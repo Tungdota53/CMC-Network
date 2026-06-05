@@ -1,0 +1,17 @@
+{
+  "name": "@campus-connect/ui-kit",
+  "version": "1.0.0",
+  "main": "./index.tsx",
+  "types": "./index.tsx",
+  "scripts": {
+    "lint": "eslint \"**/*.ts*\""
+  },
+  "dependencies": {
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

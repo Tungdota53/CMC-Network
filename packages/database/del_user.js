@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { await prisma.user.delete({ where: { email: 'bit250108@st.cmcu.edu.vn' } }); console.log('Deleted broken account'); } main().catch(console.error).finally(() => prisma.$disconnect());
