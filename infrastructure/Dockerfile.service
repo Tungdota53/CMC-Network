@@ -1,0 +1,42 @@
+# ============================================================
+# Generic multi-stage Dockerfile for any CampusConnect NestJS service.
+# Build with:  docker build -f infrastructure/Dockerfile.service \
+#                --build-arg SERVICE=user-service -t cc-user-service .
+# (build context = repo root)
+# ============================================================
+
+# ---- Base deps (whole workspace, needed for npm workspaces + prisma) ----
+FROM node:20-alpine AS deps
+WORKDIR /app
+# Copy manifests first for better layer caching.
+COPY package.json package-lock.json turbo.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN npm ci
+
+# ---- Build the target service ----
+FROM node:20-alpine AS build
+ARG SERVICE
+WORKDIR /app
+COPY --from=deps /app ./
+# Generate Prisma client, then build the service (+ its workspace deps).
+RUN npx --workspace=@campus-connect/database prisma generate
+RUN npx turbo run build --filter=${SERVICE}
+
+# ---- Runtime ----
+FROM node:20-alpine AS runtime
+ARG SERVICE
+ENV NODE_ENV=production
+ENV SERVICE_DIR=apps/${SERVICE}
+WORKDIR /app
+
+# Copy the full installed workspace (NestJS resolves @campus-connect/* via node_modules symlinks).
+COPY --from=build /app ./
+
+# Drop privileges.
+RUN addgroup -S nodejs && adduser -S nodejs -G nodejs \
+  && mkdir -p /app/${SERVICE_DIR}/uploads && chown -R nodejs:nodejs /app/${SERVICE_DIR}
+USER nodejs
+
+WORKDIR /app/apps/${SERVICE}
+CMD ["node", "dist/main.js"]

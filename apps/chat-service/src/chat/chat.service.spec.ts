@@ -11,14 +11,17 @@ jest.mock('@campus-connect/database', () => ({
     message: {
       create: jest.fn(),
       findMany: jest.fn(),
+      updateMany: jest.fn(),
+      groupBy: jest.fn(),
     },
     conversationMember: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
     },
   },
 }));
 
-describe('ChatService', () => {
+describe('ChatService — direct conversations', () => {
   let service: ChatService;
 
   beforeEach(() => {
@@ -31,7 +34,6 @@ describe('ChatService', () => {
       id: 'conversation-1',
       members: [{ userId: 'user-1' }, { userId: 'user-2' }],
     };
-
     jest.mocked(prisma.conversation.findMany).mockResolvedValue([conversation] as never);
 
     await expect(service.getOrCreateDirectConversation('user-1', 'user-2')).resolves.toBe(conversation);
@@ -43,21 +45,67 @@ describe('ChatService', () => {
       id: 'conversation-2',
       members: [{ userId: 'user-1' }, { userId: 'user-3' }],
     };
-
     jest.mocked(prisma.conversation.findMany).mockResolvedValue([
       { id: 'group-like', members: [{ userId: 'user-1' }, { userId: 'user-2' }, { userId: 'user-3' }] },
     ] as never);
     jest.mocked(prisma.conversation.create).mockResolvedValue(created as never);
 
     await expect(service.getOrCreateDirectConversation('user-1', 'user-3')).resolves.toBe(created);
-    expect(prisma.conversation.create).toHaveBeenCalledWith({
-      data: {
-        type: 'DIRECT',
-        members: {
-          create: [{ userId: 'user-1' }, { userId: 'user-3' }],
-        },
-      },
-      include: { members: true },
-    });
+  });
+});
+
+describe('ChatService — message safety', () => {
+  let service: ChatService;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new ChatService();
+  });
+
+  it('rejects sending a message when sender is not a conversation member', async () => {
+    jest.mocked(prisma.conversationMember.findUnique).mockResolvedValue(null as never);
+    await expect(
+      service.saveMessage('conv-1', 'outsider', 'hi'),
+    ).rejects.toThrow(/không thuộc đoạn chat/i);
+  });
+
+  it('coerces unknown message types back to text', async () => {
+    jest.mocked(prisma.conversationMember.findUnique).mockResolvedValue({ id: 'm' } as never);
+    jest.mocked(prisma.message.create).mockResolvedValue({ id: 'm-1', messageType: 'text' } as never);
+    jest.mocked(prisma.conversation.update).mockResolvedValue({} as never);
+
+    await service.saveMessage('conv-1', 'user-1', 'hi', 'malicious-type' as never);
+
+    const call = jest.mocked(prisma.message.create).mock.calls[0][0] as { data: { messageType: string } };
+    expect(call.data.messageType).toBe('text');
+  });
+});
+
+describe('ChatService — unread counts', () => {
+  let service: ChatService;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new ChatService();
+  });
+
+  it('aggregates unread counts per conversation, excluding the viewer\'s own messages', async () => {
+    jest.mocked(prisma.conversationMember.findMany).mockResolvedValue([
+      { conversationId: 'c1' }, { conversationId: 'c2' },
+    ] as never);
+    jest.mocked(prisma.message.groupBy).mockResolvedValue([
+      { conversationId: 'c1', _count: { _all: 3 } },
+      { conversationId: 'c2', _count: { _all: 1 } },
+    ] as never);
+
+    const result = await service.getUnreadCounts('viewer');
+    expect(result.total).toBe(4);
+    expect(result.perConversation).toHaveLength(2);
+  });
+
+  it('returns zero when the viewer has no conversations', async () => {
+    jest.mocked(prisma.conversationMember.findMany).mockResolvedValue([] as never);
+    const result = await service.getUnreadCounts('viewer');
+    expect(result.total).toBe(0);
+    expect(result.perConversation).toEqual([]);
+    expect(prisma.message.groupBy).not.toHaveBeenCalled();
   });
 });

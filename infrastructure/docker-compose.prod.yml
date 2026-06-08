@@ -1,0 +1,112 @@
+# ============================================================
+# CampusConnect — Production-ready compose.
+# Usage:
+#   cp .env.example .env   (fill in real secrets)
+#   docker compose -f infrastructure/docker-compose.prod.yml --env-file .env up -d --build
+#
+# Build context for every service image is the REPO ROOT (..), so the
+# Dockerfile can see the whole npm workspace.
+# ============================================================
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  env_file:
+    - ../.env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_started
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: campus_connect_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-campus_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-campus_password}
+      POSTGRES_DB: ${POSTGRES_DB:-campus_connect}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-campus_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: campus_connect_redis
+    restart: unless-stopped
+
+  api-gateway:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.service
+      args:
+        SERVICE: api-gateway
+    ports:
+      - "3001:3001"
+
+  auth-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.service
+      args:
+        SERVICE: auth-service
+
+  user-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.service
+      args:
+        SERVICE: user-service
+
+  social-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.service
+      args:
+        SERVICE: social-service
+
+  chat-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.service
+      args:
+        SERVICE: chat-service
+    ports:
+      - "3005:3005"
+
+  study-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.service
+      args:
+        SERVICE: study-service
+
+  material-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.service
+      args:
+        SERVICE: material-service
+
+  marketplace-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.service
+      args:
+        SERVICE: marketplace-service
+
+volumes:
+  pgdata:

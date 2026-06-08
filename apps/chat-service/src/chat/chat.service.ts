@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
 
 @Injectable()
@@ -32,21 +32,74 @@ export class ChatService {
     });
   }
 
-  async saveMessage(conversationId: string, senderId: string, content: string, messageType: string = 'text', mediaUrl?: string) {
-    const message = await prisma.message.create({
+  /** Create a group conversation. The creator is the owner. */
+  async createGroup(creatorId: string, name: string, memberIds: string[], avatar?: string) {
+    const uniqueIds = Array.from(new Set([creatorId, ...memberIds]));
+    return prisma.conversation.create({
       data: {
-        conversationId,
-        senderId,
-        content,
-        messageType,
-        mediaUrl,
-        status: 'SENT',
-      },
-      include: {
-        sender: {
-          select: { id: true, fullName: true, avatarUrl: true },
+        type: 'GROUP',
+        name,
+        avatar,
+        members: {
+          create: uniqueIds.map((userId) => ({
+            userId,
+            role: userId === creatorId ? 'owner' : 'member',
+          })),
         },
       },
+      include: { members: { include: { user: { select: { id: true, fullName: true, avatarUrl: true } } } } },
+    });
+  }
+
+  async addGroupMember(conversationId: string, actorId: string, userId: string) {
+    await this.assertGroupOwner(conversationId, actorId);
+    return prisma.conversationMember.upsert({
+      where: { conversationId_userId: { conversationId, userId } },
+      create: { conversationId, userId, role: 'member' },
+      update: {},
+    });
+  }
+
+  async removeGroupMember(conversationId: string, actorId: string, userId: string) {
+    await this.assertGroupOwner(conversationId, actorId);
+    return prisma.conversationMember.delete({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+  }
+
+  private async assertGroupOwner(conversationId: string, userId: string) {
+    const member = await prisma.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+    if (!member || member.role !== 'owner') {
+      throw new ForbiddenException('Chỉ chủ nhóm mới có quyền này');
+    }
+  }
+
+  /** Persist a message; allowed types: text, image, file, video, audio. */
+  async saveMessage(
+    conversationId: string,
+    senderId: string,
+    content: string,
+    messageType: string = 'text',
+    mediaUrl?: string,
+  ) {
+    const allowedTypes = ['text', 'image', 'file', 'video', 'audio'];
+    if (!allowedTypes.includes(messageType)) {
+      messageType = 'text';
+    }
+
+    // Ensure sender belongs to the conversation.
+    const member = await prisma.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId: senderId } },
+    });
+    if (!member) {
+      throw new ForbiddenException('Bạn không thuộc đoạn chat này');
+    }
+
+    const message = await prisma.message.create({
+      data: { conversationId, senderId, content, messageType, mediaUrl, status: 'SENT' },
+      include: { sender: { select: { id: true, fullName: true, avatarUrl: true } } },
     });
 
     await prisma.conversation.update({
@@ -61,20 +114,58 @@ export class ChatService {
     const message = await prisma.message.findUnique({ where: { id: messageId } });
     if (!message || message.senderId !== userId) return null;
 
-    const updatedMessage = await prisma.message.update({
+    return prisma.message.update({
       where: { id: messageId },
-      data: {
-        content: 'Tin nhắn đã bị thu hồi',
-        messageType: 'recalled',
+      data: { content: 'Tin nhắn đã bị thu hồi', messageType: 'recalled' },
+      include: { sender: { select: { id: true, fullName: true, avatarUrl: true } } },
+    });
+  }
+
+  /** Mark one message as DELIVERED (called when the recipient socket receives it). */
+  async markDelivered(messageId: string) {
+    const existing = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!existing || existing.status === 'READ') return existing;
+    return prisma.message.update({ where: { id: messageId }, data: { status: 'DELIVERED' } });
+  }
+
+  /** Mark all messages in a conversation as READ for a given viewer, returns affected count. */
+  async markConversationRead(conversationId: string, viewerId: string) {
+    const result = await prisma.message.updateMany({
+      where: {
+        conversationId,
+        senderId: { not: viewerId },
+        status: { not: 'READ' },
       },
-      include: {
-        sender: {
-          select: { id: true, fullName: true, avatarUrl: true },
-        },
+      data: { status: 'READ' },
+    });
+    return { updated: result.count };
+  }
+
+  /** Unread message count per conversation for a viewer. */
+  async getUnreadCounts(viewerId: string) {
+    const memberships = await prisma.conversationMember.findMany({
+      where: { userId: viewerId },
+      select: { conversationId: true },
+    });
+    const ids = memberships.map((m) => m.conversationId);
+    if (ids.length === 0) return { total: 0, perConversation: [] as { conversationId: string; count: number }[] };
+
+    const grouped = await prisma.message.groupBy({
+      by: ['conversationId'],
+      where: {
+        conversationId: { in: ids },
+        senderId: { not: viewerId },
+        status: { not: 'READ' },
       },
+      _count: { _all: true },
     });
 
-    return updatedMessage;
+    const perConversation = grouped.map((g) => ({
+      conversationId: g.conversationId,
+      count: g._count._all,
+    }));
+    const total = perConversation.reduce((acc, c) => acc + c.count, 0);
+    return { total, perConversation };
   }
 
   async getConversations(userId: string) {
@@ -101,9 +192,12 @@ export class ChatService {
       },
     });
 
+    const unread = await this.getUnreadCounts(userId);
+    const unreadMap = new Map(unread.perConversation.map((u) => [u.conversationId, u.count]));
+
     return members.map((member) => {
       const conversation = member.conversation;
-      const otherMembers = conversation.members.filter((conversationMember) => conversationMember.userId !== userId);
+      const otherMembers = conversation.members.filter((m) => m.userId !== userId);
       const title = conversation.type === 'DIRECT'
         ? otherMembers[0]?.user.fullName
         : conversation.name;
@@ -117,14 +211,35 @@ export class ChatService {
         avatarUrl,
         otherMembers,
         lastMessage: conversation.messages[0] ?? null,
+        unreadCount: unreadMap.get(conversation.id) ?? 0,
       };
     });
   }
 
-  async getMessages(conversationId: string) {
+  /** Search conversations of a user by other-member name or group name. */
+  async searchConversations(userId: string, query: string) {
+    const keyword = query.trim();
+    if (keyword.length < 2) return [];
+    const all = await this.getConversations(userId);
+    const lower = keyword.toLowerCase();
+    return all.filter((c) => (c.title ?? '').toLowerCase().includes(lower));
+  }
+
+  async getMessages(conversationId: string, viewerId?: string, limit = 50, before?: string) {
+    if (viewerId) {
+      const member = await prisma.conversationMember.findUnique({
+        where: { conversationId_userId: { conversationId, userId: viewerId } },
+      });
+      if (!member) throw new ForbiddenException('Bạn không thuộc đoạn chat này');
+    }
+
     return prisma.message.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: 'asc' },
+      where: {
+        conversationId,
+        ...(before ? { createdAt: { lt: new Date(before) } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 200),
       include: {
         sender: { select: { id: true, fullName: true, avatarUrl: true } },
       },

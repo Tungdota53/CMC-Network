@@ -6,6 +6,10 @@
     "build": "turbo run build",
     "predev": "node infrastructure/kill-ports.js",
     "dev": "turbo run dev start:dev --concurrency=20",
+    "dev:frontend": "turbo run dev --filter=web-client",
+    "dev:admin": "turbo run dev --filter=admin-dashboard",
+    "dev:web": "turbo run dev --filter=web-client --filter=admin-dashboard",
+    "dev:backend": "turbo run start:dev --concurrency=20 --filter=!web-client --filter=!admin-dashboard",
     "lint": "turbo run lint",
     "test": "turbo run test"
   },

@@ -1,9 +1,10 @@
-import { NestFactory } from '@nestjs/core';
+import { bootstrapService } from '@campus-connect/common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.enableCors();
-  await app.listen(process.env.PORT ?? 3005);
+  await bootstrapService(AppModule, {
+    serviceName: 'chat-service',
+    port: 3005,
+  });
 }
 bootstrap();

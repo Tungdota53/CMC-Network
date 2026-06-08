@@ -8,18 +8,18 @@ datasource db {
 }
 
 model User {
-  id                     String               @id @default(uuid()) @db.Uuid
-  email                  String               @unique
-  emailVerified          Boolean              @default(false)
+  id                     String                @id @default(uuid()) @db.Uuid
+  email                  String                @unique
+  emailVerified          Boolean               @default(false)
   otpCode                String?
   otpExpiry              DateTime?
   passwordHash           String?
-  authProvider           AuthProvider         @default(EMAIL)
-  role                   Role                 @default(STUDENT)
-  twoFactorStatus        TwoFactorStatus      @default(DISABLED)
+  authProvider           AuthProvider          @default(EMAIL)
+  role                   Role                  @default(STUDENT)
+  twoFactorStatus        TwoFactorStatus       @default(DISABLED)
   twoFactorSecret        String?
   fullName               String
-  studentId              String?              @unique
+  studentId              String?               @unique
   department             String?
   major                  String?
   cohort                 String?
@@ -27,33 +27,37 @@ model User {
   avatarUrl              String?
   coverPhotoUrl          String?
   location               String?
-  reputationScore        Int                  @default(0)
-  isVerified             Boolean              @default(false)
-  isSuspended            Boolean              @default(false)
+  reputationScore        Int                   @default(0)
+  isVerified             Boolean               @default(false)
+  isSuspended            Boolean               @default(false)
   lastLoginAt            DateTime?
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  deletedAt              DateTime?
+  violationStrikes       Int                   @default(0)
+  banExpiresAt           DateTime?
   commentLikes           CommentLike[]
   comments               Comment[]
   conversationMembers    ConversationMember[]
   eventAttendees         EventAttendee[]
   events                 Event[]
-  receivedFriendRequests FriendRequest[]      @relation("ReceivedFriendRequests")
-  sentFriendRequests     FriendRequest[]      @relation("SentFriendRequests")
-  friendships            Friendship[]         @relation("UserAFriendships")
-  friendships2           Friendship[]         @relation("UserBFriendships")
+  receivedFriendRequests FriendRequest[]       @relation("ReceivedFriendRequests")
+  sentFriendRequests     FriendRequest[]       @relation("SentFriendRequests")
+  friendships            Friendship[]          @relation("UserAFriendships")
+  friendships2           Friendship[]          @relation("UserBFriendships")
   joinRequests           JoinRequest[]
   materialBookmarks      MaterialBookmark[]
   materialReviews        MaterialReview[]
   materials              Material[]
-  menteeBookings         MentorBooking[]      @relation("MenteeBookings")
-  mentorBookings         MentorBooking[]      @relation("MentorBookings")
+  menteeBookings         MentorBooking[]       @relation("MenteeBookings")
+  mentorBookings         MentorBooking[]       @relation("MentorBookings")
   mentorProfile          MentorProfile?
-  givenMentorReviews     MentorReview[]       @relation("GivenMentorReviews")
-  mentorReviews          MentorReview[]       @relation("MentorReviews")
+  givenMentorReviews     MentorReview[]        @relation("GivenMentorReviews")
+  mentorReviews          MentorReview[]        @relation("MentorReviews")
   sentMessages           Message[]
   postLikes              PostLike[]
   postSaves              PostSave[]
+  storyViews             StoryView[]
   posts                  Post[]
   products               Product[]
   reputationHistory      ReputationHistory[]
@@ -66,6 +70,13 @@ model User {
   skills                 UserSkill[]
   notifications          Notification[]
   reports                Report[]
+  auditLogsActed         AuditLog[]            @relation("AuditActor")
+  auditLogsTargeted      AuditLog[]            @relation("AuditTarget")
+  userViolations         UserViolation[]
+  verificationRequests   VerificationRequest[]
+  ownedClubs             Club[]                @relation("ClubOwner")
+  clubMemberships        ClubMember[]
+  mentorApplications     MentorApplication[]
 
   @@index([department])
   @@index([major])
@@ -166,17 +177,32 @@ model Post {
   sharedFromId String?        @db.Uuid
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
   comments     Comment[]
   likesRel     PostLike[]
   saves        PostSave[]
+  storySeenBy  StoryView[]
   sharedFrom   Post?          @relation("SharedPost", fields: [sharedFromId], references: [id])
   sharedBy     Post[]         @relation("SharedPost")
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
   @@index([type])
+  @@index([visibility, createdAt(sort: Desc)])
   @@map("posts")
+}
+
+model StoryView {
+  id      String   @id @default(uuid()) @db.Uuid
+  storyId String   @db.Uuid
+  userId  String   @db.Uuid
+  seenAt  DateTime @default(now())
+  story   Post     @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, userId])
+  @@index([storyId])
+  @@map("story_views")
 }
 
 model PostLike {
@@ -213,6 +239,7 @@ model Comment {
   likes     Int           @default(0)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
   likesRel  CommentLike[]
   parent    Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   Comment[]     @relation("CommentReplies")
@@ -248,6 +275,8 @@ model StudyGroup {
   schedule      String?
   status        StudyGroupStatus   @default(OPEN)
   memberCount   Int                @default(1)
+  whiteboardData Json?
+  todoList      Json?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   joinRequests  JoinRequest[]
@@ -301,13 +330,14 @@ model Material {
   reviewCount   Int                @default(0)
   aiSummary     String?
   tags          String[]
+  isOfficial    Boolean            @default(false)
   createdAt     DateTime           @default(now())
+  deletedAt     DateTime?
   bookmarks     MaterialBookmark[]
   reviews       MaterialReview[]
   uploader      User               @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
 
-  @@index([subject])
-  @@index([fileType])
+  @@index([subject, fileType])
   @@index([uploaderId])
   @@index([rating(sort: Desc)])
   @@index([downloadCount(sort: Desc)])
@@ -492,8 +522,7 @@ model Message {
   conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
-  @@index([conversationId])
-  @@index([createdAt(sort: Desc)])
+  @@index([conversationId, createdAt(sort: Desc)])
   @@map("messages")
 }
 
@@ -653,14 +682,14 @@ enum ProductStatus {
 }
 
 model Notification {
-  id        String             @id @default(uuid()) @db.Uuid
-  userId    String             @db.Uuid
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
   type      NotificationType
   content   String
-  isRead    Boolean            @default(false)
-  relatedId String?            @db.Uuid
-  createdAt DateTime           @default(now())
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isRead    Boolean          @default(false)
+  relatedId String?          @db.Uuid
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([isRead])
@@ -669,15 +698,15 @@ model Notification {
 }
 
 model Report {
-  id          String       @id @default(uuid()) @db.Uuid
-  reporterId  String       @db.Uuid
-  targetId    String       @db.Uuid
-  targetType  ReportType
-  reason      String
-  status      ReportStatus @default(PENDING)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  reporter    User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  id         String       @id @default(uuid()) @db.Uuid
+  reporterId String       @db.Uuid
+  targetId   String       @db.Uuid
+  targetType ReportType
+  reason     String
+  status     ReportStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@map("reports")
@@ -704,4 +733,91 @@ enum ReportStatus {
   REVIEWED
   RESOLVED
   DISMISSED
+}
+
+model SystemConfig {
+  key   String @id
+  value String
+
+  @@map("system_configs")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String   @db.Uuid
+  targetId  String?  @db.Uuid
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  actor     User     @relation("AuditActor", fields: [actorId], references: [id], onDelete: Cascade)
+  target    User?    @relation("AuditTarget", fields: [targetId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model UserViolation {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  reason      String
+  strikeLevel Int
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_violations")
+}
+
+model VerificationRequest {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  type      String
+  documents String[]
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("verification_requests")
+}
+
+model MentorApplication {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  status    String   @default("PENDING")
+  documents String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("mentor_applications")
+}
+
+model Club {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  ownerId     String       @db.Uuid
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  owner       User         @relation("ClubOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     ClubMember[]
+
+  @@map("clubs")
+}
+
+model ClubMember {
+  id       String   @id @default(uuid()) @db.Uuid
+  clubId   String   @db.Uuid
+  userId   String   @db.Uuid
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+  club     Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@map("club_members")
 }

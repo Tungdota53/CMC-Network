@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
+import { NotificationDispatcher, validateUpload } from '@campus-connect/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
@@ -7,8 +8,24 @@ import { join } from 'path';
 export class UsersService {
   private readonly uploadDir = join(process.cwd(), 'uploads', 'avatars');
 
-  constructor() {
+  constructor(private readonly notifier: NotificationDispatcher) {
     this.ensureUploadDir();
+  }
+
+  /** Persist + push a realtime notification; never throws into the caller. */
+  private async notify(userId: string, type: string, content: string, relatedId?: string) {
+    try {
+      await prisma.notification.create({
+        data: { userId, type: type as never, content, relatedId },
+      });
+    } catch {
+      // ignore persistence errors
+    }
+    try {
+      await this.notifier.push({ userId, type: type as never, content, relatedId });
+    } catch (err) {
+      console.error('Lỗi khi push notification:', err);
+    }
   }
 
   private async ensureUploadDir() {
@@ -45,6 +62,73 @@ export class UsersService {
     return user;
   }
 
+  /** Full public profile: core fields + counts + badges + skills. */
+  async getPublicProfile(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        studentId: true,
+        department: true,
+        major: true,
+        cohort: true,
+        bio: true,
+        avatarUrl: true,
+        coverPhotoUrl: true,
+        location: true,
+        reputationScore: true,
+        role: true,
+        isVerified: true,
+        createdAt: true,
+        badges: { select: { badge: true, earnedAt: true } },
+        skills: true,
+        _count: { select: { posts: true, friendships: true, friendships2: true } },
+      },
+    });
+    if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+
+    const { _count, ...rest } = user;
+    return {
+      ...rest,
+      postCount: _count.posts,
+      friendCount: _count.friendships + _count.friendships2,
+    };
+  }
+
+  /** Posts authored by a user (newest first). */
+  async getUserPosts(userId: string, limit = 20) {
+    return prisma.post.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 50),
+      include: {
+        user: { select: { id: true, fullName: true, avatarUrl: true } },
+        _count: { select: { comments: true } },
+      },
+    });
+  }
+
+  /** Image media a user has posted (for the Photos tab). */
+  async getUserPhotos(userId: string) {
+    const posts = await prisma.post.findMany({
+      where: { userId, mediaUrls: { isEmpty: false } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, mediaUrls: true, createdAt: true },
+      take: 50,
+    });
+    return posts.flatMap((p) => p.mediaUrls.map((url) => ({ url, postId: p.id, createdAt: p.createdAt })));
+  }
+
+  /** Update cover photo URL. */
+  async updateCover(userId: string, coverPhotoUrl: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { coverPhotoUrl },
+      select: { id: true, coverPhotoUrl: true },
+    });
+  }
+
   async updateProfile(userId: string, data: any) {
     return prisma.user.update({
       where: { id: userId },
@@ -52,7 +136,12 @@ export class UsersService {
     });
   }
 
-  async uploadAvatar(userId: string, file: { buffer: Buffer; originalname: string }) {
+  async uploadAvatar(userId: string, file: { buffer: Buffer; originalname: string; mimetype?: string; size?: number }) {
+    validateUpload(
+      { mimetype: file.mimetype, size: file.size ?? file.buffer.length, originalname: file.originalname },
+      { preset: 'image', maxSizeBytes: 5 * 1024 * 1024 },
+    );
+
     const ext = file.originalname.split('.').pop() || 'png';
     const safeFileName = `${userId}-${Date.now()}.${ext}`;
     const filePath = join(this.uploadDir, safeFileName);
@@ -66,7 +155,7 @@ export class UsersService {
   }
 
   async sendFriendRequest(senderId: string, receiverId: string) {
-    if (senderId === receiverId) throw new Error('Không thể kết bạn với chính mình');
+    if (senderId === receiverId) throw new BadRequestException('Không thể kết bạn với chính mình');
 
     const receiver = await prisma.user.findUnique({ where: { id: receiverId }, select: { id: true } });
     if (!receiver) throw new NotFoundException('Không tìm thấy người nhận');
@@ -80,26 +169,40 @@ export class UsersService {
       },
     });
 
-    if (existingFriend) throw new Error('Hai người đã là bạn bè');
+    if (existingFriend) throw new ConflictException('Hai người đã là bạn bè');
 
-    const existingRequest = await prisma.friendRequest.findFirst({
+    const existingRequests = await prisma.friendRequest.findMany({
       where: {
         OR: [
           { senderId, receiverId },
           { senderId: receiverId, receiverId: senderId },
         ],
-        status: 'pending',
       },
     });
 
-    if (existingRequest) throw new Error('Đã có lời mời kết bạn đang chờ');
+    for (const req of existingRequests) {
+      if (req.status === 'pending') {
+        throw new ConflictException('Đã có lời mời kết bạn đang chờ');
+      }
+      await prisma.friendRequest.delete({ where: { id: req.id } });
+    }
 
-    return prisma.friendRequest.create({
+    const request = await prisma.friendRequest.create({
       data: { senderId, receiverId, status: 'pending' },
       include: {
-        receiver: { select: { id: true, fullName: true, avatarUrl: true, major: true, cohort: true } },
+        receiver: true,
+        sender: true,
       },
     });
+
+    await this.notify(
+      receiverId,
+      'FRIEND_REQUEST',
+      `${request.sender.fullName} đã gửi lời mời kết bạn`,
+      senderId,
+    );
+
+    return request;
   }
 
   async respondFriendRequest(userId: string, requestId: string, status: 'accepted' | 'rejected') {
@@ -124,13 +227,24 @@ export class UsersService {
           data: { userAId: request.senderId, userBId: request.receiverId },
         });
       }
+
+      const accepter = await prisma.user.findUnique({
+        where: { id: request.receiverId },
+        select: { fullName: true },
+      });
+      await this.notify(
+        request.senderId,
+        'FRIEND_ACCEPT',
+        `${accepter?.fullName ?? 'Ai đó'} đã chấp nhận lời mời kết bạn`,
+        request.receiverId,
+      );
     }
 
     return prisma.friendRequest.update({
       where: { id: requestId },
       data: { status },
       include: {
-        sender: { select: { id: true, fullName: true, avatarUrl: true, major: true, cohort: true } },
+        sender: true,
       },
     });
   }
@@ -178,7 +292,7 @@ export class UsersService {
     return prisma.friendRequest.findMany({
       where: { receiverId: userId, status: 'pending' },
       include: {
-        sender: { select: { id: true, fullName: true, avatarUrl: true, major: true, cohort: true } },
+        sender: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -188,7 +302,7 @@ export class UsersService {
     return prisma.friendRequest.findMany({
       where: { senderId: userId, status: 'pending' },
       include: {
-        receiver: { select: { id: true, fullName: true, avatarUrl: true, major: true, cohort: true } },
+        receiver: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -300,5 +414,111 @@ export class UsersService {
       data: { role: role as any },
       select: { id: true, role: true, fullName: true },
     });
+  }
+
+  // ===========================================================================
+  // Portfolio: skills / achievements / certificates / projects
+  // Backs the profile "About/Portfolio" tabs. Each list is owned by its user;
+  // ownerId is resolved from the JWT (preferred) or body fallback (compat).
+  // ===========================================================================
+
+  /** All portfolio sections for a user in one round-trip (read-only, public). */
+  async getPortfolio(userId: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+
+    const [skills, achievements, certificates, projects] = await Promise.all([
+      prisma.userSkill.findMany({ where: { userId }, orderBy: { skill: 'asc' } }),
+      prisma.userAchievement.findMany({ where: { userId }, orderBy: { earnedAt: 'desc' } }),
+      prisma.userCertificate.findMany({ where: { userId }, orderBy: { issuedAt: 'desc' } }),
+      prisma.userProject.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+    ]);
+
+    return { skills, achievements, certificates, projects };
+  }
+
+  // ----- Skills -----
+
+  async addSkill(userId: string, skill: string, level = 'beginner') {
+    const name = (skill || '').trim();
+    if (!name) throw new BadRequestException('Tên kỹ năng không được để trống');
+    try {
+      return await prisma.userSkill.create({ data: { userId, skill: name, level } });
+    } catch {
+      // @@unique([userId, skill]) violated.
+      throw new ConflictException('Kỹ năng này đã có trong hồ sơ');
+    }
+  }
+
+  async removeSkill(userId: string, skillId: string) {
+    const skill = await prisma.userSkill.findUnique({ where: { id: skillId } });
+    if (!skill) throw new NotFoundException('Không tìm thấy kỹ năng');
+    if (skill.userId !== userId) throw new ForbiddenException('Không thể xóa kỹ năng của người khác');
+    return prisma.userSkill.delete({ where: { id: skillId } });
+  }
+
+  // ----- Achievements -----
+
+  async addAchievement(userId: string, title: string, description?: string) {
+    const name = (title || '').trim();
+    if (!name) throw new BadRequestException('Tiêu đề thành tích không được để trống');
+    return prisma.userAchievement.create({ data: { userId, title: name, description } });
+  }
+
+  async removeAchievement(userId: string, achievementId: string) {
+    const item = await prisma.userAchievement.findUnique({ where: { id: achievementId } });
+    if (!item) throw new NotFoundException('Không tìm thấy thành tích');
+    if (item.userId !== userId) throw new ForbiddenException('Không thể xóa thành tích của người khác');
+    return prisma.userAchievement.delete({ where: { id: achievementId } });
+  }
+
+  // ----- Certificates -----
+
+  async addCertificate(
+    userId: string,
+    data: { name: string; issuer: string; issuedAt: string; credentialUrl?: string },
+  ) {
+    const name = (data?.name || '').trim();
+    const issuer = (data?.issuer || '').trim();
+    if (!name || !issuer) throw new BadRequestException('Tên chứng chỉ và đơn vị cấp là bắt buộc');
+    const issuedAt = new Date(data.issuedAt);
+    if (isNaN(issuedAt.getTime())) throw new BadRequestException('Ngày cấp không hợp lệ');
+    return prisma.userCertificate.create({
+      data: { userId, name, issuer, issuedAt, credentialUrl: data.credentialUrl || null },
+    });
+  }
+
+  async removeCertificate(userId: string, certificateId: string) {
+    const item = await prisma.userCertificate.findUnique({ where: { id: certificateId } });
+    if (!item) throw new NotFoundException('Không tìm thấy chứng chỉ');
+    if (item.userId !== userId) throw new ForbiddenException('Không thể xóa chứng chỉ của người khác');
+    return prisma.userCertificate.delete({ where: { id: certificateId } });
+  }
+
+  // ----- Projects -----
+
+  async addProject(
+    userId: string,
+    data: { title: string; description?: string; techStack?: string[]; githubUrl?: string; demoUrl?: string },
+  ) {
+    const title = (data?.title || '').trim();
+    if (!title) throw new BadRequestException('Tên dự án không được để trống');
+    return prisma.userProject.create({
+      data: {
+        userId,
+        title,
+        description: data.description || null,
+        techStack: Array.isArray(data.techStack) ? data.techStack : [],
+        githubUrl: data.githubUrl || null,
+        demoUrl: data.demoUrl || null,
+      },
+    });
+  }
+
+  async removeProject(userId: string, projectId: string) {
+    const item = await prisma.userProject.findUnique({ where: { id: projectId } });
+    if (!item) throw new NotFoundException('Không tìm thấy dự án');
+    if (item.userId !== userId) throw new ForbiddenException('Không thể xóa dự án của người khác');
+    return prisma.userProject.delete({ where: { id: projectId } });
   }
 }

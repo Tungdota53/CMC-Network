@@ -1,13 +1,16 @@
 version: '3.8'
 
+# Credentials are env-driven so the SAME DATABASE_URL works whether you run
+# Postgres locally or via this compose file. Defaults match packages/database/.env.
+# Override via shell env or a root .env file (gitignored).
 services:
   postgres:
     image: postgres:15-alpine
     container_name: campus_connect_db
     environment:
-      POSTGRES_USER: campus_admin
-      POSTGRES_PASSWORD: campus_password
-      POSTGRES_DB: campus_connect
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-703050}
+      POSTGRES_DB: ${POSTGRES_DB:-campus_connect}
     ports:
       - "5432:5432"
     volumes:

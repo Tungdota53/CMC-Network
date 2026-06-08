@@ -1,12 +1,15 @@
-import { NestFactory } from '@nestjs/core';
-import { NestExpressApplication } from '@nestjs/platform-express';
-import { join } from 'path';
+import { bootstrapService } from '@campus-connect/common';
 import { AppModule } from './app.module';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.enableCors();
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
-  await app.listen(process.env.PORT ?? 3004);
+  await bootstrapService(AppModule, {
+    serviceName: 'social-service',
+    port: 3004,
+    staticAssets: {
+      root: join(process.cwd(), 'uploads'),
+      prefix: '/uploads/',
+    },
+  });
 }
 bootstrap();

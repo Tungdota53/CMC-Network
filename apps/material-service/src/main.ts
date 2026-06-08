@@ -1,8 +1,10 @@
-import { NestFactory } from '@nestjs/core';
+import { bootstrapService } from '@campus-connect/common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  await app.listen(process.env.PORT ?? 3007);
+  await bootstrapService(AppModule, {
+    serviceName: 'material-service',
+    port: 3007,
+  });
 }
 bootstrap();

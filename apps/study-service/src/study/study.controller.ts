@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { CurrentUser, resolveUserId } from '@campus-connect/common';
 import { StudyService } from './study.service';
 
 @Controller('study-groups')
@@ -11,7 +12,82 @@ export class StudyController {
   }
 
   @Post()
-  async createGroup(@Body() data: any) {
-    return this.studyService.createStudyGroup(data);
+  async createGroup(
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { creatorId?: string; [key: string]: unknown },
+  ) {
+    return this.studyService.createStudyGroup({
+      ...data,
+      creatorId: resolveUserId(tokenUserId, data.creatorId),
+    });
+  }
+
+  @Put(':id')
+  async updateGroup(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string; [key: string]: unknown },
+  ) {
+    return this.studyService.updateStudyGroup(id, resolveUserId(tokenUserId, data.userId), data);
+  }
+
+  @Delete(':id')
+  async deleteGroup(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string },
+  ) {
+    return this.studyService.deleteStudyGroup(id, resolveUserId(tokenUserId, data?.userId));
+  }
+
+  @Post(':id/join-requests')
+  async requestToJoin(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string },
+  ) {
+    return this.studyService.requestToJoin(id, resolveUserId(tokenUserId, data.userId));
+  }
+
+  @Get(':id/join-requests')
+  async listJoinRequests(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.studyService.listJoinRequests(id, resolveUserId(tokenUserId, userId));
+  }
+
+  @Put(':id/join-requests/:requestId')
+  async respondJoinRequest(
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string; action: 'accept' | 'reject' },
+  ) {
+    return this.studyService.respondJoinRequest(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      requestId,
+      data.action,
+    );
+  }
+
+  @Put(':id/whiteboard')
+  async updateWhiteboard(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string; whiteboardData: any },
+  ) {
+    return this.studyService.updateWhiteboard(id, resolveUserId(tokenUserId, data.userId), data.whiteboardData);
+  }
+
+  @Put(':id/todo-list')
+  async updateTodoList(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string; todoList: any },
+  ) {
+    return this.studyService.updateTodoList(id, resolveUserId(tokenUserId, data.userId), data.todoList);
   }
 }
