@@ -1,0 +1,344 @@
+@import "tailwindcss";
+
+/* ============================================================
+   DESIGN TOKENS
+   Light theme is default on :root. Dark theme is applied by
+   adding the `.dark` class to <html> (see ThemeToggle + the
+   no-flash inline script in app/layout.tsx).
+   ============================================================ */
+@layer base {
+  :root {
+    /* Premium Clean Light Theme */
+    --bg-base: #fdf2f8;            /* trắng hồng */
+    --bg-surface: #ffffff;
+    --bg-subtle: #f8fafc;          /* slate-50 */
+    --bg-subtle-2: #f1f5f9;        /* slate-100 */
+
+    --card-bg: rgba(255, 255, 255, 0.7);
+    --card-bg-hover: rgba(255, 255, 255, 0.9);
+    --card-border: rgba(226, 232, 240, 0.6);
+    --card-border-hover: rgba(203, 213, 225, 0.8);
+
+    --text-primary: #0f172a;       /* slate-900 */
+    --text-secondary: #475569;     /* slate-600 */
+    --text-tertiary: #64748b;      /* slate-500 */
+
+    /* Accents */
+    --accent-blue: #2563eb;
+    --accent-purple: #7c3aed;
+    --accent-indigo: #4f46e5;
+    --accent-glow: rgba(79, 70, 229, 0.15);
+
+    /* Mesh background tint */
+    --mesh-1: rgba(244, 114, 182, 0.08);
+    --mesh-2: rgba(234, 179, 8, 0.05);
+
+    /* Elevation scale */
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 4px 24px -1px rgba(15, 23, 42, 0.06), 0 1px 3px -1px rgba(15, 23, 42, 0.03);
+    --shadow-lg: 0 12px 40px -8px rgba(15, 23, 42, 0.12), 0 3px 8px -2px rgba(15, 23, 42, 0.05);
+
+    /* Radii */
+    --radius-sm: 0.5rem;
+    --radius-md: 0.75rem;
+    --radius-lg: 1rem;
+    --radius-xl: 1.5rem;
+
+    /* Motion */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Skeleton shimmer */
+    --skeleton-base: #e9eef5;
+    --skeleton-hl: #f6f8fb;
+
+    color-scheme: light;
+  }
+
+  html.dark {
+    --bg-base: #0a0e1a;            /* deep navy */
+    --bg-surface: #131a2b;
+    --bg-subtle: #161e30;
+    --bg-subtle-2: #1e2740;
+
+    --card-bg: rgba(23, 31, 51, 0.72);
+    --card-bg-hover: rgba(30, 41, 66, 0.9);
+    --card-border: rgba(148, 163, 184, 0.14);
+    --card-border-hover: rgba(148, 163, 184, 0.28);
+
+    --text-primary: #f1f5f9;       /* slate-100 */
+    --text-secondary: #cbd5e1;     /* slate-300 */
+    --text-tertiary: #94a3b8;      /* slate-400 */
+
+    --accent-blue: #60a5fa;
+    --accent-purple: #a78bfa;
+    --accent-indigo: #818cf8;
+    --accent-glow: rgba(129, 140, 248, 0.25);
+
+    --mesh-1: rgba(99, 102, 241, 0.12);
+    --mesh-2: rgba(168, 85, 247, 0.10);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 24px -1px rgba(0, 0, 0, 0.45), 0 1px 3px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 12px 40px -8px rgba(0, 0, 0, 0.6), 0 3px 8px -2px rgba(0, 0, 0, 0.4);
+
+    --skeleton-base: #1e2740;
+    --skeleton-hl: #2a3553;
+
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    background-image:
+      radial-gradient(circle at 0% 0%, var(--mesh-1), transparent 40%),
+      radial-gradient(circle at 100% 100%, var(--mesh-2), transparent 40%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.01em;
+    transition: background-color 0.4s var(--ease-out), color 0.4s var(--ease-out);
+  }
+
+  /* Respect reduced-motion preferences globally */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Scrollbars */
+  .no-scrollbar::-webkit-scrollbar { width: 0; background: transparent; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
+
+  /* Premium Glassmorphism (theme-aware via tokens) */
+  .glass {
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    transition: border-color 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out), background 0.3s var(--ease-out);
+  }
+  .glass:hover {
+    border-color: var(--card-border-hover);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .glass-panel {
+    background: var(--card-bg-hover);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  /* Inputs */
+  .glass-input {
+    background: color-mix(in srgb, var(--bg-surface) 55%, transparent);
+    border: 1px solid var(--card-border);
+    color: var(--text-primary);
+    transition: all 0.2s var(--ease-out);
+  }
+  .glass-input::placeholder { color: var(--text-tertiary); }
+  .glass-input:hover { background: color-mix(in srgb, var(--bg-surface) 80%, transparent); }
+  .glass-input:focus {
+    outline: none;
+    background: var(--bg-surface);
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  /* Buttons */
+  .glass-btn {
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--card-border);
+    color: var(--text-primary);
+    font-weight: 500;
+    transition: all 0.2s var(--ease-out);
+  }
+  .glass-btn:hover {
+    background: var(--bg-surface);
+    border-color: var(--card-border-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .glass-btn:active { transform: translateY(0); }
+
+  /* Gradient Text */
+  .neon-text {
+    background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-tertiary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .brand-text {
+    background: linear-gradient(to right, var(--accent-indigo), var(--accent-blue));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Glow border on hover */
+  .neon-border { position: relative; z-index: 1; }
+  .neon-border::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(139, 92, 246, 0.5));
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s var(--ease-out);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    padding: 1px;
+  }
+  .neon-border:hover::before { opacity: 1; }
+
+  /* Skeleton shimmer */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--skeleton-base);
+    border-radius: var(--radius-md);
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, var(--skeleton-hl), transparent);
+    animation: shimmer 1.6s infinite;
+  }
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+
+  /* Entrance helpers */
+  @keyframes fade-rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-rise { animation: fade-rise 0.45s var(--ease-out) both; }
+
+  @keyframes pop-in {
+    0% { opacity: 0; transform: scale(0.96); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  .animate-pop-in { animation: pop-in 0.25s var(--ease-spring) both; }
+
+  /* Float / pulse (kept from before) */
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+  .animate-float { animation: float 4s ease-in-out infinite; }
+
+  @keyframes pulse-slow { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.05); } }
+  .animate-pulse-slow { animation: pulse-slow 8s ease-in-out infinite; }
+
+  /* Token-driven helpers usable directly in JSX */
+  .surface { background: var(--bg-surface); }
+  .surface-subtle { background: var(--bg-subtle); }
+  .text-token-primary { color: var(--text-primary); }
+  .text-token-secondary { color: var(--text-secondary); }
+  .text-token-tertiary { color: var(--text-tertiary); }
+
+  /* Verified badge (REQ-FE-UI-003) — inline SVG, scales with font-size */
+  .verified-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #0866FF; /* Facebook blue */
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em; /* cân đối với chữ */
+    position: relative; /* Dùng để định vị lớp lót màu trắng */
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+  .verified-badge::before {
+    content: '';
+    position: absolute;
+    width: 55%; /* Nhỏ hơn bông hoa để nằm trọn bên trong */
+    height: 55%;
+    background-color: #FFFFFF; /* Dấu tick màu trắng */
+    border-radius: 50%;
+    z-index: 0;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .verified-badge svg { 
+    width: 100%; 
+    height: 100%; 
+    display: block; 
+    z-index: 1; /* Nằm đè lên lớp lót trắng */
+    position: relative;
+  }
+  .verified-badge:hover {
+    transform: scale(1.1);
+  }
+  .verified-badge:focus-visible {
+    outline: 2px solid #0866FF;
+    outline-offset: 2px;
+    border-radius: 50%;
+  }
+}
+
+/* ============================================================
+   DARK-MODE UTILITY REMAPS (unlayered → win the cascade)
+   The pages were built with hardcoded light Tailwind colors.
+   Rather than edit every element, remap the handful of color
+   utilities actually in use so dark mode covers the whole app.
+   `html.dark .x` (0,2,1) beats the layered `.x` (0,1,0).
+   ============================================================ */
+html.dark .bg-white { background-color: var(--bg-surface) !important; }
+html.dark .bg-slate-50 { background-color: var(--bg-subtle) !important; }
+html.dark .bg-slate-100 { background-color: var(--bg-subtle-2) !important; }
+html.dark .bg-slate-100\/50,
+html.dark .bg-slate-100\/80 { background-color: rgba(30, 39, 64, 0.6) !important; }
+html.dark .bg-gray-50 { background-color: var(--bg-subtle) !important; }
+html.dark .bg-gray-100 { background-color: var(--bg-subtle-2) !important; }
+
+html.dark .text-slate-900,
+html.dark .text-slate-800,
+html.dark .text-gray-900,
+html.dark .text-gray-800 { color: var(--text-primary) !important; }
+html.dark .text-slate-700,
+html.dark .text-slate-600,
+html.dark .text-gray-700,
+html.dark .text-gray-600 { color: var(--text-secondary) !important; }
+html.dark .text-slate-500,
+html.dark .text-slate-400,
+html.dark .text-gray-500,
+html.dark .text-gray-400 { color: var(--text-tertiary) !important; }
+
+html.dark .border-slate-200,
+html.dark .border-slate-300,
+html.dark .border-gray-200,
+html.dark .border-gray-300 { border-color: var(--card-border) !important; }
+
+/* Hover states that flip to light backgrounds */
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-slate-100\/80:hover,
+html.dark .hover\:bg-slate-200:hover { background-color: var(--bg-subtle-2) !important; }
+
+/* Soft tinted pills/badges read poorly on dark — lift them slightly */
+html.dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.16) !important; }
+html.dark .bg-amber-50,
+html.dark .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.14) !important; }
+html.dark .bg-rose-50,
+html.dark .bg-red-50 { background-color: rgba(244, 63, 94, 0.14) !important; }
+html.dark .bg-emerald-50,
+html.dark .bg-green-50 { background-color: rgba(16, 185, 129, 0.14) !important; }
+html.dark .bg-purple-50,
+html.dark .bg-violet-50 { background-color: rgba(168, 85, 247, 0.16) !important; }
