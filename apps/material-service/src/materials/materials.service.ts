@@ -1,31 +1,35 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { FileType, prisma } from '@campus-connect/database';
-import { validateUpload } from '@campus-connect/common';
+import { validateUpload, createStorageProvider } from '@campus-connect/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
 @Injectable()
 export class MaterialsService {
-  private readonly uploadDir = join(process.cwd(), 'uploads', 'materials');
+  private readonly storageProvider = createStorageProvider(join(process.cwd(), 'uploads'), '');
 
-  constructor() {
+  constructor(@InjectQueue('material-processing') private materialQueue: Queue) {
     this.ensureUploadDir();
   }
 
   private async ensureUploadDir() {
     try {
-      await fs.mkdir(this.uploadDir, { recursive: true });
+      await fs.mkdir(join(process.cwd(), 'uploads', 'materials'), { recursive: true });
     } catch {
       // Directory already exists
     }
   }
 
   async getMaterials(subject?: string) {
-    const filter = subject ? { subject: { contains: subject, mode: 'insensitive' as any } } : {};
+    const where = subject ? { subject: { contains: subject, mode: 'insensitive' as const } } : {};
     return prisma.material.findMany({
-      where: filter,
-      include: { uploader: { select: { fullName: true, avatarUrl: true } } },
+      where,
       orderBy: { createdAt: 'desc' },
+      include: {
+        uploader: { select: { id: true, fullName: true, avatarUrl: true } },
+      },
     });
   }
 
@@ -47,52 +51,40 @@ export class MaterialsService {
       { preset: 'document', maxSizeBytes: 50 * 1024 * 1024 },
     );
 
-    const safeFileName = `${Date.now()}-${data.fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const filePath = join(this.uploadDir, safeFileName);
+    const storedFile = await this.storageProvider.put({
+      buffer: data.fileBuffer,
+      originalName: data.fileName,
+      mimeType: data.mimeType || 'application/pdf',
+      size: data.fileBuffer.length,
+      folder: 'materials',
+    });
 
-    await fs.writeFile(filePath, data.fileBuffer);
-
-    const fileUrl = `/materials/${safeFileName}`;
+    const fileUrl = storedFile.url;
     const validTypes = Object.values(FileType);
     const fileType = validTypes.includes(data.fileType.toUpperCase() as FileType)
       ? (data.fileType.toUpperCase() as FileType)
       : FileType.OTHER;
 
-    // Trích xuất văn bản và gọi AI Summarization (chỉ chạy ngầm để không block upload nếu text quá dài, 
-    // nhưng ở đây ta await luôn cho đơn giản với prototype).
-    let aiSummary = null;
-    if (data.mimeType === 'application/pdf') {
-      try {
-        const pdfParse = require('pdf-parse');
-        const pdfData = await pdfParse(data.fileBuffer);
-        const text = pdfData.text;
-        
-        // Gọi AI service nội bộ (nếu có lỗi thì bỏ qua)
-        const aiRes = await fetch('http://localhost:8000/api/v1/summarize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
-        });
-        
-        if (aiRes.ok) {
-          const resData = await aiRes.json();
-          aiSummary = resData.summary;
-        }
-      } catch (err) {
-        console.error('Failed to extract text or summarize PDF:', err);
-      }
-    }
-
-    return prisma.material.create({
+    // Create material with PROCESSING status
+    const material = await prisma.material.create({
       data: {
         uploaderId: data.uploaderId,
         title: data.title,
         s3Url: fileUrl,
         subject: data.subject,
         fileType,
-        aiSummary,
+        status: 'PROCESSING',
       },
     });
+
+    // Add job to queue
+    await this.materialQueue.add('process', {
+      materialId: material.id,
+      filePath: storedFile.key,
+      mimeType: data.mimeType || 'application/pdf',
+    });
+
+    return material;
   }
 
   /** Update material metadata. Only the uploader may edit. */
@@ -112,8 +104,14 @@ export class MaterialsService {
 
   /** Delete a material. Only the uploader may delete. */
   async deleteMaterial(materialId: string, userId: string) {
-    await this.assertUploader(materialId, userId);
+    const material = await this.assertUploader(materialId, userId);
     await prisma.material.delete({ where: { id: materialId } });
+    
+    if (material.s3Url) {
+      const key = material.s3Url.startsWith('/') ? material.s3Url.substring(1) : material.s3Url;
+      await this.storageProvider.delete(key);
+    }
+    
     return { deleted: true, id: materialId };
   }
 

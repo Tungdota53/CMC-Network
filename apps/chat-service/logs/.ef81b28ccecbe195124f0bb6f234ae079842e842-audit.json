@@ -6,24 +6,39 @@
     "auditLog": "logs\\.ef81b28ccecbe195124f0bb6f234ae079842e842-audit.json",
     "files": [
         {
-            "date": 1780675882763,
-            "name": "logs\\chat-service-2026-06-05.log",
-            "hash": "0dc65d0a63e4a1a70341d7bde0e930ad372ecf41e4a80a01b6874f51a15ed703"
+            "date": 1782426017337,
+            "name": "logs\\chat-service-2026-06-26.log",
+            "hash": "d99058aabff958aa62040ac3b42343413cd8708f65c1e64bd56dbc445703e085"
         },
         {
-            "date": 1780683272024,
-            "name": "logs\\chat-service-2026-06-06.log",
-            "hash": "2066d7630d61e988b37dac480b1bc9b5632490846782e24f4e08d70fe9b31301"
+            "date": 1782576905041,
+            "name": "logs\\chat-service-2026-06-27.log",
+            "hash": "559c6a309c00d743e438e4665eb5376d1ab50d1e22499605d188ade3d55e66a4"
         },
         {
-            "date": 1780765264901,
-            "name": "logs\\chat-service-2026-06-07.log",
-            "hash": "17c90f71b53e7c32323bf54267b0dd6ddba680aeb5593be92ac0b651d2a46033"
+            "date": 1782579661626,
+            "name": "logs\\chat-service-2026-06-28.log",
+            "hash": "7f87d62d3d6a616d44b922b52c59772459a8e1fc977a71382e92bdfa52ccb1da"
         },
         {
-            "date": 1780852471819,
-            "name": "logs\\chat-service-2026-06-08.log",
-            "hash": "f5525af791e5916bcdb4fdf054125368d8a2b0e988c2cc8ed5b6a0b0d15f3e99"
+            "date": 1782812202794,
+            "name": "logs\\chat-service-2026-06-30.log",
+            "hash": "8e1984362025d386ba247ba6e61248320d40912690f627590e4092bb8c6850b2"
+        },
+        {
+            "date": 1783075768237,
+            "name": "logs\\chat-service-2026-07-03.log",
+            "hash": "2d3613c2b55664ab86b1ea9e45f5ce129a332278b251458663a93616068e3aa3"
+        },
+        {
+            "date": 1783306212784,
+            "name": "logs\\chat-service-2026-07-06.log",
+            "hash": "e0789aad4988873b21acdb9bf5b6ca4dc975cbeed7ebbe48e86c1ba1a6dde37d"
+        },
+        {
+            "date": 1783393966833,
+            "name": "logs\\chat-service-2026-07-07.log",
+            "hash": "5ad3345107ed961c78f6741eb1e1566960fc881ef41a1331ac858eee618d2167"
         }
     ],
     "hashType": "sha256"

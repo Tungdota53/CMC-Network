@@ -6,24 +6,39 @@
     "auditLog": "logs\\.bb871d85359c02b4d9ad6eed1da55a7fe63e563c-audit.json",
     "files": [
         {
-            "date": 1780675883246,
-            "name": "logs\\user-service-2026-06-05.log",
-            "hash": "b3acf9ab9993955c0643779f00df76a1d95ec2091c62bc10aa4b40d01e4720a7"
+            "date": 1782426012199,
+            "name": "logs\\user-service-2026-06-26.log",
+            "hash": "e64073236fc49b56f800c908502f59800197c14289c711a119f05d73f61fb42f"
         },
         {
-            "date": 1780683272841,
-            "name": "logs\\user-service-2026-06-06.log",
-            "hash": "72f66f350f6974bf5f64a8186adb9885a0d3f876ca34b9805dbc9ad73be641d4"
+            "date": 1782576925272,
+            "name": "logs\\user-service-2026-06-27.log",
+            "hash": "3be818c0e10fd4bb375981a56ec3a969476c501301a594a0ae03ee99277ff7ae"
         },
         {
-            "date": 1780842406839,
-            "name": "logs\\user-service-2026-06-07.log",
-            "hash": "fcc19e1446447950943555c25d91f34b3470f39b770e7a132e344d317155e995"
+            "date": 1782579662834,
+            "name": "logs\\user-service-2026-06-28.log",
+            "hash": "589f3d5cf5e5ca6c3e3ffb26f2abea2f7a13a9690872282862608ad16d9c4df0"
         },
         {
-            "date": 1780852470543,
-            "name": "logs\\user-service-2026-06-08.log",
-            "hash": "b4750c69346d2944e6c54e5a7e98a89344f65f848aebb05020eb2f63b470f983"
+            "date": 1782812212455,
+            "name": "logs\\user-service-2026-06-30.log",
+            "hash": "8b5ee34426a50ea0541044958576141e60f1bf0e3cedfcbe9bad9c64f28909eb"
+        },
+        {
+            "date": 1783075772710,
+            "name": "logs\\user-service-2026-07-03.log",
+            "hash": "26444f1e5605c5c1c0e5b3208b48e6f416ac24e235be5203b868c0a3a11f7a36"
+        },
+        {
+            "date": 1783306219040,
+            "name": "logs\\user-service-2026-07-06.log",
+            "hash": "e9bfd32f3bbf8b5d98a444a742f1b69aeb6b4d837e564cc1675d6e3c95005017"
+        },
+        {
+            "date": 1783393973858,
+            "name": "logs\\user-service-2026-07-07.log",
+            "hash": "d36e0b91abcc47039c1e1afd679617b061d2a9cff828307068ddbebdfa4c7072"
         }
     ],
     "hashType": "sha256"

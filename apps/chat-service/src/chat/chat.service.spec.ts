@@ -1,8 +1,9 @@
 import { ChatService } from './chat.service';
 import { prisma } from '@campus-connect/database';
 
-jest.mock('@campus-connect/database', () => ({
-  prisma: {
+jest.mock('@campus-connect/database', () => {
+  const mockPrisma = {
+    $transaction: jest.fn().mockImplementation((args) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
     conversation: {
       findMany: jest.fn(),
       create: jest.fn(),
@@ -18,8 +19,12 @@ jest.mock('@campus-connect/database', () => ({
       findMany: jest.fn(),
       findUnique: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: mockPrisma,
+    PrismaClient: jest.fn().mockImplementation(() => mockPrisma),
+  };
+});
 
 describe('ChatService — direct conversations', () => {
   let service: ChatService;

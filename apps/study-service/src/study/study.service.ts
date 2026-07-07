@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { prisma } from '@campus-connect/database';
+import { prisma, ConversationType } from '@campus-connect/database';
 
 @Injectable()
 export class StudyService {
@@ -13,7 +13,7 @@ export class StudyService {
   async createStudyGroup(data: any) {
     const group = await prisma.studyGroup.create({
       data: {
-        creatorId: data.creatorId,
+        creator: { connect: { id: data.creatorId } },
         title: data.title,
         subject: data.subject,
         description: data.description,
@@ -21,7 +21,21 @@ export class StudyService {
         maxMembers: data.maxMembers,
         scheduledTime: new Date(data.scheduledTime),
         schedule: data.schedule,
+        type: data.type || 'STUDY',
+        conversation: {
+          create: {
+            type: ConversationType.GROUP,
+            name: data.title,
+            members: {
+              create: {
+                userId: data.creatorId,
+                role: 'admin',
+              }
+            }
+          }
+        }
       },
+      include: { conversation: true },
     });
 
     await prisma.studyGroupMember.create({
@@ -50,6 +64,7 @@ export class StudyService {
         scheduledTime: data.scheduledTime ? new Date(data.scheduledTime) : group.scheduledTime,
         schedule: data.schedule ?? group.schedule,
         status: data.status ?? group.status,
+        type: data.type ?? group.type,
       },
     });
   }
@@ -129,6 +144,18 @@ export class StudyService {
         prisma.studyGroup.update({ where: { id: groupId }, data: { memberCount: { increment: 1 } } }),
         prisma.joinRequest.update({ where: { id: requestId }, data: { status: 'APPROVED' } }),
       ]);
+      
+      // Thêm member vào group chat
+      if (group?.conversationId) {
+        await prisma.conversationMember.create({
+          data: {
+            conversationId: group.conversationId,
+            userId: request.userId,
+            role: 'member',
+          }
+        }).catch(() => null); // Bỏ qua nếu đã có
+      }
+      
       return { status: 'APPROVED', requestId };
     }
 
@@ -171,5 +198,48 @@ export class StudyService {
       throw new ForbiddenException('Chỉ thành viên mới có quyền này');
     }
     return member;
+  }
+
+  // --- STUDY REQUESTS ---
+
+  async getStudyRequests() {
+    return prisma.studyRequest.findMany({
+      include: { user: { select: { fullName: true, avatarUrl: true, major: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createStudyRequest(userId: string, data: any) {
+    return prisma.studyRequest.create({
+      data: {
+        userId,
+        title: data.title,
+        description: data.description,
+        subject: data.subject,
+        type: data.type || 'FIND_PARTNER',
+        preferredTime: data.preferredTime,
+        preferredLocation: data.preferredLocation,
+      },
+    });
+  }
+
+  async updateStudyRequest(id: string, userId: string, data: any) {
+    const req = await prisma.studyRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('Không tìm thấy yêu cầu');
+    if (req.userId !== userId) throw new ForbiddenException('Chỉ người tạo mới có quyền sửa');
+
+    return prisma.studyRequest.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteStudyRequest(id: string, userId: string) {
+    const req = await prisma.studyRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('Không tìm thấy yêu cầu');
+    if (req.userId !== userId) throw new ForbiddenException('Chỉ người tạo mới có quyền xóa');
+
+    await prisma.studyRequest.delete({ where: { id } });
+    return { deleted: true, id };
   }
 }

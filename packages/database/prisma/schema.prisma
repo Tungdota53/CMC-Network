@@ -26,16 +26,20 @@ model User {
   bio                    String?
   avatarUrl              String?
   coverPhotoUrl          String?
-  location               String?
   reputationScore        Int                   @default(0)
   isVerified             Boolean               @default(false)
   isSuspended            Boolean               @default(false)
   lastLoginAt            DateTime?
   createdAt              DateTime              @default(now())
   updatedAt              DateTime              @updatedAt
+  location               String?
+  banExpiresAt           DateTime?
   deletedAt              DateTime?
   violationStrikes       Int                   @default(0)
-  banExpiresAt           DateTime?
+  auditLogsActed         AuditLog[]            @relation("AuditActor")
+  auditLogsTargeted      AuditLog[]            @relation("AuditTarget")
+  clubMemberships        ClubMember[]
+  ownedClubs             Club[]                @relation("ClubOwner")
   commentLikes           CommentLike[]
   comments               Comment[]
   conversationMembers    ConversationMember[]
@@ -49,34 +53,31 @@ model User {
   materialBookmarks      MaterialBookmark[]
   materialReviews        MaterialReview[]
   materials              Material[]
+  mentorApplications     MentorApplication[]
   menteeBookings         MentorBooking[]       @relation("MenteeBookings")
   mentorBookings         MentorBooking[]       @relation("MentorBookings")
   mentorProfile          MentorProfile?
   givenMentorReviews     MentorReview[]        @relation("GivenMentorReviews")
   mentorReviews          MentorReview[]        @relation("MentorReviews")
   sentMessages           Message[]
+  notifications          Notification[]
   postLikes              PostLike[]
   postSaves              PostSave[]
-  storyViews             StoryView[]
   posts                  Post[]
   products               Product[]
+  reports                Report[]
   reputationHistory      ReputationHistory[]
+  storyViews             StoryView[]
   studyGroupMembers      StudyGroupMember[]
   studyGroups            StudyGroup[]
+  studyRequests          StudyRequest[]
   achievements           UserAchievement[]
   badges                 UserBadge[]
   certificates           UserCertificate[]
   projects               UserProject[]
   skills                 UserSkill[]
-  notifications          Notification[]
-  reports                Report[]
-  auditLogsActed         AuditLog[]            @relation("AuditActor")
-  auditLogsTargeted      AuditLog[]            @relation("AuditTarget")
   userViolations         UserViolation[]
   verificationRequests   VerificationRequest[]
-  ownedClubs             Club[]                @relation("ClubOwner")
-  clubMemberships        ClubMember[]
-  mentorApplications     MentorApplication[]
 
   @@index([department])
   @@index([major])
@@ -181,10 +182,10 @@ model Post {
   comments     Comment[]
   likesRel     PostLike[]
   saves        PostSave[]
-  storySeenBy  StoryView[]
   sharedFrom   Post?          @relation("SharedPost", fields: [sharedFromId], references: [id])
   sharedBy     Post[]         @relation("SharedPost")
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storySeenBy  StoryView[]
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([type])
@@ -209,8 +210,8 @@ model PostLike {
   id        String   @id @default(uuid()) @db.Uuid
   postId    String   @db.Uuid
   userId    String   @db.Uuid
-  type      String   @default("LIKE")
   createdAt DateTime @default(now())
+  type      String   @default("LIKE")
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -264,24 +265,27 @@ model CommentLike {
 }
 
 model StudyGroup {
-  id            String             @id @default(uuid()) @db.Uuid
-  creatorId     String             @db.Uuid
-  title         String
-  subject       String
-  description   String?
-  location      String
-  maxMembers    Int
-  scheduledTime DateTime
-  schedule      String?
-  status        StudyGroupStatus   @default(OPEN)
-  memberCount   Int                @default(1)
+  id             String             @id @default(uuid()) @db.Uuid
+  creatorId      String             @db.Uuid
+  title          String
+  subject        String
+  description    String?
+  location       String
+  maxMembers     Int
+  scheduledTime  DateTime
+  schedule       String?
+  status         StudyGroupStatus   @default(OPEN)
+  memberCount    Int                @default(1)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  conversationId String?            @unique @db.Uuid
+  todoList       Json?
+  type           StudyGroupType     @default(STUDY)
   whiteboardData Json?
-  todoList      Json?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  joinRequests  JoinRequest[]
-  members       StudyGroupMember[]
-  creator       User               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  joinRequests   JoinRequest[]
+  members        StudyGroupMember[]
+  conversation   Conversation?      @relation(fields: [conversationId], references: [id])
+  creator        User               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
 
   @@index([subject])
   @@index([status])
@@ -330,9 +334,10 @@ model Material {
   reviewCount   Int                @default(0)
   aiSummary     String?
   tags          String[]
-  isOfficial    Boolean            @default(false)
   createdAt     DateTime           @default(now())
   deletedAt     DateTime?
+    isOfficial    Boolean            @default(false)
+  status        MaterialStatus     @default(PROCESSING)
   bookmarks     MaterialBookmark[]
   reviews       MaterialReview[]
   uploader      User               @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
@@ -484,14 +489,15 @@ model EventAttendee {
 }
 
 model Conversation {
-  id        String               @id @default(uuid()) @db.Uuid
-  type      ConversationType     @default(DIRECT)
-  name      String?
-  avatar    String?
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
-  members   ConversationMember[]
-  messages  Message[]
+  id         String               @id @default(uuid()) @db.Uuid
+  type       ConversationType     @default(DIRECT)
+  name       String?
+  avatar     String?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  members    ConversationMember[]
+  messages   Message[]
+  studyGroup StudyGroup?
 
   @@map("conversations")
 }
@@ -549,6 +555,144 @@ model ReputationHistory {
   @@index([userId])
   @@index([createdAt(sort: Desc)])
   @@map("reputation_history")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType
+  content   String
+  isRead    Boolean          @default(false)
+  relatedId String?          @db.Uuid
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model Report {
+  id         String       @id @default(uuid()) @db.Uuid
+  reporterId String       @db.Uuid
+  targetId   String       @db.Uuid
+  targetType ReportType
+  reason     String
+  status     ReportStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("reports")
+}
+
+model SystemConfig {
+  key   String @id
+  value String
+
+  @@map("system_configs")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String   @db.Uuid
+  targetId  String?  @db.Uuid
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  actor     User     @relation("AuditActor", fields: [actorId], references: [id], onDelete: Cascade)
+  target    User?    @relation("AuditTarget", fields: [targetId], references: [id])
+
+  @@index([actorId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model UserViolation {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  reason      String
+  strikeLevel Int
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_violations")
+}
+
+model VerificationRequest {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  type      String
+  documents String[]
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("verification_requests")
+}
+
+model MentorApplication {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  status    String   @default("PENDING")
+  documents String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("mentor_applications")
+}
+
+model Club {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  ownerId     String       @db.Uuid
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  members     ClubMember[]
+  owner       User         @relation("ClubOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("clubs")
+}
+
+model ClubMember {
+  id       String   @id @default(uuid()) @db.Uuid
+  clubId   String   @db.Uuid
+  userId   String   @db.Uuid
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now())
+  club     Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@map("club_members")
+}
+
+model StudyRequest {
+  id                String           @id @default(uuid()) @db.Uuid
+  userId            String           @db.Uuid
+  title             String
+  description       String?
+  subject           String?
+  type              StudyRequestType @default(FIND_PARTNER)
+  preferredTime     String?
+  preferredLocation String?
+  status            RequestStatus    @default(ACTIVE)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([subject])
+  @@index([status])
+  @@index([userId])
+  @@map("study_requests")
 }
 
 enum Role {
@@ -659,6 +803,25 @@ enum StudyGroupStatus {
   CANCELLED
 }
 
+enum StudyGroupType {
+  STUDY
+  PROJECT
+  RESEARCH
+  EXAM_PREP
+}
+
+enum StudyRequestType {
+  FIND_PARTNER
+  FIND_GROUP
+  FIND_TUTOR
+}
+
+enum RequestStatus {
+  ACTIVE
+  MATCHED
+  CLOSED
+}
+
 enum JoinRequestStatus {
   PENDING
   APPROVED
@@ -679,37 +842,6 @@ enum ProductStatus {
   SOLD
   RESERVED
   REMOVED
-}
-
-model Notification {
-  id        String           @id @default(uuid()) @db.Uuid
-  userId    String           @db.Uuid
-  type      NotificationType
-  content   String
-  isRead    Boolean          @default(false)
-  relatedId String?          @db.Uuid
-  createdAt DateTime         @default(now())
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([isRead])
-  @@index([createdAt(sort: Desc)])
-  @@map("notifications")
-}
-
-model Report {
-  id         String       @id @default(uuid()) @db.Uuid
-  reporterId String       @db.Uuid
-  targetId   String       @db.Uuid
-  targetType ReportType
-  reason     String
-  status     ReportStatus @default(PENDING)
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-
-  @@index([status])
-  @@map("reports")
 }
 
 enum NotificationType {
@@ -735,89 +867,8 @@ enum ReportStatus {
   DISMISSED
 }
 
-model SystemConfig {
-  key   String @id
-  value String
-
-  @@map("system_configs")
-}
-
-model AuditLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  actorId   String   @db.Uuid
-  targetId  String?  @db.Uuid
-  action    String
-  metadata  Json?
-  createdAt DateTime @default(now())
-  actor     User     @relation("AuditActor", fields: [actorId], references: [id], onDelete: Cascade)
-  target    User?    @relation("AuditTarget", fields: [targetId], references: [id], onDelete: SetNull)
-
-  @@index([actorId])
-  @@index([createdAt(sort: Desc)])
-  @@map("audit_logs")
-}
-
-model UserViolation {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid
-  reason      String
-  strikeLevel Int
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("user_violations")
-}
-
-model VerificationRequest {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  type      String
-  documents String[]
-  status    String   @default("PENDING")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("verification_requests")
-}
-
-model MentorApplication {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  status    String   @default("PENDING")
-  documents String[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("mentor_applications")
-}
-
-model Club {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String
-  description String?
-  ownerId     String       @db.Uuid
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  owner       User         @relation("ClubOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members     ClubMember[]
-
-  @@map("clubs")
-}
-
-model ClubMember {
-  id       String   @id @default(uuid()) @db.Uuid
-  clubId   String   @db.Uuid
-  userId   String   @db.Uuid
-  role     String   @default("MEMBER")
-  joinedAt DateTime @default(now())
-  club     Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([clubId, userId])
-  @@map("club_members")
+enum MaterialStatus {
+  PROCESSING
+  READY
+  FAILED
 }

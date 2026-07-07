@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
-import { NotificationDispatcher, validateUpload } from '@campus-connect/common';
+import { NotificationDispatcher, validateUpload, createStorageProvider } from '@campus-connect/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
 @Injectable()
 export class UsersService {
   private readonly uploadDir = join(process.cwd(), 'uploads', 'avatars');
+  private readonly storageProvider = createStorageProvider(join(process.cwd(), 'uploads'), '');
 
   constructor(private readonly notifier: NotificationDispatcher) {
     this.ensureUploadDir();
@@ -142,14 +143,23 @@ export class UsersService {
       { preset: 'image', maxSizeBytes: 5 * 1024 * 1024 },
     );
 
-    const ext = file.originalname.split('.').pop() || 'png';
-    const safeFileName = `${userId}-${Date.now()}.${ext}`;
-    const filePath = join(this.uploadDir, safeFileName);
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
 
-    await fs.writeFile(filePath, file.buffer);
+    const storedFile = await this.storageProvider.put({
+      buffer: file.buffer,
+      originalName: file.originalname,
+      mimeType: file.mimetype || 'image/png',
+      size: file.size || file.buffer.length,
+      folder: 'avatars',
+    });
 
-    const avatarUrl = `/avatars/${safeFileName}`;
+    const avatarUrl = storedFile.url;
     await this.updateProfile(userId, { avatarUrl });
+
+    if (user?.avatarUrl) {
+      const oldKey = user.avatarUrl.startsWith('/') ? user.avatarUrl.substring(1) : user.avatarUrl;
+      await this.storageProvider.delete(oldKey);
+    }
 
     return { message: 'Upload ảnh đại diện thành công', avatarUrl };
   }
@@ -212,6 +222,7 @@ export class UsersService {
 
     if (!request) throw new NotFoundException('Không tìm thấy lời mời kết bạn');
 
+    let updatedRequest;
     if (status === 'accepted') {
       const existingFriendship = await prisma.friendship.findFirst({
         where: {
@@ -222,31 +233,46 @@ export class UsersService {
         },
       });
 
+      const operations = [];
       if (!existingFriendship) {
-        await prisma.friendship.create({
-          data: { userAId: request.senderId, userBId: request.receiverId },
-        });
+        operations.push(
+          prisma.friendship.create({
+            data: { userAId: request.senderId, userBId: request.receiverId },
+          })
+        );
       }
+      
+      operations.push(
+        prisma.friendRequest.update({
+          where: { id: requestId },
+          data: { status },
+          include: { sender: true },
+        })
+      );
+
+      const result = await prisma.$transaction(operations);
+      updatedRequest = result[result.length - 1];
 
       const accepter = await prisma.user.findUnique({
         where: { id: request.receiverId },
         select: { fullName: true },
       });
+      
       await this.notify(
         request.senderId,
         'FRIEND_ACCEPT',
         `${accepter?.fullName ?? 'Ai đó'} đã chấp nhận lời mời kết bạn`,
         request.receiverId,
       );
+    } else {
+      updatedRequest = await prisma.friendRequest.update({
+        where: { id: requestId },
+        data: { status },
+        include: { sender: true },
+      });
     }
 
-    return prisma.friendRequest.update({
-      where: { id: requestId },
-      data: { status },
-      include: {
-        sender: true,
-      },
-    });
+    return updatedRequest;
   }
 
   async cancelFriendRequest(userId: string, requestId: string) {

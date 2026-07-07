@@ -90,4 +90,37 @@ export class StudyController {
   ) {
     return this.studyService.updateTodoList(id, resolveUserId(tokenUserId, data.userId), data.todoList);
   }
+
+  // --- STUDY REQUESTS ---
+
+  @Get('requests')
+  async getStudyRequests() {
+    return this.studyService.getStudyRequests();
+  }
+
+  @Post('requests')
+  async createStudyRequest(
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string; [key: string]: unknown },
+  ) {
+    return this.studyService.createStudyRequest(resolveUserId(tokenUserId, data.userId), data);
+  }
+
+  @Put('requests/:id')
+  async updateStudyRequest(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string; [key: string]: unknown },
+  ) {
+    return this.studyService.updateStudyRequest(id, resolveUserId(tokenUserId, data.userId), data);
+  }
+
+  @Delete('requests/:id')
+  async deleteStudyRequest(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string },
+  ) {
+    return this.studyService.deleteStudyRequest(id, resolveUserId(tokenUserId, data?.userId));
+  }
 }

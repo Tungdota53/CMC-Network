@@ -6,24 +6,39 @@
     "auditLog": "logs\\.60455bab21b5b7a1c9f39afd61f11ad46c8db703-audit.json",
     "files": [
         {
-            "date": 1780675882622,
-            "name": "logs\\marketplace-service-2026-06-05.log",
-            "hash": "c3c429d7f7f2b73743903f38863538d8759e680b08396aca21c991c326ba5b46"
+            "date": 1782426000396,
+            "name": "logs\\marketplace-service-2026-06-26.log",
+            "hash": "9316d0f5327661a48ac7c4f1e18f0a5d3e2130da8ed2ddea069abb27c06922b9"
         },
         {
-            "date": 1780683267373,
-            "name": "logs\\marketplace-service-2026-06-06.log",
-            "hash": "d236921c08a2ba5a45fe72eb54f21184bcaeff248910a5b60d21dad313fdead6"
+            "date": 1782576905818,
+            "name": "logs\\marketplace-service-2026-06-27.log",
+            "hash": "f0c5ad1f24352f39ac2e7f92857e97c197a06b786fd18a1961542e7bdf4770bf"
         },
         {
-            "date": 1780842406016,
-            "name": "logs\\marketplace-service-2026-06-07.log",
-            "hash": "a15bd554de179a07d5a863e3e184dccdfea77d92490c04d76c8b2a7a08374d45"
+            "date": 1782579662600,
+            "name": "logs\\marketplace-service-2026-06-28.log",
+            "hash": "09044ec62cd24d38979db3a4aae9ed19908e541ec8e9ecdcdd84664683c4627f"
         },
         {
-            "date": 1780852466023,
-            "name": "logs\\marketplace-service-2026-06-08.log",
-            "hash": "b752c35d82f85435a251c21be7733fa2864c87befa035a94f7551e6a12c6f95c"
+            "date": 1782812204193,
+            "name": "logs\\marketplace-service-2026-06-30.log",
+            "hash": "c2aa7df10661ee172ecbf7e928fc03cb3f25e14bc21b1292424d2bb3864abe54"
+        },
+        {
+            "date": 1783075770672,
+            "name": "logs\\marketplace-service-2026-07-03.log",
+            "hash": "0cbe0a2844521a80e90062a35acf4f4fdb3031dd2e14c993774e4c572e5921a8"
+        },
+        {
+            "date": 1783306213078,
+            "name": "logs\\marketplace-service-2026-07-06.log",
+            "hash": "169fc3f60e02148966d64ce87e686ecd37755f633d7c5585be9f009692217642"
+        },
+        {
+            "date": 1783393967021,
+            "name": "logs\\marketplace-service-2026-07-07.log",
+            "hash": "dbc460cc0b5813a77ccc6ce766849d8e3534b952d835d1c0985b9f7670a457b6"
         }
     ],
     "hashType": "sha256"

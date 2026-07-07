@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Delete, Body, Param, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Body, Param, Query, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, resolveUserId } from '@campus-connect/common';
 import { UsersService } from './users.service';
@@ -34,7 +34,17 @@ export class UsersController {
 
   @Post(':id/avatar')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadAvatar(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+  async uploadAvatar(
+    @Param('id') id: string, 
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp)$/ }),
+        ],
+      }),
+    ) file: Express.Multer.File
+  ) {
     return this.usersService.uploadAvatar(id, file);
   }
 

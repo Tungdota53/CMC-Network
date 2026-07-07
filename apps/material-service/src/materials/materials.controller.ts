@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, BadRequestException } from '@nestjs/common';
 import { CurrentUser, resolveUserId } from '@campus-connect/common';
 import { MaterialsService } from './materials.service';
 
@@ -14,10 +14,24 @@ export class MaterialsController {
   @Post('upload')
   async uploadMaterial(
     @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { uploaderId?: string; [key: string]: unknown },
+    @Body() data: { uploaderId?: string; fileBuffer?: string; fileName?: string; [key: string]: unknown },
   ) {
+    if (!data.fileBuffer) throw new BadRequestException('Vui lòng chọn file');
+    
+    // Strict limits based on user request (10MB for PDF, 20MB for Document)
+    const maxSize = data.fileName?.endsWith('.pdf') ? 10 * 1024 * 1024 : 20 * 1024 * 1024;
+    const buffer = Buffer.from(data.fileBuffer, 'base64');
+    
+    if (buffer.length > maxSize) {
+      throw new BadRequestException(`File size exceeds the limit of ${maxSize / (1024 * 1024)}MB`);
+    }
+
+    const mimeType = data.fileName?.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
+
     return this.materialsService.uploadMaterial({
       ...data,
+      fileBuffer: buffer,
+      mimeType,
       uploaderId: resolveUserId(tokenUserId, data.uploaderId),
     } as never);
   }

@@ -1,18 +1,24 @@
 import { MaterialsService } from './materials.service';
 import { prisma } from '@campus-connect/database';
 
-jest.mock('@campus-connect/database', () => ({
-  FileType: { PDF: 'PDF', DOC: 'DOC', OTHER: 'OTHER' },
-  prisma: {
+jest.mock('@campus-connect/database', () => {
+  const mockPrisma = {
+    $transaction: jest.fn().mockImplementation((args) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
     material: { findMany: jest.fn(), create: jest.fn() },
-  },
-}));
+  };
+  return {
+    FileType: { PDF: 'PDF', DOC: 'DOC', OTHER: 'OTHER' },
+    prisma: mockPrisma,
+    PrismaClient: jest.fn().mockImplementation(() => mockPrisma),
+  };
+});
 
 describe('MaterialsService — upload validation', () => {
   let service: MaterialsService;
+  const mockQueue = { add: jest.fn().mockResolvedValue({}) };
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new MaterialsService();
+    service = new MaterialsService(mockQueue as any);
   });
 
   it('rejects an oversized file (>50MB)', async () => {

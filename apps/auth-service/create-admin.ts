@@ -4,7 +4,17 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  const password = process.env.ADMIN_PASSWORD;
+
+  if (!password) {
+    throw new Error('ADMIN_PASSWORD is required');
+  }
+
+  if (password.length < 12) {
+    throw new Error('ADMIN_PASSWORD must be at least 12 characters');
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
   await prisma.user.upsert({
     where: { email: 'admin@cmc.edu.vn' },
     update: { 
@@ -20,9 +30,7 @@ async function main() {
       passwordHash: hashedPassword,
     }
   });
-  console.log('Admin account created successfully.');
-  console.log('Email: admin@cmc.edu.vn');
-  console.log('Password: admin123');
+  console.log('Admin user created successfully');
 }
 
 main()

@@ -1,9 +1,9 @@
 import { PostsService } from './posts.service';
 import { prisma } from '@campus-connect/database';
 
-jest.mock('@campus-connect/database', () => ({
-  PostType: { TEXT: 'TEXT', IMAGE: 'IMAGE', STORY: 'STORY' },
-  prisma: {
+jest.mock('@campus-connect/database', () => {
+  const mockPrisma = {
+    $transaction: jest.fn().mockImplementation((args) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
     post: {
       create: jest.fn(),
       update: jest.fn(),
@@ -16,8 +16,13 @@ jest.mock('@campus-connect/database', () => ({
     notification: { create: jest.fn() },
     user: { findUnique: jest.fn() },
     storyView: { upsert: jest.fn() },
-  },
-}));
+  };
+  return {
+    PostType: { TEXT: 'TEXT', IMAGE: 'IMAGE', STORY: 'STORY' },
+    prisma: mockPrisma,
+    PrismaClient: jest.fn().mockImplementation(() => mockPrisma),
+  };
+});
 
 const notifier = { push: jest.fn().mockResolvedValue(undefined) };
 

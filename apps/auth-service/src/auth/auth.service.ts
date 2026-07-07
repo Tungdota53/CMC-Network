@@ -5,12 +5,13 @@ import { prisma } from '@campus-connect/database';
 import { getRedisClient } from '@campus-connect/cache';
 import { authenticator } from 'otplib';
 import * as qrcode from 'qrcode';
+import { RegisterDto, LoginDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
   constructor(private jwtService: JwtService) {}
 
-  async register(registerDto: any) {
+  async register(registerDto: RegisterDto) {
     const { email, password, fullName } = registerDto;
     
     // Check if user exists
@@ -82,8 +83,8 @@ export class AuthService {
     return { message: 'Đăng ký thành công', userId: user.id };
   }
 
-  async login(loginDto: any) {
-    const { email: identifier, password } = loginDto;
+  async login(loginDto: LoginDto) {
+    const { identifier, password } = loginDto;
     const user = await prisma.user.findFirst({ 
       where: { 
         OR: [
@@ -98,16 +99,37 @@ export class AuthService {
     }
 
     if (user.twoFactorStatus === 'ENABLED') {
+      const temp2faToken = await this.jwtService.signAsync(
+        { sub: user.id, type: '2FA_TEMP' },
+        { expiresIn: '5m' }
+      );
       return {
         requires2FA: true,
-        userId: user.id,
+        temp2faToken,
       };
     }
+
+    // Track activity for DAU/MAU analytics.
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
 
     return this.generateTokens(user);
   }
 
-  async verify2FALogin(userId: string, token: string) {
+  async verify2FALogin(temp2faToken: string, token: string) {
+    let userId: string;
+    try {
+      const payload = await this.jwtService.verifyAsync(temp2faToken);
+      if (payload.type !== '2FA_TEMP') {
+        throw new Error('Invalid token type');
+      }
+      userId = payload.sub;
+    } catch (e) {
+      throw new UnauthorizedException('Token 2FA không hợp lệ hoặc đã hết hạn');
+    }
+
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user || user.twoFactorStatus !== 'ENABLED' || !user.twoFactorSecret) {
       throw new UnauthorizedException('2FA không hợp lệ');
@@ -131,7 +153,7 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  private async generateTokens(user: any) {
+  public async generateTokens(user: any) {
     const payload = { sub: user.id, email: user.email, role: user.role };
     const access_token = await this.jwtService.signAsync(payload, { expiresIn: '15m' });
     const refresh_token = await this.jwtService.signAsync(payload, { expiresIn: '7d' });
@@ -182,7 +204,7 @@ export class AuthService {
     const qrCode = await qrcode.toDataURL(otpauthUrl);
 
     return {
-      secret,
+      ...(process.env.NODE_ENV !== 'production' && { secret }),
       qrCode,
     };
   }
@@ -232,6 +254,9 @@ export class AuthService {
       data: { passwordHash: newHash },
     });
 
-    return { message: 'Đổi mật khẩu thành công' };
+    const redis = getRedisClient();
+    await redis.del(`refresh_token:${userId}`);
+
+    return { message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.' };
   }
 }

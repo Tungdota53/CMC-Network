@@ -1,11 +1,16 @@
 import { MarketplaceService } from './marketplace.service';
 import { prisma } from '@campus-connect/database';
 
-jest.mock('@campus-connect/database', () => ({
-  prisma: {
+jest.mock('@campus-connect/database', () => {
+  const mockPrisma = {
+    $transaction: jest.fn().mockImplementation((args) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
     product: { findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-  },
-}));
+  };
+  return {
+    prisma: mockPrisma,
+    PrismaClient: jest.fn().mockImplementation(() => mockPrisma),
+  };
+});
 
 describe('MarketplaceService', () => {
   let service: MarketplaceService;

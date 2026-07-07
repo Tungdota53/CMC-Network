@@ -2,8 +2,9 @@ import { NotFoundException, ForbiddenException, ConflictException, BadRequestExc
 import { prisma } from '@campus-connect/database';
 import { UsersService } from './users.service';
 
-jest.mock('@campus-connect/database', () => ({
-  prisma: {
+jest.mock('@campus-connect/database', () => {
+  const mockPrisma = {
+    $transaction: jest.fn().mockImplementation((args) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
     user: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -49,8 +50,12 @@ jest.mock('@campus-connect/database', () => ({
       create: jest.fn(),
       delete: jest.fn(),
     },
-  },
-}));
+  };
+  return {
+    prisma: mockPrisma,
+    PrismaClient: jest.fn().mockImplementation(() => mockPrisma),
+  };
+});
 
 const mockedPrisma = prisma as any;
 const notifier = { push: jest.fn().mockResolvedValue(undefined) };
