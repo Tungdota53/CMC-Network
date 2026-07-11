@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
 
 const MENTOR_SELECT = {
@@ -34,7 +38,11 @@ export class MentorsService {
       where: { userId },
       include: {
         user: {
-          select: { ...MENTOR_SELECT, bio: true, badges: { select: { badge: true } } },
+          select: {
+            ...MENTOR_SELECT,
+            bio: true,
+            badges: { select: { badge: true } },
+          },
         },
       },
     });
@@ -56,9 +64,17 @@ export class MentorsService {
   /** Đăng ký (hoặc cập nhật) làm mentor. */
   async registerMentor(
     userId: string,
-    data: { bio?: string; expertise?: string[]; gpa?: number; schedule?: unknown },
+    data: {
+      bio?: string;
+      expertise?: string[];
+      gpa?: number;
+      schedule?: unknown;
+    },
   ) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
 
     return prisma.mentorProfile.upsert({
@@ -82,7 +98,12 @@ export class MentorsService {
   /** Mentee đặt lịch với mentor. */
   async createBooking(
     menteeId: string,
-    data: { mentorId: string; scheduledAt: string; topic?: string; notes?: string },
+    data: {
+      mentorId: string;
+      scheduledAt: string;
+      topic?: string;
+      notes?: string;
+    },
   ) {
     if (!data.mentorId || !data.scheduledAt) {
       throw new BadRequestException('Thiếu mentorId hoặc thời gian đặt lịch');
@@ -114,7 +135,8 @@ export class MentorsService {
 
   /** Danh sách lịch của user (vai trò mentor hoặc mentee). */
   async getBookings(userId: string, role: 'mentor' | 'mentee') {
-    const where = role === 'mentor' ? { mentorId: userId } : { menteeId: userId };
+    const where =
+      role === 'mentor' ? { mentorId: userId } : { menteeId: userId };
     return prisma.mentorBooking.findMany({
       where,
       orderBy: { scheduledAt: 'desc' },
@@ -131,7 +153,9 @@ export class MentorsService {
     bookingId: string,
     status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW',
   ) {
-    const booking = await prisma.mentorBooking.findUnique({ where: { id: bookingId } });
+    const booking = await prisma.mentorBooking.findUnique({
+      where: { id: bookingId },
+    });
     if (!booking) throw new NotFoundException('Không tìm thấy lịch hẹn');
     if (booking.mentorId !== userId && booking.menteeId !== userId) {
       throw new BadRequestException('Bạn không có quyền với lịch hẹn này');
@@ -152,17 +176,21 @@ export class MentorsService {
 
     // Tích hợp đồng bộ Google Calendar
     if (status === 'CONFIRMED') {
-      await this.syncWithGoogleCalendar(updated);
+      this.syncWithGoogleCalendar(updated);
     }
 
     return updated;
   }
 
   /** Mock Google Calendar Sync */
-  private async syncWithGoogleCalendar(booking: any) {
-    console.log(`[Google Calendar Sync] Bắt đầu đồng bộ cho booking ${booking.id}...`);
+  private syncWithGoogleCalendar(booking: any) {
+    console.log(
+      `[Google Calendar Sync] Bắt đầu đồng bộ cho booking ${booking.id}...`,
+    );
     // Placeholder cho Google API call
-    console.log(`[Google Calendar Sync] Đã thêm sự kiện: Mentor Session vào lịch của Mentor và Mentee.`);
+    console.log(
+      `[Google Calendar Sync] Đã thêm sự kiện: Mentor Session vào lịch của Mentor và Mentee.`,
+    );
   }
 
   /** Mentee đánh giá mentor sau buổi học; cập nhật lại rating trung bình. */
@@ -170,7 +198,9 @@ export class MentorsService {
     menteeId: string,
     data: { bookingId: string; rating: number; comment?: string },
   ) {
-    const booking = await prisma.mentorBooking.findUnique({ where: { id: data.bookingId } });
+    const booking = await prisma.mentorBooking.findUnique({
+      where: { id: data.bookingId },
+    });
     if (!booking) throw new NotFoundException('Không tìm thấy lịch hẹn');
     if (booking.menteeId !== menteeId) {
       throw new BadRequestException('Bạn không phải mentee của buổi học này');

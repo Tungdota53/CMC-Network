@@ -12,14 +12,14 @@ export interface NotificationPayload {
  * to push a socket event to the chat-service hub (which owns the Socket.IO
  * server). Persistence is handled separately by the notifications module.
  *
- * The hub URL comes from CHAT_SERVICE_URL (default localhost:3005). Failures
+ * The hub URL comes from CHAT_SERVICE_URL (default localhost:38080). Failures
  * are swallowed and logged — a missed realtime ping must never break the
  * originating request.
  */
 @Injectable()
 export class NotificationDispatcher {
   private readonly logger = new Logger(NotificationDispatcher.name);
-  private readonly hubUrl = process.env.CHAT_SERVICE_URL || 'http://localhost:3005';
+  private readonly hubUrl = process.env.CHAT_SERVICE_URL || 'http://localhost:38080';
 
   async push(payload: NotificationPayload): Promise<void> {
     try {

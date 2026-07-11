@@ -4,12 +4,16 @@ import { Logger } from '@nestjs/common';
 import { prisma, MaterialStatus } from '@campus-connect/database';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { PDFParse } from 'pdf-parse';
 
 @Processor('material-processing')
 export class MaterialProcessor extends WorkerHost {
   private readonly logger = new Logger(MaterialProcessor.name);
 
-  async process(job: Job<{ materialId: string; filePath: string; mimeType: string }>, token?: string): Promise<any> {
+  async process(
+    job: Job<{ materialId: string; filePath: string; mimeType: string }>,
+    _token?: string,
+  ): Promise<any> {
     const { materialId, filePath, mimeType } = job.data;
     this.logger.log(`Processing material ${materialId}...`);
 
@@ -18,24 +22,30 @@ export class MaterialProcessor extends WorkerHost {
       const fileBuffer = await fs.readFile(fullPath);
 
       let aiSummary = null;
-      if (mimeType === 'application/pdf' && fileBuffer.length <= 5 * 1024 * 1024) {
-        const pdfParse = require('pdf-parse');
-        const pdfData = await pdfParse(fileBuffer);
+      if (
+        mimeType === 'application/pdf' &&
+        fileBuffer.length <= 5 * 1024 * 1024
+      ) {
+        const parser = new PDFParse({ data: fileBuffer });
+        const pdfData = await parser.getText();
+        await parser.destroy();
         const text = pdfData.text.substring(0, 20000);
-        
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
-        
-        const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000/api/v1/summarize';
+
+        const aiServiceUrl =
+          process.env.AI_SERVICE_URL ||
+          'http://localhost:8000/api/v1/summarize';
         const aiRes = await fetch(aiServiceUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text }),
-          signal: controller.signal as any
+          signal: controller.signal,
         });
-        
+
         clearTimeout(timeoutId);
-        
+
         if (aiRes.ok) {
           const resData = await aiRes.json();
           aiSummary = resData.summary;

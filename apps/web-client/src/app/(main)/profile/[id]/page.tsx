@@ -97,7 +97,7 @@ export default function PublicProfilePage() {
   }, [currentUser, params]);
 
   const handleMessage = async () => {
-    if (!currentUser || !params?.id) return;
+    if (!currentUser || !params?.id || !user) return;
     try {
       const res = await apiFetch('/api/chat/conversations/direct', {
         method: 'POST',
@@ -105,8 +105,8 @@ export default function PublicProfilePage() {
         body: JSON.stringify({ user1Id: currentUser.id, user2Id: params.id }),
       });
       if (res.ok) {
-        const data = await res.json();
-        router.push(`/chat?conversationId=${data.id}`);
+        // dispatch openChat event to trigger ChatWidget
+        window.dispatchEvent(new CustomEvent('openChat', { detail: { id: user.id, fullName: user.fullName, avatarUrl: user.avatarUrl } }));
       }
     } catch (err) {
       console.error('Failed to create/get conversation:', err);

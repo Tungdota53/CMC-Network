@@ -11,7 +11,8 @@
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
-    "eslint": "^8.0.0",
+    "eslint": "^9.39.4",
+    "typescript-eslint": "^8.60.1",
     "typescript": "^5.0.0"
   }
 }

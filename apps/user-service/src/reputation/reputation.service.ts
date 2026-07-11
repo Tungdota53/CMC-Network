@@ -30,7 +30,10 @@ export class ReputationService {
   async addPoints(userId: string, action: ReputationAction, reason?: string) {
     const points = POINTS[action] ?? 0;
 
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
 
     const [, updatedUser] = await prisma.$transaction([
@@ -44,9 +47,16 @@ export class ReputationService {
       }),
     ]);
 
-    const newBadges = await this.checkScoreBadges(userId, updatedUser.reputationScore);
+    const newBadges = await this.checkScoreBadges(
+      userId,
+      updatedUser.reputationScore,
+    );
 
-    return { reputationScore: updatedUser.reputationScore, pointsAdded: points, newBadges };
+    return {
+      reputationScore: updatedUser.reputationScore,
+      pointsAdded: points,
+      newBadges,
+    };
   }
 
   /** Trao huy hiệu khi vượt ngưỡng điểm, bỏ qua nếu đã có. */
@@ -58,7 +68,9 @@ export class ReputationService {
           where: { userId_badge: { userId, badge: badge as never } },
         });
         if (!existing) {
-          await prisma.userBadge.create({ data: { userId, badge: badge as never } });
+          await prisma.userBadge.create({
+            data: { userId, badge: badge as never },
+          });
           earned.push(badge);
         }
       }
@@ -92,7 +104,10 @@ export class ReputationService {
         id: true,
         fullName: true,
         reputationScore: true,
-        badges: { select: { badge: true, earnedAt: true }, orderBy: { earnedAt: 'desc' } },
+        badges: {
+          select: { badge: true, earnedAt: true },
+          orderBy: { earnedAt: 'desc' },
+        },
       },
     });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');

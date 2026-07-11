@@ -14,8 +14,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     if (!API_GATEWAY_URL) return [];
 
-    const userApiUrl = process.env.USER_API_URL?.replace(/\/$/, '') || 'http://localhost:3003';
-    const postsApiUrl = process.env.POSTS_API_URL?.replace(/\/$/, '') || 'http://localhost:3004';
+    const userApiUrl = process.env.USER_API_URL?.replace(/\/$/, '') || 'http://localhost:23306';
+    const postsApiUrl = process.env.POSTS_API_URL?.replace(/\/$/, '') || 'http://localhost:38888';
 
     return [
       {
@@ -44,11 +44,15 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/uploads/products/:path*',
-        destination: `http://localhost:3008/uploads/products/:path*`,
+        destination: `http://localhost:38083/uploads/products/:path*`,
       },
       {
         source: '/uploads/materials/:path*',
-        destination: `http://localhost:3007/uploads/materials/:path*`,
+        destination: `http://localhost:38082/uploads/materials/:path*`,
+      },
+      {
+        source: '/uploads/chat/:path*',
+        destination: `http://localhost:38080/uploads/chat/:path*`,
       },
       {
         source: '/uploads/:path*',

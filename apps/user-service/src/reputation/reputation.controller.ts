@@ -25,11 +25,14 @@ export class ReputationController {
     @Param('userId') userId: string,
     @Body() body: { action: string; reason?: string },
   ) {
-    return this.reputationService.addPoints(userId, body.action as never, body.reason);
+    return this.reputationService.addPoints(userId, body.action, body.reason);
   }
 
   @Post(':userId/badge')
-  async awardBadge(@Param('userId') userId: string, @Body() body: { badge: string }) {
+  async awardBadge(
+    @Param('userId') userId: string,
+    @Body() body: { badge: string },
+  ) {
     return this.reputationService.awardBadge(userId, body.badge);
   }
 }

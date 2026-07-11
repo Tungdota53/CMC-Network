@@ -37,7 +37,13 @@ export class AdminService {
     ]);
 
     return {
-      users: { total: totalUsers, dau, mau, newThisWeek: newUsersThisWeek, suspended: suspendedUsers },
+      users: {
+        total: totalUsers,
+        dau,
+        mau,
+        newThisWeek: newUsersThisWeek,
+        suspended: suspendedUsers,
+      },
       content: {
         posts: totalPosts,
         postsThisWeek,
@@ -54,8 +60,14 @@ export class AdminService {
   async getGrowth(days = 14) {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const [users, posts] = await Promise.all([
-      prisma.user.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
-      prisma.post.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+      prisma.user.findMany({
+        where: { createdAt: { gte: since } },
+        select: { createdAt: true },
+      }),
+      prisma.post.findMany({
+        where: { createdAt: { gte: since } },
+        select: { createdAt: true },
+      }),
     ]);
 
     const bucket = (rows: { createdAt: Date }[]) => {
@@ -71,15 +83,24 @@ export class AdminService {
     const postMap = bucket(posts);
     const series: { date: string; users: number; posts: number }[] = [];
     for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      series.push({ date: d, users: userMap.get(d) ?? 0, posts: postMap.get(d) ?? 0 });
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+      series.push({
+        date: d,
+        users: userMap.get(d) ?? 0,
+        posts: postMap.get(d) ?? 0,
+      });
     }
     return series;
   }
 
   /** ----- Reports / moderation ----- */
 
-  async createReport(reporterId: string, data: { targetId: string; targetType: string; reason: string }) {
+  async createReport(
+    reporterId: string,
+    data: { targetId: string; targetType: string; reason: string },
+  ) {
     return prisma.report.create({
       data: {
         reporterId,
@@ -94,14 +115,22 @@ export class AdminService {
     return prisma.report.findMany({
       where: status ? { status: status as never } : undefined,
       orderBy: { createdAt: 'desc' },
-      include: { reporter: { select: { id: true, fullName: true, avatarUrl: true } } },
+      include: {
+        reporter: { select: { id: true, fullName: true, avatarUrl: true } },
+      },
     });
   }
 
-  async resolveReport(reportId: string, status: 'REVIEWED' | 'RESOLVED' | 'DISMISSED') {
+  async resolveReport(
+    reportId: string,
+    status: 'REVIEWED' | 'RESOLVED' | 'DISMISSED',
+  ) {
     const report = await prisma.report.findUnique({ where: { id: reportId } });
     if (!report) throw new NotFoundException('Không tìm thấy báo cáo');
-    return prisma.report.update({ where: { id: reportId }, data: { status: status as never } });
+    return prisma.report.update({
+      where: { id: reportId },
+      data: { status: status as never },
+    });
   }
 
   /** Delete reported content by type. Used by moderators. */
@@ -117,7 +146,9 @@ export class AdminService {
         await prisma.product.delete({ where: { id: targetId } });
         break;
       default:
-        throw new NotFoundException(`Không hỗ trợ xóa loại nội dung: ${targetType}`);
+        throw new NotFoundException(
+          `Không hỗ trợ xóa loại nội dung: ${targetType}`,
+        );
     }
     return { deleted: true, targetType, targetId };
   }

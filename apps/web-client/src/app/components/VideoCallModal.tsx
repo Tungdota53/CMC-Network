@@ -52,6 +52,11 @@ export default function VideoCallModal({
   const userVideo = useRef<HTMLVideoElement>(null);
   const connectionRef = useRef<RTCPeerConnection | null>(null);
   const iceCandidatesBuffer = useRef<RTCIceCandidateInit[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const handleEndCallRef = useRef<(emitEvent?: boolean) => void>(() => {});
+
+  const localIceCandidatesBuffer = useRef<RTCIceCandidate[]>([]);
+  const isCallAcceptedRef = useRef(false);
 
   const createPeerConnection = useCallback((currentStream: MediaStream, targetId: string) => {
     const peer = new RTCPeerConnection({
@@ -71,16 +76,21 @@ export default function VideoCallModal({
 
     peer.onicecandidate = (event) => {
       if (event.candidate && socket) {
-        socket.emit('iceCandidate', {
-          to: targetId,
-          candidate: event.candidate
-        });
+        if (isInitiator && !isCallAcceptedRef.current) {
+          // Buffer candidates if we are the initiator and receiver hasn't accepted yet
+          localIceCandidatesBuffer.current.push(event.candidate);
+        } else {
+          socket.emit('iceCandidate', {
+            to: targetId,
+            candidate: event.candidate
+          });
+        }
       }
     };
 
     connectionRef.current = peer;
     return peer;
-  }, [socket]);
+  }, [socket, isInitiator]);
 
   const startCall = useCallback(async (currentStream: MediaStream) => {
     if (!socket || !targetUser) return;
@@ -100,10 +110,11 @@ export default function VideoCallModal({
   }, [createPeerConnection, currentUser.avatarUrl, currentUser.fullName, currentUser.id, isVideo, socket, targetUser]);
 
   const answerCall = async () => {
-    if (!callData || !stream || !socket) return;
+    if (!callData || !streamRef.current || !socket) return;
     setCallAccepted(true);
+    isCallAcceptedRef.current = true;
 
-    const peer = createPeerConnection(stream, callData.from);
+    const peer = createPeerConnection(streamRef.current, callData.from);
     
     await peer.setRemoteDescription(new RTCSessionDescription(callData.signal));
     
@@ -120,20 +131,20 @@ export default function VideoCallModal({
   };
 
   const stopScreenShare = useCallback(() => {
-    if (!stream || !connectionRef.current) return;
-    const videoTrack = stream.getVideoTracks()[0];
+    if (!streamRef.current || !connectionRef.current) return;
+    const videoTrack = streamRef.current.getVideoTracks()[0];
     const sender = connectionRef.current.getSenders().find((s) => s.track?.kind === 'video');
     if (sender && videoTrack) {
       sender.replaceTrack(videoTrack);
     }
     if (myVideo.current) {
-      myVideo.current.srcObject = stream;
+      myVideo.current.srcObject = streamRef.current;
     }
     setIsScreenSharing(false);
-  }, [stream]);
+  }, []);
 
   const toggleScreenShare = async () => {
-    if (!stream || !connectionRef.current) return;
+    if (!streamRef.current || !connectionRef.current) return;
     
     if (!isScreenSharing) {
       try {
@@ -144,9 +155,14 @@ export default function VideoCallModal({
           stopScreenShare();
         };
 
-        const sender = connectionRef.current.getSenders().find((s) => s.track?.kind === 'video');
+        const sender = connectionRef.current.getSenders().find((s) => s.track?.kind === 'video' || s.track === null); // Find video sender or an empty sender if track was stopped
+
         if (sender) {
           sender.replaceTrack(screenTrack);
+        } else {
+          toast.error("Tính năng này chỉ hỗ trợ trong cuộc gọi Video có Camera.");
+          screenTrack.stop();
+          return;
         }
         
         if (myVideo.current) {
@@ -162,24 +178,24 @@ export default function VideoCallModal({
   };
 
   const toggleAudio = useCallback(() => {
-    if (stream) {
-      const audioTrack = stream.getAudioTracks()[0];
+    if (streamRef.current) {
+      const audioTrack = streamRef.current.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         setIsAudioMuted(!audioTrack.enabled);
       }
     }
-  }, [stream]);
+  }, []);
 
   const toggleVideo = useCallback(() => {
-    if (stream) {
-      const videoTrack = stream.getVideoTracks()[0];
+    if (streamRef.current) {
+      const videoTrack = streamRef.current.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         setIsVideoMuted(!videoTrack.enabled);
       }
     }
-  }, [stream]);
+  }, []);
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -205,8 +221,9 @@ export default function VideoCallModal({
       connectionRef.current.close();
       connectionRef.current = null;
     }
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
     if (emitEvent && socket) {
       const targetId = isInitiator && targetUser ? targetUser.id : callData?.from;
@@ -215,9 +232,14 @@ export default function VideoCallModal({
       }
     }
     onEndCall();
-  }, [callData?.from, isInitiator, onEndCall, socket, stream, targetUser]);
+  }, [callData?.from, isInitiator, onEndCall, socket, targetUser]);
 
   useEffect(() => {
+    handleEndCallRef.current = handleEndCall;
+  }, [handleEndCall]);
+
+  useEffect(() => {
+    streamRef.current = stream;
     if (myVideo.current && stream) {
       myVideo.current.srcObject = stream;
     }
@@ -234,35 +256,99 @@ export default function VideoCallModal({
     let localStream: MediaStream | null = null;
 
     // Get local media stream
-    navigator.mediaDevices.getUserMedia({ video: isVideo, audio: true })
-      .then((currentStream) => {
+    // Guard: mediaDevices is undefined on insecure (HTTP) origins
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error('Trình duyệt không hỗ trợ gọi điện qua HTTP. Hãy dùng HTTPS hoặc localhost.');
+      handleEndCallRef.current();
+      return;
+    }
+    const startMedia = async () => {
+      try {
+        let stream: MediaStream;
+        try {
+          // Attempt 1: Request what user asked for
+          stream = await navigator.mediaDevices.getUserMedia({ video: isVideo, audio: true });
+        } catch (err: any) {
+          if (err.name === 'NotFoundError') {
+            // Attempt 2: Fallback to audio only if video fails, or video only if audio fails
+            console.warn('Primary device not found, attempting fallback...');
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+              toast.success('Không tìm thấy Camera, đang gọi bằng giọng nói.');
+            } catch (fallbackErr) {
+              stream = await navigator.mediaDevices.getUserMedia({ video: isVideo, audio: false });
+              toast.success('Không tìm thấy Micro, đang gọi không có tiếng.');
+            }
+          } else {
+            throw err;
+          }
+        }
+
+        // --- DUMMY VIDEO TRACK TRICK FOR SCREEN SHARING ---
+        // If the stream has no video track (e.g. because of the fallback above), we MUST add a "dummy" black video track.
+        // WebRTC requires an existing video sender to perform `replaceTrack` for Screen Sharing.
+        // Without this dummy track, Screen Sharing will fail because there is no video track to replace.
+        if (stream.getVideoTracks().length === 0 && isVideo) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 640;
+          canvas.height = 480;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          const dummyStream = (canvas as any).captureStream(1); // 1 FPS
+          if (dummyStream && dummyStream.getVideoTracks().length > 0) {
+            stream.addTrack(dummyStream.getVideoTracks()[0]);
+          }
+        }
+
         if (isCancelled) {
-          currentStream.getTracks().forEach(track => track.stop());
+          stream.getTracks().forEach(track => track.stop());
           return;
         }
-        localStream = currentStream;
-        setStream(currentStream);
 
-        // If I am the initiator, I should start the call immediately after getting media
+        localStream = stream;
+        setStream(stream);
+
         if (isInitiator && targetUser && socket) {
-          startCall(currentStream);
+          startCall(stream);
         }
-      })
-      .catch((err) => {
+      } catch (err: any) {
         if (isCancelled) return;
         console.error("Failed to get local stream", err);
-        toast.error("Không thể truy cập Camera/Microphone");
-        handleEndCall();
-      });
+        
+        if (err.name === 'NotFoundError') {
+          toast.error("Máy của bạn không có Camera hoặc Microphone để gọi.");
+        } else if (err.name === 'NotAllowedError') {
+          toast.error("Bạn chưa cấp quyền truy cập Camera/Micro cho trình duyệt.");
+        } else {
+          toast.error("Lỗi khi truy cập Camera/Micro: " + err.message);
+        }
+        handleEndCallRef.current();
+      }
+    };
+
+    startMedia();
 
     // Listeners for WebRTC events
     if (socket) {
       socket.on(`callAccepted-${currentUser.id}`, async (signal: RTCSessionDescriptionInit) => {
         setCallAccepted(true);
+        isCallAcceptedRef.current = true;
         if (connectionRef.current) {
           await connectionRef.current.setRemoteDescription(new RTCSessionDescription(signal));
           iceCandidatesBuffer.current.forEach(c => connectionRef.current?.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.error(e)));
           iceCandidatesBuffer.current = [];
+
+          // Flush any local candidates generated before receiver accepted
+          localIceCandidatesBuffer.current.forEach(candidate => {
+            const targetId = targetUser?.id || callData?.from;
+            if (targetId) {
+              socket.emit('iceCandidate', { to: targetId, candidate });
+            }
+          });
+          localIceCandidatesBuffer.current = [];
         }
       });
 
@@ -275,7 +361,7 @@ export default function VideoCallModal({
       });
 
       socket.on(`callEnded-${currentUser.id}`, () => {
-        handleEndCall(false); // Remote ended
+        handleEndCallRef.current(false); // Remote ended
       });
     }
 
@@ -290,7 +376,7 @@ export default function VideoCallModal({
         socket.off(`callEnded-${currentUser.id}`);
       }
     };
-  }, [currentUser.id, handleEndCall, isInitiator, isVideo, socket, startCall, targetUser]);
+  }, [currentUser.id, isInitiator, isVideo, socket, startCall, targetUser]);
 
   return (
     <div ref={containerRef} className={`fixed inset-0 bg-black/95 z-[9999] flex flex-col items-center justify-center backdrop-blur-xl ${isFullscreen ? 'p-0' : 'p-4'}`}>

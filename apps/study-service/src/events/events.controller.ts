@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Put, Delete, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { CurrentUser, resolveUserId } from '@campus-connect/common';
 import { EventsService } from './events.service';
 
@@ -28,7 +37,11 @@ export class EventsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; [key: string]: unknown },
   ) {
-    return this.eventsService.updateEvent(id, resolveUserId(tokenUserId, data.userId), data);
+    return this.eventsService.updateEvent(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data,
+    );
   }
 
   @Delete(':id')
@@ -37,7 +50,10 @@ export class EventsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.eventsService.deleteEvent(id, resolveUserId(tokenUserId, data?.userId));
+    return this.eventsService.deleteEvent(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 
   @Post(':id/join')
@@ -55,7 +71,10 @@ export class EventsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body('userId') userId?: string,
   ) {
-    return this.eventsService.leaveEvent(id, resolveUserId(tokenUserId, userId));
+    return this.eventsService.leaveEvent(
+      id,
+      resolveUserId(tokenUserId, userId),
+    );
   }
 
   @Post(':id/checkin')
@@ -64,7 +83,10 @@ export class EventsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.eventsService.checkIn(id, resolveUserId(tokenUserId, data?.userId));
+    return this.eventsService.checkIn(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 
   @Get(':id/attendees')

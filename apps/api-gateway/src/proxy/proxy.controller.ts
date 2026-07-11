@@ -19,12 +19,15 @@ export class ProxyController {
   async handleProxy(@Req() req: express.Request, @Res() res: express.Response) {
     try {
       const { method, body, headers } = req;
-      const authHeader = headers['authorization'] as string | undefined;
+      const authHeader = headers['authorization'];
 
       // `req.originalUrl` preserves the query string (e.g. "/search?q=foo"),
       // unlike `req.path` which only returns "/search". Strip the leading
       // slash so downstream URL composition stays the same.
-      const pathWithQuery = (req.originalUrl || req.url || '').replace(/^\//, '');
+      const pathWithQuery = (req.originalUrl || req.url || '').replace(
+        /^\//,
+        '',
+      );
 
       const result = await this.proxyService.forwardRequest(
         method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',

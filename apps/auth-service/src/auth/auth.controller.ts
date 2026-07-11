@@ -1,14 +1,24 @@
-import { Body, Controller, Post, HttpCode, HttpStatus, UseGuards, Get, Req, Res, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+  Get,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { JwtAuthGuard, CurrentUser } from '@campus-connect/common';
 import { AuthService } from './auth.service';
-import { 
-  RegisterDto, 
-  LoginDto, 
-  ChangePasswordDto, 
-  RefreshTokenDto, 
-  Verify2FAAndEnableDto, 
-  Verify2FALoginDto 
+import {
+  RegisterDto,
+  LoginDto,
+  ChangePasswordDto,
+  RefreshTokenDto,
+  Verify2FAAndEnableDto,
+  Verify2FALoginDto,
 } from './dto/auth.dto';
 
 @Controller('auth')
@@ -33,7 +43,11 @@ export class AuthController {
     @CurrentUser('sub') userId: string,
     @Body() body: ChangePasswordDto,
   ) {
-    return this.authService.changePassword(userId, body.currentPassword, body.newPassword);
+    return this.authService.changePassword(
+      userId,
+      body.currentPassword,
+      body.newPassword,
+    );
   }
 
   @HttpCode(HttpStatus.OK)
@@ -74,28 +88,45 @@ export class AuthController {
   @Get('microsoft/callback')
   @UseGuards(AuthGuard('microsoft'))
   async microsoftAuthRedirect(@Req() req: any, @Res() res: any) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:25080';
     const user = req.user;
-    
+
     // 6. OAuth domain whitelist
-    const allowedDomains = process.env.ALLOWED_EMAIL_DOMAINS?.split(',').map((d) => d.trim().toLowerCase()) ?? [];
+    const allowedDomains =
+      process.env.ALLOWED_EMAIL_DOMAINS?.split(',').map((d) =>
+        d.trim().toLowerCase(),
+      ) ?? [];
     const emailDomain = user.email.split('@')[1]?.toLowerCase();
-    
-    if (!emailDomain || !allowedDomains.includes(emailDomain)) {
-      // If we don't want to throw an exception here, we can redirect to login with error,
-      // but the prompt says: "Nếu domain không hợp lệ thì throw UnauthorizedException"
-      throw new UnauthorizedException('Email domain is not allowed');
+
+    if (
+      !emailDomain ||
+      (allowedDomains.length > 0 && !allowedDomains.includes(emailDomain))
+    ) {
+      // Redirect to frontend with error instead of throwing raw JSON
+      return res.redirect(
+        `${frontendUrl}/auth/callback?error=domain_not_allowed`,
+      );
     }
 
     const tokens = await this.authService.generateTokens(user);
 
+    const isProduction = process.env.NODE_ENV === 'production';
+
     res.cookie('access_token', tokens.access_token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProduction,
       sameSite: 'lax',
       maxAge: 15 * 60 * 1000,
     });
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // Also set refresh_token so OAuth users don't get logged out after 15 min
+    res.cookie('refresh_token', tokens.refresh_token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
     res.redirect(`${frontendUrl}/auth/callback`);
   }
 }

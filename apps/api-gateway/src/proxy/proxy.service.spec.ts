@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpService } from '@nestjs/axios';
-import { HttpException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { of, throwError } from 'rxjs';
 import { AxiosError } from 'axios';
 import { ProxyService } from './proxy.service';
@@ -23,13 +23,17 @@ describe('ProxyService', () => {
   describe('findRoute', () => {
     it('matches the first path segment to a service prefix', () => {
       expect(service.findRoute('users/123')?.prefix).toBe('users');
-      expect(service.findRoute('study-groups/abc/join-requests')?.prefix).toBe('study-groups');
+      expect(service.findRoute('study-groups/abc/join-requests')?.prefix).toBe(
+        'study-groups',
+      );
     });
 
     it('ignores the query string when matching the prefix', () => {
       // Regression: a "/search?q=foo" path must still resolve to the search route.
       expect(service.findRoute('search?q=foo')?.prefix).toBe('search');
-      expect(service.findRoute('marketplace?status=SOLD')?.prefix).toBe('marketplace');
+      expect(service.findRoute('marketplace?status=SOLD')?.prefix).toBe(
+        'marketplace',
+      );
     });
 
     it('returns null for an unknown prefix', () => {
@@ -53,7 +57,9 @@ describe('ProxyService', () => {
     });
 
     it('throws NotFound for an unroutable path without calling http', async () => {
-      await expect(service.forwardRequest('GET', 'nope/1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.forwardRequest('GET', 'nope/1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(httpRequest).not.toHaveBeenCalled();
     });
 
@@ -65,7 +71,9 @@ describe('ProxyService', () => {
       } as AxiosError;
       httpRequest.mockReturnValueOnce(throwError(() => axiosError));
 
-      await expect(service.forwardRequest('DELETE', 'study-groups/1')).rejects.toMatchObject({
+      await expect(
+        service.forwardRequest('DELETE', 'study-groups/1'),
+      ).rejects.toMatchObject({
         // HttpException carrying the real downstream status.
         status: 403,
       });
@@ -80,7 +88,9 @@ describe('ProxyService', () => {
       } as AxiosError;
       httpRequest.mockReturnValueOnce(throwError(() => axiosError));
 
-      await expect(service.forwardRequest('GET', 'users/1')).rejects.toMatchObject({
+      await expect(
+        service.forwardRequest('GET', 'users/1'),
+      ).rejects.toMatchObject({
         status: 503,
       });
     });

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { apiFetch } from '../../lib/api';
 
 type StudyGroup = {
   id: string;
@@ -32,13 +33,13 @@ export default function StudyPage() {
     setLoading(true);
     try {
       if (activeTab === 'GROUPS') {
-        const res = await fetch('/api/study-groups');
+        const res = await apiFetch('/study-groups');
         if (res.ok) {
           const data = await res.json();
           setGroups(Array.isArray(data) ? data : []);
         }
       } else {
-        const res = await fetch('/api/study-groups/requests');
+        const res = await apiFetch('/study-groups/requests');
         if (res.ok) {
           const data = await res.json();
           setRequests(Array.isArray(data) ? data : []);
@@ -61,7 +62,7 @@ export default function StudyPage() {
     const title = prompt('Tên nhóm học:');
     if (!title) return;
     try {
-      const res = await fetch('/api/study-groups', {
+      const res = await apiFetch('/study-groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -86,7 +87,7 @@ export default function StudyPage() {
     const title = prompt('Tiêu đề tìm bạn:');
     if (!title) return;
     try {
-      const res = await fetch('/api/study-groups/requests', {
+      const res = await apiFetch('/study-groups/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

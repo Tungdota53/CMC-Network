@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
 
 @Injectable()
@@ -98,11 +103,20 @@ export class EventsService {
     });
     if (!attendee) throw new NotFoundException('Bạn chưa đăng ký sự kiện này');
 
-    await prisma.eventAttendee.delete({ where: { id: attendee.id } });
-    await prisma.event.update({
-      where: { id: eventId },
-      data: { attendeeCount: { decrement: 1 } },
+    await prisma.$transaction([
+      prisma.eventAttendee.delete({ where: { id: attendee.id } }),
+      prisma.event.update({
+        where: { id: eventId },
+        data: { attendeeCount: { decrement: 1 } },
+      }),
+    ]);
+
+    // Ensure attendeeCount never goes below 0 (defensive fix)
+    await prisma.event.updateMany({
+      where: { id: eventId, attendeeCount: { lt: 0 } },
+      data: { attendeeCount: 0 },
     });
+
     return { left: true, eventId };
   }
 
@@ -125,7 +139,17 @@ export class EventsService {
     return prisma.eventAttendee.findMany({
       where: { eventId },
       orderBy: { createdAt: 'asc' },
-      include: { user: { select: { id: true, fullName: true, avatarUrl: true, studentId: true, major: true } } },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            studentId: true,
+            major: true,
+          },
+        },
+      },
     });
   }
 

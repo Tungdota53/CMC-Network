@@ -4,7 +4,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   await bootstrapService(AppModule, {
     serviceName: 'material-service',
-    port: 3007,
+    port: 38082,
   });
 }
 bootstrap();

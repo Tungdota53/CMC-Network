@@ -80,7 +80,7 @@ export default function LoginPage() {
 
         // Redirect to homepage after short delay
         setTimeout(() => {
-          router.replace('/');
+          window.location.href = '/';
         }, 800);
       }
     } catch (err) {
@@ -135,6 +135,7 @@ export default function LoginPage() {
               value={formData.identifier}
               onChange={handleChange}
               required
+              autoComplete="username"
               className="w-full glass-input px-4 py-3 rounded-xl text-[15px] transition-all"
               placeholder="Nhập MSSV (2310xxx) hoặc Email" 
             />
@@ -151,6 +152,7 @@ export default function LoginPage() {
               value={formData.password}
               onChange={handleChange}
               required
+              autoComplete="current-password"
               className="w-full glass-input px-4 py-3 rounded-xl text-[15px] transition-all"
               placeholder="••••••••" 
             />

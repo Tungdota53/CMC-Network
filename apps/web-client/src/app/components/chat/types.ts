@@ -4,6 +4,14 @@ export type User = {
   avatarUrl?: string | null;
   role?: string;
   isVerified?: boolean;
+  major?: string;
+  cohort?: string;
+};
+
+export type Reaction = {
+  emoji: string;
+  userId: string;
+  userName?: string;
 };
 
 export type Message = {
@@ -12,8 +20,15 @@ export type Message = {
   senderId: string;
   content: string;
   createdAt: string;
-  status: string;
+  status: 'SENT' | 'DELIVERED' | 'READ';
+  messageType?: string;
+  mediaUrl?: string;
   sender?: User;
+  // New fields for enhanced features
+  replyToId?: string;
+  replyTo?: Message;
+  reactions?: Reaction[];
+  forwardedFrom?: { senderName: string; conversationTitle?: string };
 };
 
 export type Conversation = {
@@ -24,5 +39,8 @@ export type Conversation = {
   otherMembers: Array<{ userId: string; user: User }>;
   lastMessage: Message | null;
   messages?: Message[];
+  unreadCount?: number;
   updatedAt: string;
+  backgroundUrl?: string | null;
+  isPinned?: boolean;
 };

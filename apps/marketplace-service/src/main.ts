@@ -4,7 +4,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   await bootstrapService(AppModule, {
     serviceName: 'marketplace-service',
-    port: 3008,
+    port: 38083,
   });
 }
 bootstrap();

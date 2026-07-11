@@ -29,6 +29,18 @@ export default function RegisterPage() {
       return;
     }
 
+    if (formData.password.length < 6) {
+      setError('Mật khẩu phải có ít nhất 6 ký tự!');
+      return;
+    }
+
+    // Convert MSSV to email format if needed
+    let email = formData.identifier.trim();
+    if (!email.includes('@')) {
+      // Assume it's a student ID — append domain
+      email = email.toLowerCase() + '@st.cmc.edu.vn';
+    }
+
     setIsLoading(true);
     try {
       const res = await fetch('/api/auth/register', {
@@ -38,7 +50,7 @@ export default function RegisterPage() {
         },
         body: JSON.stringify({
           fullName: formData.fullName,
-          identifier: formData.identifier,
+          email,
           password: formData.password
         })
       });
@@ -48,13 +60,16 @@ export default function RegisterPage() {
       if (!res.ok) {
         setError(data.message || 'Có lỗi xảy ra khi đăng ký');
       } else {
-        setSuccess('Đăng ký thành công! Bạn có thể đăng nhập ngay bây giờ.');
+        setSuccess('Đăng ký thành công! Đang chuyển hướng đến trang đăng nhập...');
         setFormData({
           fullName: '',
           identifier: '',
           password: '',
           confirmPassword: ''
         });
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
       }
     } catch (err) {
       setError('Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');

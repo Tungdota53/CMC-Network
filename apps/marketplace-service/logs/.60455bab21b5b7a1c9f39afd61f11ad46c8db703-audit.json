@@ -6,11 +6,6 @@
     "auditLog": "logs\\.60455bab21b5b7a1c9f39afd61f11ad46c8db703-audit.json",
     "files": [
         {
-            "date": 1782426000396,
-            "name": "logs\\marketplace-service-2026-06-26.log",
-            "hash": "9316d0f5327661a48ac7c4f1e18f0a5d3e2130da8ed2ddea069abb27c06922b9"
-        },
-        {
             "date": 1782576905818,
             "name": "logs\\marketplace-service-2026-06-27.log",
             "hash": "f0c5ad1f24352f39ac2e7f92857e97c197a06b786fd18a1961542e7bdf4770bf"
@@ -39,6 +34,21 @@
             "date": 1783393967021,
             "name": "logs\\marketplace-service-2026-07-07.log",
             "hash": "dbc460cc0b5813a77ccc6ce766849d8e3534b952d835d1c0985b9f7670a457b6"
+        },
+        {
+            "date": 1783473595154,
+            "name": "logs\\marketplace-service-2026-07-08.log",
+            "hash": "e2ea186fd903dd427ce3da6755b028157a79561e8dba90d8502df32d66bc04ca"
+        },
+        {
+            "date": 1783563261473,
+            "name": "logs\\marketplace-service-2026-07-09.log",
+            "hash": "81f24c170dde7e40981c17ce54559164105897be499fc8bd8945012e4e63d472"
+        },
+        {
+            "date": 1783684626944,
+            "name": "logs\\marketplace-service-2026-07-10.log",
+            "hash": "78c4b0b64bdb592462d250aa715cbc8e3e7ea4892d0e14b22a2f91de3cbb0cd9"
         }
     ],
     "hashType": "sha256"

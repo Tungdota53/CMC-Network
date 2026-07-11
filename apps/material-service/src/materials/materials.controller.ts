@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  BadRequestException,
+} from '@nestjs/common';
 import { CurrentUser, resolveUserId } from '@campus-connect/common';
 import { MaterialsService } from './materials.service';
 
@@ -14,19 +24,31 @@ export class MaterialsController {
   @Post('upload')
   async uploadMaterial(
     @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { uploaderId?: string; fileBuffer?: string; fileName?: string; [key: string]: unknown },
+    @Body()
+    data: {
+      uploaderId?: string;
+      fileBuffer?: string;
+      fileName?: string;
+      [key: string]: unknown;
+    },
   ) {
     if (!data.fileBuffer) throw new BadRequestException('Vui lòng chọn file');
-    
+
     // Strict limits based on user request (10MB for PDF, 20MB for Document)
-    const maxSize = data.fileName?.endsWith('.pdf') ? 10 * 1024 * 1024 : 20 * 1024 * 1024;
+    const maxSize = data.fileName?.endsWith('.pdf')
+      ? 10 * 1024 * 1024
+      : 20 * 1024 * 1024;
     const buffer = Buffer.from(data.fileBuffer, 'base64');
-    
+
     if (buffer.length > maxSize) {
-      throw new BadRequestException(`File size exceeds the limit of ${maxSize / (1024 * 1024)}MB`);
+      throw new BadRequestException(
+        `File size exceeds the limit of ${maxSize / (1024 * 1024)}MB`,
+      );
     }
 
-    const mimeType = data.fileName?.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
+    const mimeType = data.fileName?.endsWith('.pdf')
+      ? 'application/pdf'
+      : 'application/octet-stream';
 
     return this.materialsService.uploadMaterial({
       ...data,
@@ -40,9 +62,21 @@ export class MaterialsController {
   async updateMaterial(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { userId?: string; title?: string; description?: string; subject?: string; semester?: string; tags?: string[] },
+    @Body()
+    data: {
+      userId?: string;
+      title?: string;
+      description?: string;
+      subject?: string;
+      semester?: string;
+      tags?: string[];
+    },
   ) {
-    return this.materialsService.updateMaterial(id, resolveUserId(tokenUserId, data.userId), data);
+    return this.materialsService.updateMaterial(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data,
+    );
   }
 
   @Delete(':id')
@@ -51,7 +85,10 @@ export class MaterialsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.materialsService.deleteMaterial(id, resolveUserId(tokenUserId, data?.userId));
+    return this.materialsService.deleteMaterial(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 
   @Post(':id/download')
@@ -89,6 +126,9 @@ export class MaterialsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.materialsService.toggleBookmark(id, resolveUserId(tokenUserId, data?.userId));
+    return this.materialsService.toggleBookmark(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 }

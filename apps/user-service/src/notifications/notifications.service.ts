@@ -1,12 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
 
-type NotifType = 'LIKE' | 'COMMENT' | 'FRIEND_REQUEST' | 'FRIEND_ACCEPT' | 'SYSTEM' | 'MENTION';
+type NotifType =
+  | 'LIKE'
+  | 'COMMENT'
+  | 'FRIEND_REQUEST'
+  | 'FRIEND_ACCEPT'
+  | 'SYSTEM'
+  | 'MENTION';
 
 @Injectable()
 export class NotificationsService {
   /** Persist a notification row. Realtime push is handled by the dispatcher. */
-  async create(userId: string, type: NotifType, content: string, relatedId?: string) {
+  async create(
+    userId: string,
+    type: NotifType,
+    content: string,
+    relatedId?: string,
+  ) {
     return prisma.notification.create({
       data: { userId, type: type as never, content, relatedId },
     });

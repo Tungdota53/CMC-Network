@@ -16,9 +16,16 @@ x-service-defaults: &service-defaults
     postgres:
       condition: service_healthy
     redis:
-      condition: service_started
+      condition: service_healthy
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+      reservations:
+        memory: 256M
 
 services:
+  # --- PostgreSQL 15 ---
   postgres:
     image: postgres:15-alpine
     container_name: campus_connect_db
@@ -34,12 +41,66 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
 
+  # --- PgBouncer — connection pooling ---
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: campus_connect_pgbouncer
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-campus_admin}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-campus_password}
+      DB_NAME: ${POSTGRES_DB:-campus_connect}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 200
+      DEFAULT_POOL_SIZE: 20
+      MIN_POOL_SIZE: 5
+      RESERVE_POOL_SIZE: 5
+      RESERVE_POOL_TIMEOUT: 3
+      SERVER_RESET_QUERY: DISCARD ALL
+      AUTH_TYPE: scram-sha-256
+    ports:
+      - "6432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${POSTGRES_USER:-campus_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # --- Redis 7 ---
   redis:
     image: redis:7-alpine
     container_name: campus_connect_redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 384M
 
+  # --- API Gateway ---
   api-gateway:
     <<: *service-defaults
     build:
@@ -49,7 +110,14 @@ services:
         SERVICE: api-gateway
     ports:
       - "3001:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
+  # --- Auth Service ---
   auth-service:
     <<: *service-defaults
     build:
@@ -57,7 +125,14 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: auth-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3002/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
+  # --- User Service ---
   user-service:
     <<: *service-defaults
     build:
@@ -65,7 +140,14 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: user-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
+  # --- Social Service ---
   social-service:
     <<: *service-defaults
     build:
@@ -73,7 +155,14 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: social-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3004/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
+  # --- Chat Service ---
   chat-service:
     <<: *service-defaults
     build:
@@ -83,7 +172,14 @@ services:
         SERVICE: chat-service
     ports:
       - "3005:3005"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3005/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
+  # --- Study Service ---
   study-service:
     <<: *service-defaults
     build:
@@ -91,7 +187,14 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: study-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3006/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
+  # --- Material Service ---
   material-service:
     <<: *service-defaults
     build:
@@ -99,7 +202,14 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: material-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3007/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
+  # --- Marketplace Service ---
   marketplace-service:
     <<: *service-defaults
     build:
@@ -107,6 +217,13 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: marketplace-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3008/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   pgdata:
+  redisdata:

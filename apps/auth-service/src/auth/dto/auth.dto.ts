@@ -16,7 +16,9 @@ export class RegisterDto {
 
 export class LoginDto {
   @IsString()
-  @IsNotEmpty({ message: 'Tài khoản (email hoặc mã sinh viên) không được để trống' })
+  @IsNotEmpty({
+    message: 'Tài khoản (email hoặc mã sinh viên) không được để trống',
+  })
   identifier: string;
 
   @IsString()

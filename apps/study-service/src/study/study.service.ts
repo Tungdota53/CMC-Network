@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { prisma, ConversationType } from '@campus-connect/database';
 
 @Injectable()
@@ -22,6 +27,7 @@ export class StudyService {
         scheduledTime: new Date(data.scheduledTime),
         schedule: data.schedule,
         type: data.type || 'STUDY',
+        memberCount: 1,
         conversation: {
           create: {
             type: ConversationType.GROUP,
@@ -30,10 +36,10 @@ export class StudyService {
               create: {
                 userId: data.creatorId,
                 role: 'admin',
-              }
-            }
-          }
-        }
+              },
+            },
+          },
+        },
       },
       include: { conversation: true },
     });
@@ -61,7 +67,9 @@ export class StudyService {
         description: data.description ?? group.description,
         location: data.location ?? group.location,
         maxMembers: data.maxMembers ?? group.maxMembers,
-        scheduledTime: data.scheduledTime ? new Date(data.scheduledTime) : group.scheduledTime,
+        scheduledTime: data.scheduledTime
+          ? new Date(data.scheduledTime)
+          : group.scheduledTime,
         schedule: data.schedule ?? group.schedule,
         status: data.status ?? group.status,
         type: data.type ?? group.type,
@@ -78,13 +86,16 @@ export class StudyService {
 
   /** A user requests to join a group. Idempotent; blocks if already a member or full. */
   async requestToJoin(groupId: string, userId: string) {
-    const group = await prisma.studyGroup.findUnique({ where: { id: groupId } });
+    const group = await prisma.studyGroup.findUnique({
+      where: { id: groupId },
+    });
     if (!group) throw new NotFoundException('Không tìm thấy nhóm học');
 
     const existingMember = await prisma.studyGroupMember.findUnique({
       where: { groupId_userId: { groupId, userId } },
     });
-    if (existingMember) throw new BadRequestException('Bạn đã là thành viên của nhóm');
+    if (existingMember)
+      throw new BadRequestException('Bạn đã là thành viên của nhóm');
 
     if (group.memberCount >= group.maxMembers) {
       throw new BadRequestException('Nhóm đã đủ thành viên');
@@ -94,7 +105,9 @@ export class StudyService {
       where: { groupId_userId: { groupId, userId } },
       create: { groupId, userId, status: 'PENDING' },
       update: { status: 'PENDING' },
-      include: { user: { select: { id: true, fullName: true, avatarUrl: true } } },
+      include: {
+        user: { select: { id: true, fullName: true, avatarUrl: true } },
+      },
     });
   }
 
@@ -103,7 +116,17 @@ export class StudyService {
     await this.assertCreator(groupId, userId);
     return prisma.joinRequest.findMany({
       where: { groupId, status: 'PENDING' },
-      include: { user: { select: { id: true, fullName: true, avatarUrl: true, major: true, cohort: true } } },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            major: true,
+            cohort: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -120,10 +143,13 @@ export class StudyService {
     const request = await prisma.joinRequest.findFirst({
       where: { id: requestId, groupId, status: 'PENDING' },
     });
-    if (!request) throw new NotFoundException('Không tìm thấy yêu cầu tham gia');
+    if (!request)
+      throw new NotFoundException('Không tìm thấy yêu cầu tham gia');
 
     if (action === 'accept') {
-      const group = await prisma.studyGroup.findUnique({ where: { id: groupId } });
+      const group = await prisma.studyGroup.findUnique({
+        where: { id: groupId },
+      });
       if (group && group.memberCount >= group.maxMembers) {
         throw new BadRequestException('Nhóm đã đủ thành viên');
       }
@@ -135,36 +161,54 @@ export class StudyService {
         where: { groupId_userId: { groupId, userId: request.userId } },
       });
       if (alreadyMember) {
-        await prisma.joinRequest.update({ where: { id: requestId }, data: { status: 'APPROVED' } });
+        await prisma.joinRequest.update({
+          where: { id: requestId },
+          data: { status: 'APPROVED' },
+        });
         return { status: 'APPROVED', requestId };
       }
 
       await prisma.$transaction([
-        prisma.studyGroupMember.create({ data: { groupId, userId: request.userId, role: 'member' } }),
-        prisma.studyGroup.update({ where: { id: groupId }, data: { memberCount: { increment: 1 } } }),
-        prisma.joinRequest.update({ where: { id: requestId }, data: { status: 'APPROVED' } }),
+        prisma.studyGroupMember.create({
+          data: { groupId, userId: request.userId, role: 'member' },
+        }),
+        prisma.studyGroup.update({
+          where: { id: groupId },
+          data: { memberCount: { increment: 1 } },
+        }),
+        prisma.joinRequest.update({
+          where: { id: requestId },
+          data: { status: 'APPROVED' },
+        }),
       ]);
-      
+
       // Thêm member vào group chat
       if (group?.conversationId) {
-        await prisma.conversationMember.create({
-          data: {
-            conversationId: group.conversationId,
-            userId: request.userId,
-            role: 'member',
-          }
-        }).catch(() => null); // Bỏ qua nếu đã có
+        await prisma.conversationMember
+          .create({
+            data: {
+              conversationId: group.conversationId,
+              userId: request.userId,
+              role: 'member',
+            },
+          })
+          .catch(() => null); // Bỏ qua nếu đã có
       }
-      
+
       return { status: 'APPROVED', requestId };
     }
 
-    await prisma.joinRequest.update({ where: { id: requestId }, data: { status: 'REJECTED' } });
+    await prisma.joinRequest.update({
+      where: { id: requestId },
+      data: { status: 'REJECTED' },
+    });
     return { status: 'REJECTED', requestId };
   }
 
   private async assertCreator(groupId: string, userId: string) {
-    const group = await prisma.studyGroup.findUnique({ where: { id: groupId } });
+    const group = await prisma.studyGroup.findUnique({
+      where: { id: groupId },
+    });
     if (!group) throw new NotFoundException('Không tìm thấy nhóm học');
     if (group.creatorId !== userId) {
       throw new ForbiddenException('Chỉ người tạo nhóm mới có quyền này');
@@ -204,7 +248,9 @@ export class StudyService {
 
   async getStudyRequests() {
     return prisma.studyRequest.findMany({
-      include: { user: { select: { fullName: true, avatarUrl: true, major: true } } },
+      include: {
+        user: { select: { fullName: true, avatarUrl: true, major: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -226,18 +272,34 @@ export class StudyService {
   async updateStudyRequest(id: string, userId: string, data: any) {
     const req = await prisma.studyRequest.findUnique({ where: { id } });
     if (!req) throw new NotFoundException('Không tìm thấy yêu cầu');
-    if (req.userId !== userId) throw new ForbiddenException('Chỉ người tạo mới có quyền sửa');
+    if (req.userId !== userId)
+      throw new ForbiddenException('Chỉ người tạo mới có quyền sửa');
+
+    const sanitized: Record<string, unknown> = {};
+    for (const key of [
+      'title',
+      'subject',
+      'description',
+      'preferredTime',
+      'preferredLocation',
+      'status',
+    ]) {
+      if (data[key] !== undefined) {
+        sanitized[key] = data[key];
+      }
+    }
 
     return prisma.studyRequest.update({
       where: { id },
-      data,
+      data: sanitized,
     });
   }
 
   async deleteStudyRequest(id: string, userId: string) {
     const req = await prisma.studyRequest.findUnique({ where: { id } });
     if (!req) throw new NotFoundException('Không tìm thấy yêu cầu');
-    if (req.userId !== userId) throw new ForbiddenException('Chỉ người tạo mới có quyền xóa');
+    if (req.userId !== userId)
+      throw new ForbiddenException('Chỉ người tạo mới có quyền xóa');
 
     await prisma.studyRequest.delete({ where: { id } });
     return { deleted: true, id };

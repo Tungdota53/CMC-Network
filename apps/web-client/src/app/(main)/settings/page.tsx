@@ -22,22 +22,33 @@ export default function SettingsPage() {
   const [accountForm, setAccountForm] = useState({ fullName: '', bio: '', location: '' });
   const [savingAccount, setSavingAccount] = useState(false);
 
-  // Privacy toggles
-  const [privacy, setPrivacy] = useState({
-    profilePublic: true,
-    showEmail: false,
-    showStudentId: true,
-    allowFriendRequests: true,
+  // Privacy toggles — persisted to localStorage until backend supports them
+  const [privacy, setPrivacy] = useState(() => {
+    if (typeof window === 'undefined') return { profilePublic: true, showEmail: false, showStudentId: true, allowFriendRequests: true };
+    try {
+      const saved = localStorage.getItem('settings_privacy');
+      return saved ? JSON.parse(saved) : { profilePublic: true, showEmail: false, showStudentId: true, allowFriendRequests: true };
+    } catch { return { profilePublic: true, showEmail: false, showStudentId: true, allowFriendRequests: true }; }
   });
 
-  // Notification toggles
-  const [notifications, setNotifications] = useState({
-    likes: true,
-    comments: true,
-    friendRequests: true,
-    messages: true,
-    events: false,
+  // Notification toggles — persisted to localStorage
+  const [notifications, setNotifications] = useState(() => {
+    if (typeof window === 'undefined') return { likes: true, comments: true, friendRequests: true, messages: true, events: false };
+    try {
+      const saved = localStorage.getItem('settings_notifications');
+      return saved ? JSON.parse(saved) : { likes: true, comments: true, friendRequests: true, messages: true, events: false };
+    } catch { return { likes: true, comments: true, friendRequests: true, messages: true, events: false }; }
   });
+
+  // Persist privacy to localStorage on change
+  useEffect(() => {
+    try { localStorage.setItem('settings_privacy', JSON.stringify(privacy)); } catch {}
+  }, [privacy]);
+
+  // Persist notifications to localStorage on change
+  useEffect(() => {
+    try { localStorage.setItem('settings_notifications', JSON.stringify(notifications)); } catch {}
+  }, [notifications]);
 
   // Password change
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
@@ -241,7 +252,7 @@ export default function SettingsPage() {
                   checked={privacy.allowFriendRequests}
                   onChange={v => setPrivacy({ ...privacy, allowFriendRequests: v })}
                 />
-                <p className="text-xs text-slate-400 pt-3">Các tùy chọn quyền riêng tư được lưu cục bộ trên thiết bị này.</p>
+                <p className="text-xs text-slate-400 pt-3">Các tùy chọn quyền riêng tư được lưu trên trình duyệt. Sẽ đồng bộ khi backend hỗ trợ.</p>
               </div>
             )}
 
@@ -253,7 +264,7 @@ export default function SettingsPage() {
                 <ToggleRow label="Lời mời kết bạn" desc="Khi ai đó gửi lời mời kết bạn" checked={notifications.friendRequests} onChange={v => setNotifications({ ...notifications, friendRequests: v })} />
                 <ToggleRow label="Tin nhắn" desc="Khi bạn nhận được tin nhắn mới" checked={notifications.messages} onChange={v => setNotifications({ ...notifications, messages: v })} />
                 <ToggleRow label="Sự kiện" desc="Nhắc nhở về sự kiện sắp diễn ra" checked={notifications.events} onChange={v => setNotifications({ ...notifications, events: v })} />
-                <p className="text-xs text-slate-400 pt-3">Các tùy chọn thông báo được lưu cục bộ trên thiết bị này.</p>
+                <p className="text-xs text-slate-400 pt-3">Các tùy chọn thông báo được lưu trên trình duyệt. Sẽ đồng bộ khi backend hỗ trợ.</p>
               </div>
             )}
 

@@ -7,6 +7,7 @@ import { RolesGuard } from './roles.guard';
 import { RateLimitGuard } from './rate-limit.guard';
 import { HealthController } from './health.controller';
 import { resolveJwtSecret } from './jwt-secret';
+import { RedisModule } from './redis.module';
 
 export interface CommonModuleOptions {
   /**
@@ -61,6 +62,7 @@ export class CommonModule {
       module: CommonModule,
       global: true,
       imports: [
+        RedisModule.forRoot(),
         JwtModule.register({
           global: true,
           secret: resolveJwtSecret(),

@@ -96,9 +96,14 @@
       radial-gradient(circle at 100% 100%, var(--mesh-2), transparent 40%);
     background-attachment: fixed;
     min-height: 100vh;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
     letter-spacing: -0.01em;
     transition: background-color 0.4s var(--ease-out), color 0.4s var(--ease-out);
+  }
+
+  h1, h2, h3, h4, h5, h6, .heading-font {
+    font-family: var(--font-heading), system-ui, sans-serif;
+    letter-spacing: -0.02em;
   }
 
   /* Respect reduced-motion preferences globally */

@@ -4,6 +4,12 @@ export type { BootstrapOptions } from './bootstrap';
 export { CommonModule } from './common.module';
 export type { CommonModuleOptions } from './common.module';
 
+export { RedisModule } from './redis.module';
+export { REDIS_CLIENT } from './redis.module';
+export type { RedisModuleOptions } from './redis.module';
+
+export { CacheService } from './cache.service';
+
 export { resolveJwtSecret } from './jwt-secret';
 
 export { AllExceptionsFilter } from './all-exceptions.filter';
@@ -37,3 +43,11 @@ export type {
 export * from './roles.guard';
 export * from './not-suspended.guard';
 export * from './rate-limit.guard';
+
+export {
+  parseStudentInfo,
+  isCmcStudentEmail,
+  MAJOR_MAP,
+  CMC_STUDENT_DOMAINS,
+} from './student-utils';
+export type { StudentInfo } from './student-utils';

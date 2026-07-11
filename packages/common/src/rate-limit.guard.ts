@@ -5,9 +5,14 @@ import {
   HttpException,
   HttpStatus,
   SetMetadata,
+  Optional,
+  Inject,
+  Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
+import { REDIS_CLIENT } from './redis.module';
+import type { Redis } from 'ioredis';
 
 export interface RateLimitOptions {
   /** Max requests allowed within the window. */
@@ -32,24 +37,36 @@ interface Counter {
 }
 
 /**
- * In-memory sliding-window rate limiter (single-instance). For multi-instance
- * deployments swap the store for Redis, but this is enough to stop abuse/DDoS
- * on a single node and needs no external dependency.
+ * Rate limiter — Redis-backed for multi-instance, in-memory fallback.
+ *
+ * Redis strategy: INCR + EXPIRE (fixed window). Key format:
+ *   ratelimit:{ip}:{controller}.{handler}
+ *
+ * When Redis is unavailable, falls back to in-memory Map so single-instance
+ * dev still works.
  */
 @Injectable()
 export class RateLimitGuard implements CanActivate {
+  private readonly logger = new Logger('RateLimitGuard');
   private readonly store = new Map<string, Counter>();
   private readonly defaults: RateLimitOptions;
   private lastSweep = 0;
 
-  constructor(private readonly reflector: Reflector) {
+  constructor(
+    private readonly reflector: Reflector,
+    @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null,
+  ) {
     this.defaults = {
       limit: Number(process.env.RATE_LIMIT_MAX) || 120,
       windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 60_000,
     };
   }
 
-  canActivate(context: ExecutionContext): boolean {
+  private get redisReady(): boolean {
+    return !!this.redis && this.redis.status === 'ready';
+  }
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const handler = context.getHandler();
     const controller = context.getClass();
 
@@ -67,9 +84,60 @@ export class RateLimitGuard implements CanActivate {
 
     const req = context.switchToHttp().getRequest<Request>();
     const res = context.switchToHttp().getResponse<Response>();
-    const key = `${this.clientIp(req)}:${controller.name}.${handler.name}`;
-    const now = Date.now();
+    const ip = this.clientIp(req);
+    const key = `ratelimit:${ip}:${controller.name}.${handler.name}`;
 
+    if (this.redisReady) {
+      return this.checkRedis(key, options, res);
+    }
+
+    return this.checkMemory(key, options, res);
+  }
+
+  /** Redis fixed-window: INCR + EXPIRE on first hit. */
+  private async checkRedis(
+    key: string,
+    options: RateLimitOptions,
+    res: Response,
+  ): Promise<boolean> {
+    const windowSec = Math.ceil(options.windowMs / 1000);
+    const count = await this.redis!.incr(key);
+
+    // Set TTL only on first request in the window.
+    if (count === 1) {
+      await this.redis!.expire(key, windowSec);
+    }
+
+    const remaining = Math.max(0, options.limit - count);
+    const resetAt = Math.floor(Date.now() / 1000) + windowSec;
+
+    res.setHeader('X-RateLimit-Limit', String(options.limit));
+    res.setHeader('X-RateLimit-Remaining', String(remaining));
+    res.setHeader('X-RateLimit-Reset', String(resetAt));
+
+    if (count > options.limit) {
+      const ttl = await this.redis!.ttl(key);
+      res.setHeader('Retry-After', String(Math.max(1, ttl)));
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: 'Bạn thao tác quá nhanh. Vui lòng thử lại sau giây lát.',
+          error: 'Too Many Requests',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    return true;
+  }
+
+  /** In-memory fallback (single-instance). */
+  private checkMemory(
+    key: string,
+    options: RateLimitOptions,
+    res: Response,
+  ): boolean {
+    const now = Date.now();
     this.sweep(now);
 
     let counter = this.store.get(key);

@@ -6,11 +6,6 @@
     "auditLog": "logs\\.668b8e97f9a2a69e4f1e12a3d2a9106bc77d74b8-audit.json",
     "files": [
         {
-            "date": 1782426001931,
-            "name": "logs\\api-gateway-2026-06-26.log",
-            "hash": "2ce42b9c2a7c90bcad92b9d329ea997b31a2b7dce23eff3429ff7d4e10d4e1ab"
-        },
-        {
             "date": 1782576902104,
             "name": "logs\\api-gateway-2026-06-27.log",
             "hash": "4f35b918031bbbac2e1bb25feea0695910582443490e238bc9f0485a0acebaff"
@@ -39,6 +34,21 @@
             "date": 1783393967989,
             "name": "logs\\api-gateway-2026-07-07.log",
             "hash": "d8671e132d562cae0e96a1ccd141d482bc482e648958a291cba21153e23f4dab"
+        },
+        {
+            "date": 1783473593340,
+            "name": "logs\\api-gateway-2026-07-08.log",
+            "hash": "6227de7f49a583371ba5f5061b93c1750535d5a661a4398213f1dd65a1f01c3f"
+        },
+        {
+            "date": 1783563262114,
+            "name": "logs\\api-gateway-2026-07-09.log",
+            "hash": "c488d9f762ff0a0e0acc7e55551fb52e8d1cbb6a8610bd3735c77a2423cc5eca"
+        },
+        {
+            "date": 1783684615372,
+            "name": "logs\\api-gateway-2026-07-10.log",
+            "hash": "320de7a3b0df73192e4c6f50ae1ed792255ad3956c2261e70b047c6d551c9346"
         }
     ],
     "hashType": "sha256"

@@ -1,20 +1,38 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
-import { NotificationDispatcher, validateUpload, createStorageProvider } from '@campus-connect/common';
+import {
+  NotificationDispatcher,
+  validateUpload,
+  createStorageProvider,
+} from '@campus-connect/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
 @Injectable()
 export class UsersService {
   private readonly uploadDir = join(process.cwd(), 'uploads', 'avatars');
-  private readonly storageProvider = createStorageProvider(join(process.cwd(), 'uploads'), '');
+  private readonly storageProvider = createStorageProvider(
+    join(process.cwd(), 'uploads'),
+    '',
+  );
 
   constructor(private readonly notifier: NotificationDispatcher) {
     this.ensureUploadDir();
   }
 
   /** Persist + push a realtime notification; never throws into the caller. */
-  private async notify(userId: string, type: string, content: string, relatedId?: string) {
+  private async notify(
+    userId: string,
+    type: string,
+    content: string,
+    relatedId?: string,
+  ) {
     try {
       await prisma.notification.create({
         data: { userId, type: type as never, content, relatedId },
@@ -23,7 +41,12 @@ export class UsersService {
       // ignore persistence errors
     }
     try {
-      await this.notifier.push({ userId, type: type as never, content, relatedId });
+      await this.notifier.push({
+        userId,
+        type: type as never,
+        content,
+        relatedId,
+      });
     } catch (err) {
       console.error('Lỗi khi push notification:', err);
     }
@@ -84,7 +107,9 @@ export class UsersService {
         createdAt: true,
         badges: { select: { badge: true, earnedAt: true } },
         skills: true,
-        _count: { select: { posts: true, friendships: true, friendships2: true } },
+        _count: {
+          select: { posts: true, friendships: true, friendships2: true },
+        },
       },
     });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
@@ -118,7 +143,9 @@ export class UsersService {
       select: { id: true, mediaUrls: true, createdAt: true },
       take: 50,
     });
-    return posts.flatMap((p) => p.mediaUrls.map((url) => ({ url, postId: p.id, createdAt: p.createdAt })));
+    return posts.flatMap((p) =>
+      p.mediaUrls.map((url) => ({ url, postId: p.id, createdAt: p.createdAt })),
+    );
   }
 
   /** Update cover photo URL. */
@@ -130,20 +157,53 @@ export class UsersService {
     });
   }
 
+  /** Allowed fields for self-service profile updates (no role, isSuspended, etc.). */
+  private static readonly PROFILE_WHITELIST = [
+    'fullName',
+    'bio',
+    'location',
+    'department',
+    'major',
+    'cohort',
+    'avatarUrl',
+    'coverPhotoUrl',
+  ] as const;
+
   async updateProfile(userId: string, data: any) {
+    const sanitized: Record<string, unknown> = {};
+    for (const key of UsersService.PROFILE_WHITELIST) {
+      if (data[key] !== undefined) {
+        sanitized[key] = data[key];
+      }
+    }
     return prisma.user.update({
       where: { id: userId },
-      data,
+      data: sanitized,
     });
   }
 
-  async uploadAvatar(userId: string, file: { buffer: Buffer; originalname: string; mimetype?: string; size?: number }) {
+  async uploadAvatar(
+    userId: string,
+    file: {
+      buffer: Buffer;
+      originalname: string;
+      mimetype?: string;
+      size?: number;
+    },
+  ) {
     validateUpload(
-      { mimetype: file.mimetype, size: file.size ?? file.buffer.length, originalname: file.originalname },
+      {
+        mimetype: file.mimetype,
+        size: file.size ?? file.buffer.length,
+        originalname: file.originalname,
+      },
       { preset: 'image', maxSizeBytes: 5 * 1024 * 1024 },
     );
 
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarUrl: true },
+    });
 
     const storedFile = await this.storageProvider.put({
       buffer: file.buffer,
@@ -157,7 +217,9 @@ export class UsersService {
     await this.updateProfile(userId, { avatarUrl });
 
     if (user?.avatarUrl) {
-      const oldKey = user.avatarUrl.startsWith('/') ? user.avatarUrl.substring(1) : user.avatarUrl;
+      const oldKey = user.avatarUrl.startsWith('/')
+        ? user.avatarUrl.substring(1)
+        : user.avatarUrl;
       await this.storageProvider.delete(oldKey);
     }
 
@@ -165,9 +227,13 @@ export class UsersService {
   }
 
   async sendFriendRequest(senderId: string, receiverId: string) {
-    if (senderId === receiverId) throw new BadRequestException('Không thể kết bạn với chính mình');
+    if (senderId === receiverId)
+      throw new BadRequestException('Không thể kết bạn với chính mình');
 
-    const receiver = await prisma.user.findUnique({ where: { id: receiverId }, select: { id: true } });
+    const receiver = await prisma.user.findUnique({
+      where: { id: receiverId },
+      select: { id: true },
+    });
     if (!receiver) throw new NotFoundException('Không tìm thấy người nhận');
 
     const existingFriend = await prisma.friendship.findFirst({
@@ -215,7 +281,11 @@ export class UsersService {
     return request;
   }
 
-  async respondFriendRequest(userId: string, requestId: string, status: 'accepted' | 'rejected') {
+  async respondFriendRequest(
+    userId: string,
+    requestId: string,
+    status: 'accepted' | 'rejected',
+  ) {
     const request = await prisma.friendRequest.findFirst({
       where: { id: requestId, receiverId: userId, status: 'pending' },
     });
@@ -238,16 +308,16 @@ export class UsersService {
         operations.push(
           prisma.friendship.create({
             data: { userAId: request.senderId, userBId: request.receiverId },
-          })
+          }),
         );
       }
-      
+
       operations.push(
         prisma.friendRequest.update({
           where: { id: requestId },
           data: { status },
           include: { sender: true },
-        })
+        }),
       );
 
       const result = await prisma.$transaction(operations);
@@ -257,7 +327,7 @@ export class UsersService {
         where: { id: request.receiverId },
         select: { fullName: true },
       });
-      
+
       await this.notify(
         request.senderId,
         'FRIEND_ACCEPT',
@@ -306,12 +376,32 @@ export class UsersService {
         OR: [{ userAId: userId }, { userBId: userId }],
       },
       include: {
-        userA: { select: { id: true, fullName: true, avatarUrl: true, isVerified: true, major: true, cohort: true } },
-        userB: { select: { id: true, fullName: true, avatarUrl: true, isVerified: true, major: true, cohort: true } },
+        userA: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+            major: true,
+            cohort: true,
+          },
+        },
+        userB: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+            major: true,
+            cohort: true,
+          },
+        },
       },
     });
 
-    return friendships.map((friendship) => friendship.userAId === userId ? friendship.userB : friendship.userA);
+    return friendships.map((friendship) =>
+      friendship.userAId === userId ? friendship.userB : friendship.userA,
+    );
   }
 
   async getFriendRequests(userId: string) {
@@ -348,7 +438,9 @@ export class UsersService {
       },
       select: { senderId: true, receiverId: true },
     });
-    const pendingUserIds = pendingRequests.map((request) => request.senderId === userId ? request.receiverId : request.senderId);
+    const pendingUserIds = pendingRequests.map((request) =>
+      request.senderId === userId ? request.receiverId : request.senderId,
+    );
     const excludedIds = [userId, ...friendIds, ...pendingUserIds];
     const where = { id: { notIn: excludedIds } };
     const profileMatches: Array<{ major: string } | { cohort: string }> = [];
@@ -362,7 +454,13 @@ export class UsersService {
           OR: profileMatches,
         },
         take: 8,
-        select: { id: true, fullName: true, avatarUrl: true, major: true, cohort: true },
+        select: {
+          id: true,
+          fullName: true,
+          avatarUrl: true,
+          major: true,
+          cohort: true,
+        },
       });
 
       if (suggestions.length > 0) return suggestions;
@@ -371,7 +469,13 @@ export class UsersService {
     return prisma.user.findMany({
       where,
       take: 8,
-      select: { id: true, fullName: true, avatarUrl: true, major: true, cohort: true },
+      select: {
+        id: true,
+        fullName: true,
+        avatarUrl: true,
+        major: true,
+        cohort: true,
+      },
     });
   }
 
@@ -388,7 +492,9 @@ export class UsersService {
       },
       select: { senderId: true, receiverId: true },
     });
-    const pendingUserIds = pendingRequests.map((request) => request.senderId === userId ? request.receiverId : request.senderId);
+    const pendingUserIds = pendingRequests.map((request) =>
+      request.senderId === userId ? request.receiverId : request.senderId,
+    );
 
     return prisma.user.findMany({
       where: {
@@ -402,7 +508,13 @@ export class UsersService {
         ],
       },
       take: 10,
-      select: { id: true, fullName: true, avatarUrl: true, major: true, cohort: true },
+      select: {
+        id: true,
+        fullName: true,
+        avatarUrl: true,
+        major: true,
+        cohort: true,
+      },
     });
   }
 
@@ -416,7 +528,7 @@ export class UsersService {
         role: true,
         isSuspended: true,
         createdAt: true,
-      }
+      },
     });
   }
 
@@ -450,14 +562,29 @@ export class UsersService {
 
   /** All portfolio sections for a user in one round-trip (read-only, public). */
   async getPortfolio(userId: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
 
     const [skills, achievements, certificates, projects] = await Promise.all([
-      prisma.userSkill.findMany({ where: { userId }, orderBy: { skill: 'asc' } }),
-      prisma.userAchievement.findMany({ where: { userId }, orderBy: { earnedAt: 'desc' } }),
-      prisma.userCertificate.findMany({ where: { userId }, orderBy: { issuedAt: 'desc' } }),
-      prisma.userProject.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+      prisma.userSkill.findMany({
+        where: { userId },
+        orderBy: { skill: 'asc' },
+      }),
+      prisma.userAchievement.findMany({
+        where: { userId },
+        orderBy: { earnedAt: 'desc' },
+      }),
+      prisma.userCertificate.findMany({
+        where: { userId },
+        orderBy: { issuedAt: 'desc' },
+      }),
+      prisma.userProject.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
 
     return { skills, achievements, certificates, projects };
@@ -469,7 +596,9 @@ export class UsersService {
     const name = (skill || '').trim();
     if (!name) throw new BadRequestException('Tên kỹ năng không được để trống');
     try {
-      return await prisma.userSkill.create({ data: { userId, skill: name, level } });
+      return await prisma.userSkill.create({
+        data: { userId, skill: name, level },
+      });
     } catch {
       // @@unique([userId, skill]) violated.
       throw new ConflictException('Kỹ năng này đã có trong hồ sơ');
@@ -479,7 +608,8 @@ export class UsersService {
   async removeSkill(userId: string, skillId: string) {
     const skill = await prisma.userSkill.findUnique({ where: { id: skillId } });
     if (!skill) throw new NotFoundException('Không tìm thấy kỹ năng');
-    if (skill.userId !== userId) throw new ForbiddenException('Không thể xóa kỹ năng của người khác');
+    if (skill.userId !== userId)
+      throw new ForbiddenException('Không thể xóa kỹ năng của người khác');
     return prisma.userSkill.delete({ where: { id: skillId } });
   }
 
@@ -487,14 +617,20 @@ export class UsersService {
 
   async addAchievement(userId: string, title: string, description?: string) {
     const name = (title || '').trim();
-    if (!name) throw new BadRequestException('Tiêu đề thành tích không được để trống');
-    return prisma.userAchievement.create({ data: { userId, title: name, description } });
+    if (!name)
+      throw new BadRequestException('Tiêu đề thành tích không được để trống');
+    return prisma.userAchievement.create({
+      data: { userId, title: name, description },
+    });
   }
 
   async removeAchievement(userId: string, achievementId: string) {
-    const item = await prisma.userAchievement.findUnique({ where: { id: achievementId } });
+    const item = await prisma.userAchievement.findUnique({
+      where: { id: achievementId },
+    });
     if (!item) throw new NotFoundException('Không tìm thấy thành tích');
-    if (item.userId !== userId) throw new ForbiddenException('Không thể xóa thành tích của người khác');
+    if (item.userId !== userId)
+      throw new ForbiddenException('Không thể xóa thành tích của người khác');
     return prisma.userAchievement.delete({ where: { id: achievementId } });
   }
 
@@ -502,22 +638,38 @@ export class UsersService {
 
   async addCertificate(
     userId: string,
-    data: { name: string; issuer: string; issuedAt: string; credentialUrl?: string },
+    data: {
+      name: string;
+      issuer: string;
+      issuedAt: string;
+      credentialUrl?: string;
+    },
   ) {
     const name = (data?.name || '').trim();
     const issuer = (data?.issuer || '').trim();
-    if (!name || !issuer) throw new BadRequestException('Tên chứng chỉ và đơn vị cấp là bắt buộc');
+    if (!name || !issuer)
+      throw new BadRequestException('Tên chứng chỉ và đơn vị cấp là bắt buộc');
     const issuedAt = new Date(data.issuedAt);
-    if (isNaN(issuedAt.getTime())) throw new BadRequestException('Ngày cấp không hợp lệ');
+    if (isNaN(issuedAt.getTime()))
+      throw new BadRequestException('Ngày cấp không hợp lệ');
     return prisma.userCertificate.create({
-      data: { userId, name, issuer, issuedAt, credentialUrl: data.credentialUrl || null },
+      data: {
+        userId,
+        name,
+        issuer,
+        issuedAt,
+        credentialUrl: data.credentialUrl || null,
+      },
     });
   }
 
   async removeCertificate(userId: string, certificateId: string) {
-    const item = await prisma.userCertificate.findUnique({ where: { id: certificateId } });
+    const item = await prisma.userCertificate.findUnique({
+      where: { id: certificateId },
+    });
     if (!item) throw new NotFoundException('Không tìm thấy chứng chỉ');
-    if (item.userId !== userId) throw new ForbiddenException('Không thể xóa chứng chỉ của người khác');
+    if (item.userId !== userId)
+      throw new ForbiddenException('Không thể xóa chứng chỉ của người khác');
     return prisma.userCertificate.delete({ where: { id: certificateId } });
   }
 
@@ -525,7 +677,13 @@ export class UsersService {
 
   async addProject(
     userId: string,
-    data: { title: string; description?: string; techStack?: string[]; githubUrl?: string; demoUrl?: string },
+    data: {
+      title: string;
+      description?: string;
+      techStack?: string[];
+      githubUrl?: string;
+      demoUrl?: string;
+    },
   ) {
     const title = (data?.title || '').trim();
     if (!title) throw new BadRequestException('Tên dự án không được để trống');
@@ -542,9 +700,12 @@ export class UsersService {
   }
 
   async removeProject(userId: string, projectId: string) {
-    const item = await prisma.userProject.findUnique({ where: { id: projectId } });
+    const item = await prisma.userProject.findUnique({
+      where: { id: projectId },
+    });
     if (!item) throw new NotFoundException('Không tìm thấy dự án');
-    if (item.userId !== userId) throw new ForbiddenException('Không thể xóa dự án của người khác');
+    if (item.userId !== userId)
+      throw new ForbiddenException('Không thể xóa dự án của người khác');
     return prisma.userProject.delete({ where: { id: projectId } });
   }
 }

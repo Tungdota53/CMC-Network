@@ -9,7 +9,11 @@ describe('AppController', () => {
   beforeEach(async () => {
     const proxyServiceMock = {
       getHealthStatus: jest.fn().mockReturnValue([
-        { name: 'Auth Service', prefix: 'auth', url: 'http://localhost:3002' },
+        {
+          name: 'Auth Service',
+          prefix: 'auth',
+          url: 'http://localhost:3002',
+        },
       ]),
     };
 

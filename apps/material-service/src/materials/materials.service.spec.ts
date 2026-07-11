@@ -3,7 +3,11 @@ import { prisma } from '@campus-connect/database';
 
 jest.mock('@campus-connect/database', () => {
   const mockPrisma = {
-    $transaction: jest.fn().mockImplementation((args) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
+    $transaction: jest
+      .fn()
+      .mockImplementation((args) =>
+        Array.isArray(args) ? Promise.all(args) : args(mockPrisma),
+      ),
     material: { findMany: jest.fn(), create: jest.fn() },
   };
   return {
@@ -51,7 +55,9 @@ describe('MaterialsService — upload validation', () => {
   });
 
   it('accepts a valid PDF and persists it', async () => {
-    jest.mocked(prisma.material.create).mockResolvedValue({ id: 'm1' } as never);
+    jest
+      .mocked(prisma.material.create)
+      .mockResolvedValue({ id: 'm1' } as never);
     await service.uploadMaterial({
       uploaderId: 'u1',
       title: 'Notes',

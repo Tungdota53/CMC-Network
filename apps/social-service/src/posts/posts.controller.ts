@@ -1,6 +1,24 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+  UseGuards,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CurrentUser, resolveUserId } from '@campus-connect/common';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  Roles,
+  RolesGuard,
+  resolveUserId,
+} from '@campus-connect/common';
 import { PostsService } from './posts.service';
 
 @Controller('posts')
@@ -8,18 +26,30 @@ export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
   @Get('admin/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async getAllPostsAdmin() {
     return this.postsService.getAllPostsAdmin();
   }
 
   @Delete('admin/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async adminDeletePost(@Param('id') id: string) {
     return this.postsService.adminDeletePost(id);
   }
 
   @Get('feed')
-  async getFeed(@Query('page') page: string, @Query('limit') limit: string) {
-    return this.postsService.getFeed(Number(page) || 1, Number(limit) || 10);
+  async getFeed(
+    @Query('page') page: string,
+    @Query('limit') limit: string,
+    @CurrentUser('sub') viewerId?: string,
+  ) {
+    return this.postsService.getFeed(
+      Number(page) || 1,
+      Number(limit) || 10,
+      viewerId,
+    );
   }
 
   @Get('stories')
@@ -33,8 +63,18 @@ export class PostsController {
   }
 
   @Get('user/:userId')
-  async getUserPosts(@Param('userId') userId: string) {
-    return this.postsService.getUserPosts(userId);
+  async getUserPosts(
+    @Param('userId') userId: string,
+    @Query('page') page: string,
+    @Query('limit') limit: string,
+    @CurrentUser('sub') viewerId?: string,
+  ) {
+    return this.postsService.getUserPosts(
+      userId,
+      Number(page) || 1,
+      Number(limit) || 20,
+      viewerId,
+    );
   }
 
   @Post('stories/:id/seen')
@@ -43,7 +83,10 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.postsService.markStorySeen(id, resolveUserId(tokenUserId, data.userId));
+    return this.postsService.markStorySeen(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+    );
   }
 
   @Post('upload')
@@ -57,7 +100,11 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; mediaUrl: string; content?: string },
   ) {
-    return this.postsService.createStory(resolveUserId(tokenUserId, data.userId), data.mediaUrl, data.content);
+    return this.postsService.createStory(
+      resolveUserId(tokenUserId, data.userId),
+      data.mediaUrl,
+      data.content,
+    );
   }
 
   @Post()
@@ -65,7 +112,11 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; content: string; mediaUrls?: string[] },
   ) {
-    return this.postsService.createPost(resolveUserId(tokenUserId, data.userId), data.content, data.mediaUrls);
+    return this.postsService.createPost(
+      resolveUserId(tokenUserId, data.userId),
+      data.content,
+      data.mediaUrls,
+    );
   }
 
   @Put(':id/like')
@@ -74,7 +125,11 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; type: string },
   ) {
-    return this.postsService.likePost(id, resolveUserId(tokenUserId, data.userId), data.type);
+    return this.postsService.likePost(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data.type,
+    );
   }
 
   @Put(':id')
@@ -83,7 +138,11 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; content: string },
   ) {
-    return this.postsService.editPost(id, resolveUserId(tokenUserId, data.userId), data.content);
+    return this.postsService.editPost(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data.content,
+    );
   }
 
   @Delete(':id')
@@ -92,7 +151,10 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.postsService.deletePost(id, resolveUserId(tokenUserId, data.userId));
+    return this.postsService.deletePost(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+    );
   }
 
   @Post(':id/comments')
@@ -101,7 +163,11 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; content: string },
   ) {
-    return this.postsService.commentPost(id, resolveUserId(tokenUserId, data.userId), data.content);
+    return this.postsService.commentPost(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data.content,
+    );
   }
 
   @Post(':id/save')
@@ -110,7 +176,10 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.postsService.toggleSave(id, resolveUserId(tokenUserId, data?.userId));
+    return this.postsService.toggleSave(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 
   @Post(':id/share')
@@ -119,7 +188,11 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; content?: string },
   ) {
-    return this.postsService.sharePost(id, resolveUserId(tokenUserId, data?.userId), data?.content);
+    return this.postsService.sharePost(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+      data?.content,
+    );
   }
 
   @Post('comments/:commentId/like')
@@ -128,6 +201,9 @@ export class PostsController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.postsService.toggleCommentLike(commentId, resolveUserId(tokenUserId, data?.userId));
+    return this.postsService.toggleCommentLike(
+      commentId,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 }

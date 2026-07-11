@@ -5,7 +5,7 @@ import { join } from 'path';
 async function bootstrap() {
   await bootstrapService(AppModule, {
     serviceName: 'user-service',
-    port: 3003,
+    port: 23306,
     staticAssets: {
       root: join(process.cwd(), 'uploads'),
       prefix: '/',

@@ -6,11 +6,6 @@
     "auditLog": "logs\\.321e3d35b30820ddde4b879e59db16b7ca73ffaf-audit.json",
     "files": [
         {
-            "date": 1782425995501,
-            "name": "logs\\material-service-2026-06-26.log",
-            "hash": "449804c9defe686cb2f26c717cc82d2e3cf7545d56099227cb6167ea54f351d4"
-        },
-        {
             "date": 1782576908908,
             "name": "logs\\material-service-2026-06-27.log",
             "hash": "e1654870ce25420b50e523a443ba0259b95cf748a66297e5e25a8bc62ba54ba7"
@@ -39,6 +34,21 @@
             "date": 1783393973428,
             "name": "logs\\material-service-2026-07-07.log",
             "hash": "83efe74d14e96897a8d82b3ffff200265a3d42f38394948d1c7c1a0b4af9999e"
+        },
+        {
+            "date": 1783473598325,
+            "name": "logs\\material-service-2026-07-08.log",
+            "hash": "2b062a57b75ded7be80db5109f0288f4e778c706b04557d84b5f185ba60f9e7a"
+        },
+        {
+            "date": 1783563264622,
+            "name": "logs\\material-service-2026-07-09.log",
+            "hash": "a25125129a5a03913c7c0cd2804d0628a282866678afd7245a6a285d23ba7a63"
+        },
+        {
+            "date": 1783684626939,
+            "name": "logs\\material-service-2026-07-10.log",
+            "hash": "886703a95e0afbf151b83918a9d213bd37a1e6033c45d2e56407301beff77322"
         }
     ],
     "hashType": "sha256"

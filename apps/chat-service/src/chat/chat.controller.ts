@@ -1,4 +1,15 @@
-import { Controller, Get, Param, Post, Body, Query, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Post,
+  Body,
+  Query,
+  Delete,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, resolveUserId } from '@campus-connect/common';
 import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
@@ -10,10 +21,24 @@ export class ChatController {
     private readonly chatGateway: ChatGateway,
   ) {}
 
+  /** Upload media file (image/video/file) for chat messages. */
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+    return this.chatService.uploadFile(file);
+  }
+
   /** Internal hook: other services push realtime notifications through here. */
   @Post('internal/notify')
-  async internalNotify(
-    @Body() body: { userId: string; type: string; content?: string; message?: string; relatedId?: string },
+  internalNotify(
+    @Body()
+    body: {
+      userId: string;
+      type: string;
+      content?: string;
+      message?: string;
+      relatedId?: string;
+    },
   ) {
     this.chatGateway.pushNotification(body.userId, {
       type: body.type,
@@ -32,7 +57,10 @@ export class ChatController {
   }
 
   @Get('conversations/:userId/search')
-  async searchConversations(@Param('userId') userId: string, @Query('q') q = '') {
+  async searchConversations(
+    @Param('userId') userId: string,
+    @Query('q') q = '',
+  ) {
     return this.chatService.searchConversations(userId, q);
   }
 
@@ -48,7 +76,12 @@ export class ChatController {
     @Query('limit') limit?: string,
     @Query('before') before?: string,
   ) {
-    return this.chatService.getMessages(conversationId, viewerId, Number(limit) || 50, before);
+    return this.chatService.getMessages(
+      conversationId,
+      viewerId,
+      Number(limit) || 50,
+      before,
+    );
   }
 
   @Post('messages/:conversationId/read')
@@ -57,18 +90,32 @@ export class ChatController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() body: { userId?: string },
   ) {
-    return this.chatService.markConversationRead(conversationId, resolveUserId(tokenUserId, body.userId));
+    return this.chatService.markConversationRead(
+      conversationId,
+      resolveUserId(tokenUserId, body.userId),
+    );
   }
 
   @Post('conversations/direct')
-  async getOrCreateDirectConversation(@Body() body: { user1Id: string; user2Id: string }) {
-    return this.chatService.getOrCreateDirectConversation(body.user1Id, body.user2Id);
+  async getOrCreateDirectConversation(
+    @Body() body: { user1Id: string; user2Id: string },
+  ) {
+    return this.chatService.getOrCreateDirectConversation(
+      body.user1Id,
+      body.user2Id,
+    );
   }
 
   @Post('groups')
   async createGroup(
     @CurrentUser('sub') tokenUserId: string,
-    @Body() body: { creatorId?: string; name: string; memberIds: string[]; avatar?: string },
+    @Body()
+    body: {
+      creatorId?: string;
+      name: string;
+      memberIds: string[];
+      avatar?: string;
+    },
   ) {
     return this.chatService.createGroup(
       resolveUserId(tokenUserId, body.creatorId),
@@ -84,7 +131,11 @@ export class ChatController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() body: { actorId?: string; userId: string },
   ) {
-    return this.chatService.addGroupMember(conversationId, resolveUserId(tokenUserId, body.actorId), body.userId);
+    return this.chatService.addGroupMember(
+      conversationId,
+      resolveUserId(tokenUserId, body.actorId),
+      body.userId,
+    );
   }
 
   @Delete('groups/:conversationId/members/:userId')
@@ -94,6 +145,21 @@ export class ChatController {
     @CurrentUser('sub') tokenUserId: string,
     @Query('actorId') actorId?: string,
   ) {
-    return this.chatService.removeGroupMember(conversationId, resolveUserId(tokenUserId, actorId), userId);
+    return this.chatService.removeGroupMember(
+      conversationId,
+      resolveUserId(tokenUserId, actorId),
+      userId,
+    );
+  }
+
+  @Post('conversations/:conversationId/background')
+  async updateBackground(
+    @Param('conversationId') conversationId: string,
+    @Body() body: { backgroundUrl: string },
+  ) {
+    return this.chatService.updateBackground(
+      conversationId,
+      body.backgroundUrl,
+    );
   }
 }

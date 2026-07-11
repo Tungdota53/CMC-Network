@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { prisma } from '@campus-connect/database';
@@ -6,6 +11,7 @@ import { getRedisClient } from '@campus-connect/cache';
 import { authenticator } from 'otplib';
 import * as qrcode from 'qrcode';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
+import { parseStudentInfo } from '@campus-connect/common';
 
 @Injectable()
 export class AuthService {
@@ -13,7 +19,7 @@ export class AuthService {
 
   async register(registerDto: RegisterDto) {
     const { email, password, fullName } = registerDto;
-    
+
     // Check if user exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
@@ -23,60 +29,17 @@ export class AuthService {
     const salt = await bcrypt.genSalt();
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    let studentId = null;
-    let cohort = null;
-    let major = null;
-
-    if (email.endsWith('@st.cmc.edu.vn') || email.endsWith('@st.cmcu.edu.vn')) {
-      studentId = email.split('@')[0].toUpperCase();
-      
-      const match = studentId.match(/^([A-Za-z]+)(\d{2})\d+$/);
-      if (match) {
-        const letters = match[1].toUpperCase();
-        const yearPrefix = parseInt(match[2]);
-
-        const cohortNum = yearPrefix - 21; 
-        if (cohortNum > 0) {
-          cohort = `K${cohortNum}`;
-        }
-
-        const majorMap: Record<string, string> = {
-          'AI': 'Trí tuệ Nhân tạo',
-          'BA': 'Quản trị Kinh doanh',
-          'CB': 'Tiếng Trung Thương mại',
-          'CL': 'Ngôn ngữ Trung Quốc',
-          'CS': 'Khoa học Máy tính',
-          'DA': 'Thiết kế Mỹ thuật số',
-          'EC': 'Công nghệ Kỹ thuật Điện tử - Viễn thông',
-          'EM': 'Thương mại Điện tử',
-          'GA': 'Đồ họa Game',
-          'GD': 'Thiết kế Đồ họa',
-          'IB': 'Kinh doanh Quốc tế',
-          'IT': 'Công nghệ Thông tin',
-          'KL': 'Ngôn ngữ Hàn Quốc',
-          'LS': 'Logistics và Quản lý chuỗi cung ứng',
-          'MC': 'Truyền thông Đa phương tiện',
-          'NS': 'An ninh Mạng',
-          'PR': 'Quan hệ Công chúng',
-          'SE': 'Kỹ thuật Phần mềm'
-        };
-
-        const majorCode = letters.length >= 2 ? letters.slice(-2) : letters;
-        if (majorMap[majorCode]) {
-          major = majorMap[majorCode];
-        }
-      }
-    }
+    const info = parseStudentInfo(email);
 
     const user = await prisma.user.create({
       data: {
         email,
         passwordHash: hashedPassword,
         fullName,
-        studentId,
-        major,
-        cohort,
-        role: 'STUDENT'
+        studentId: info.studentId,
+        major: info.major,
+        cohort: info.cohort,
+        role: 'STUDENT',
       },
     });
 
@@ -85,23 +48,33 @@ export class AuthService {
 
   async login(loginDto: LoginDto) {
     const { identifier, password } = loginDto;
-    const user = await prisma.user.findFirst({ 
-      where: { 
+    const user = await prisma.user.findFirst({
+      where: {
         OR: [
           { email: identifier.toLowerCase() },
-          { studentId: identifier.toUpperCase() }
-        ]
-      } 
+          { studentId: identifier.toUpperCase() },
+        ],
+      },
     });
 
-    if (!user || !user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user) {
+      throw new UnauthorizedException('Sai tài khoản hoặc mật khẩu');
+    }
+
+    if (!user.passwordHash) {
+      throw new UnauthorizedException(
+        'Tài khoản chỉ hỗ trợ đăng nhập qua Microsoft',
+      );
+    }
+
+    if (!(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Sai tài khoản hoặc mật khẩu');
     }
 
     if (user.twoFactorStatus === 'ENABLED') {
       const temp2faToken = await this.jwtService.signAsync(
         { sub: user.id, type: '2FA_TEMP' },
-        { expiresIn: '5m' }
+        { expiresIn: '5m' },
       );
       return {
         requires2FA: true,
@@ -126,7 +99,7 @@ export class AuthService {
         throw new Error('Invalid token type');
       }
       userId = payload.sub;
-    } catch (e) {
+    } catch {
       throw new UnauthorizedException('Token 2FA không hợp lệ hoặc đã hết hạn');
     }
 
@@ -155,16 +128,30 @@ export class AuthService {
 
   public async generateTokens(user: any) {
     const payload = { sub: user.id, email: user.email, role: user.role };
-    const access_token = await this.jwtService.signAsync(payload, { expiresIn: '15m' });
-    const refresh_token = await this.jwtService.signAsync(payload, { expiresIn: '7d' });
+    const access_token = await this.jwtService.signAsync(payload, {
+      expiresIn: '15m',
+    });
+    const refresh_token = await this.jwtService.signAsync(payload, {
+      expiresIn: '7d',
+    });
 
     const redis = getRedisClient();
-    await redis.set(`refresh_token:${user.id}`, refresh_token, 'EX', 7 * 24 * 60 * 60);
+    await redis.set(
+      `refresh_token:${user.id}`,
+      refresh_token,
+      'EX',
+      7 * 24 * 60 * 60,
+    );
 
     return {
       access_token,
       refresh_token,
-      user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role }
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+      },
     };
   }
 
@@ -172,19 +159,21 @@ export class AuthService {
     try {
       const payload = await this.jwtService.verifyAsync(refreshToken);
       const userId = payload.sub;
-      
+
       const redis = getRedisClient();
       const storedToken = await redis.get(`refresh_token:${userId}`);
-      
+
       if (!storedToken || storedToken !== refreshToken) {
-        throw new UnauthorizedException('Refresh token không hợp lệ hoặc đã hết hạn');
+        throw new UnauthorizedException(
+          'Refresh token không hợp lệ hoặc đã hết hạn',
+        );
       }
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) throw new NotFoundException('User không tồn tại');
 
       return this.generateTokens(user);
-    } catch (e) {
+    } catch {
       throw new UnauthorizedException('Refresh token không hợp lệ');
     }
   }
@@ -194,8 +183,12 @@ export class AuthService {
     if (!user) throw new NotFoundException('User không tồn tại');
 
     const secret = authenticator.generateSecret();
-    const otpauthUrl = authenticator.keyuri(user.email, 'CampusConnect', secret);
-    
+    const otpauthUrl = authenticator.keyuri(
+      user.email,
+      'CampusConnect',
+      secret,
+    );
+
     await prisma.user.update({
       where: { id: userId },
       data: { twoFactorSecret: secret },
@@ -232,7 +225,11 @@ export class AuthService {
     return { message: 'Bật 2FA thành công' };
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
     if (!newPassword || newPassword.length < 6) {
       throw new BadRequestException('Mật khẩu mới phải có ít nhất 6 ký tự');
     }

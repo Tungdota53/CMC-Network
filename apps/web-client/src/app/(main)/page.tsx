@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { SkeletonCard } from '../components/Skeleton';
 import EmptyState from '../components/EmptyState';
 import { VerifiedBadge } from '../components/VerifiedBadge';
+import { StaggerContainer, StaggerItem, SlideUp } from '../components/ui/Motion';
 
 type PostUser = {
   id?: string;
@@ -105,7 +106,7 @@ export default function Home() {
   const loadFeed = useCallback(async () => {
     setIsLoadingFeed(true);
     try {
-      const response = await fetch(`${POSTS_API_URL}/posts/feed?page=1&limit=20`);
+      const response = await apiFetch(`${POSTS_API_URL}/posts/feed?page=1&limit=20`);
       if (!response.ok) return;
 
       const data = await response.json();
@@ -122,7 +123,7 @@ export default function Home() {
   }, []);
 
   const loadStories = useCallback(async () => {
-    const response = await fetch(`${POSTS_API_URL}/posts/stories`);
+    const response = await apiFetch(`${POSTS_API_URL}/posts/stories`);
     if (!response.ok) return;
 
     const data = await response.json();
@@ -140,7 +141,7 @@ export default function Home() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${POSTS_API_URL}/posts/upload`, {
+    const response = await apiFetch(`${POSTS_API_URL}/posts/upload`, {
       method: 'POST',
       body: formData,
     });
@@ -179,7 +180,7 @@ export default function Home() {
     setIsPosting(true);
     try {
       const mediaUrls = await Promise.all(selectedImages.map((img) => uploadImage(img.file)));
-      const response = await fetch(`${POSTS_API_URL}/posts`, {
+      const response = await apiFetch(`${POSTS_API_URL}/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser?.id || '', content: newContent || 'Đã thêm ảnh mới', mediaUrls }),
@@ -207,7 +208,7 @@ export default function Home() {
     setIsPostingStory(true);
     try {
       const mediaUrl = await uploadImage(file);
-      const response = await fetch(`${POSTS_API_URL}/posts/stories`, {
+      const response = await apiFetch(`${POSTS_API_URL}/posts/stories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser?.id || '', mediaUrl, content: 'Story' }),
@@ -249,7 +250,7 @@ export default function Home() {
     }));
 
     try {
-      await fetch(`${POSTS_API_URL}/posts/${postId}/like`, { 
+      await apiFetch(`${POSTS_API_URL}/posts/${postId}/like`, { 
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser?.id || '', type }),
@@ -267,7 +268,7 @@ export default function Home() {
 
   const saveEdit = async (postId: string) => {
     try {
-      const response = await fetch(`${POSTS_API_URL}/posts/${postId}`, {
+      const response = await apiFetch(`${POSTS_API_URL}/posts/${postId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser?.id, content: editContent })
@@ -284,7 +285,7 @@ export default function Home() {
   const handleDeletePost = async (postId: string) => {
     if (!currentUser?.id) return;
 
-    const response = await fetch(`${POSTS_API_URL}/posts/${postId}`, {
+    const response = await apiFetch(`${POSTS_API_URL}/posts/${postId}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUser.id }),
@@ -301,7 +302,7 @@ export default function Home() {
     const content = commentInputs[postId]?.trim();
     if (!content) return;
 
-    const response = await fetch(`${POSTS_API_URL}/posts/${postId}/comments`, {
+    const response = await apiFetch(`${POSTS_API_URL}/posts/${postId}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: currentUser?.id || '', content }),
@@ -423,7 +424,7 @@ export default function Home() {
         ))}
       </div>
 
-      <div className="w-full glass rounded-none sm:rounded-xl border-x-0 sm:border-x p-4 relative overflow-hidden flex flex-col gap-3 transition-all duration-300 mb-2 sm:mb-0">
+      <SlideUp y={10} className="w-full glass rounded-none sm:rounded-xl p-4 sm:p-5 mb-4 border-x-0 sm:border-x flex flex-col gap-4 shadow-sm z-10 relative">
         <div className="flex gap-3 relative z-10 items-start">
           <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-slate-700">
             <img src={getAvatar(currentUser, currentUser?.id || 'me')} alt="Avatar" className="w-full h-full object-cover" />
@@ -487,7 +488,7 @@ export default function Home() {
             {isPosting ? 'Đang đăng...' : 'Đăng bài'}
           </button>
         </div>
-      </div>
+      </SlideUp>
 
       {isLoadingFeed ? (
         <div className="w-full space-y-6">
@@ -502,8 +503,9 @@ export default function Home() {
         />
       ) : null}
 
+      <StaggerContainer delayChildren={0.1} staggerChildren={0.1} className="w-full flex flex-col gap-4">
       {posts.map((post) => (
-        <div key={post.id} className="w-full glass rounded-none sm:rounded-xl border-x-0 sm:border-x mb-2 sm:mb-0">
+        <StaggerItem key={post.id} className="w-full glass rounded-none sm:rounded-xl border-x-0 sm:border-x mb-2 sm:mb-0">
           <div className="flex justify-between items-start p-5">
             <div className="flex items-center gap-2">
               <Link href={`/profile/${post.userId}`} className="relative group/avatar cursor-pointer">
@@ -688,8 +690,9 @@ export default function Home() {
               </div>
             </div>
           )}
-        </div>
+        </StaggerItem>
       ))}
+      </StaggerContainer>
 
       {viewingStory && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/95 backdrop-blur-md">

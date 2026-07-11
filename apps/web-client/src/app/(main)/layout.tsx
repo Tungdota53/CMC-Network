@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
 import UserMenu from '../components/UserMenu';
 import AuthGuard from '../components/AuthGuard';
 import SidebarProfile from '../components/SidebarProfile';
@@ -29,6 +30,7 @@ const Icons = {
   Bell: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>,
   Bookmark: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>,
   Trophy: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8m-4-4v4m-5-16h10v3a5 5 0 01-10 0V5zm10 1h2a2 2 0 010 4h-.5M7 6H5a2 2 0 000 4h.5"/></svg>,
+  Message: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>,
 };
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -65,6 +67,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             { icon: Icons.Home, path: '/', label: 'Feed' },
             { icon: Icons.Pulse, path: '/pulse', label: 'Pulse' },
             { icon: Icons.Users, path: '/groups', label: 'Nhóm' },
+            { icon: Icons.Message, path: '/chat', label: 'Tin nhắn' },
             { icon: Icons.Book, path: '/materials', label: 'Tài liệu' },
             { icon: Icons.Store, path: '/marketplace', label: 'Chợ' },
           ].map((item, i) => {
@@ -74,6 +77,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <Link 
               key={i} 
               href={item.path}
+              target={item.path === '/chat' ? '_blank' : undefined}
+              rel={item.path === '/chat' ? 'noopener noreferrer' : undefined}
               aria-label={item.label}
               aria-current={active ? 'page' : undefined}
               className={`px-5 h-14 flex items-center justify-center rounded-2xl transition-all relative group ${
@@ -83,7 +88,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               }`}
             >
               <div className="group-hover:-translate-y-0.5 transition-transform duration-300">{item.icon}</div>
-              <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-[3px] bg-indigo-600 dark:bg-indigo-300 rounded-t-full transition-all duration-300 ${active ? 'w-10 opacity-100' : 'w-0 opacity-0 group-hover:w-10 group-hover:opacity-100'}`}></div>
+              {active ? (
+                <motion.div layoutId="navIndicator" className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3px] bg-indigo-600 dark:bg-indigo-300 rounded-t-full w-10" />
+              ) : (
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3px] bg-indigo-600 dark:bg-indigo-300 rounded-t-full w-0 opacity-0 group-hover:w-10 group-hover:opacity-30 transition-all duration-300" />
+              )}
             </Link>
             );
           })}
@@ -120,13 +129,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             {[
               { icon: Icons.Pulse, label: 'Live Campus Pulse', color: 'text-sky-500', path: '/pulse' },
               { icon: Icons.Users, label: 'Nhóm học tập', color: 'text-indigo-500', path: '/groups' },
+              { icon: Icons.Message, label: 'Tin nhắn', color: 'text-pink-500', path: '/chat' },
               { icon: Icons.Book, label: 'Kho tài liệu', color: 'text-violet-500', path: '/materials' },
               { icon: Icons.Calendar, label: 'Sự kiện', color: 'text-rose-500', path: '/events' },
               { icon: Icons.Store, label: 'Chợ sinh viên', color: 'text-emerald-500', path: '/marketplace' },
               { icon: Icons.Trophy, label: 'Bảng xếp hạng', color: 'text-amber-500', path: '/leaderboard' },
               { icon: Icons.Bookmark, label: 'Đã lưu', color: 'text-orange-500', path: '/saved' },
             ].map((item, i) => (
-              <Link href={item.path} key={i} aria-current={isActivePath(item.path) ? 'page' : undefined} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors group ${isActivePath(item.path) ? 'bg-indigo-50/90 dark:bg-indigo-500/10' : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/80'}`}>
+              <Link href={item.path} key={i} target={item.path === '/chat' ? '_blank' : undefined} rel={item.path === '/chat' ? 'noopener noreferrer' : undefined} aria-current={isActivePath(item.path) ? 'page' : undefined} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors group ${isActivePath(item.path) ? 'bg-indigo-50/90 dark:bg-indigo-500/10' : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/80'}`}>
                 <div className={`transition-transform duration-300 ${item.color} group-hover:scale-110`}>{item.icon}</div>
                 <span className="font-medium text-token-secondary group-hover:text-token-primary text-sm">{item.label}</span>
               </Link>
@@ -162,21 +172,22 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         {/* RIGHT SIDEBAR */}
         <RightSidebar />
         
-        <ChatWidget />
-        <MobileBottomNav />
-        <Toaster 
-          position="bottom-left"
-          toastOptions={{
-            style: {
-              background: 'rgba(255, 255, 255, 0.9)',
-              backdropFilter: 'blur(16px)',
-              color: '#0f172a',
-              border: '1px solid rgba(226, 232, 240, 0.8)',
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-            }
-          }}
-        />
       </main>
+      
+      <ChatWidget />
+      <MobileBottomNav />
+      <Toaster 
+        position="bottom-left"
+        toastOptions={{
+          style: {
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(16px)',
+            color: '#0f172a',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          }
+        }}
+      />
         </SocketProvider>
       </UserProvider>
     </AuthGuard>

@@ -1,5 +1,5 @@
 import { PrismaClient } from '@campus-connect/database';
-import * as bcrypt from 'bcryptjs'; // auth-service might use bcryptjs or bcrypt
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -19,16 +19,10 @@ async function run() {
   // Hash password
   let hashedPassword;
   try {
-    const bcryptLib = require('bcryptjs');
-    hashedPassword = await bcryptLib.hash(newPassword, 10);
+    hashedPassword = await bcrypt.hash(newPassword, 10);
   } catch (e) {
-    try {
-      const bcryptLib = require('bcrypt');
-      hashedPassword = await bcryptLib.hash(newPassword, 10);
-    } catch (e2) {
-      console.error('Không tìm thấy thư viện bcrypt hoặc bcryptjs.');
-      return;
-    }
+    console.error('Không tìm thấy thư viện bcrypt.');
+    return;
   }
 
   await prisma.user.update({

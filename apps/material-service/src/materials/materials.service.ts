@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { FileType, prisma } from '@campus-connect/database';
@@ -8,22 +13,31 @@ import { join } from 'path';
 
 @Injectable()
 export class MaterialsService {
-  private readonly storageProvider = createStorageProvider(join(process.cwd(), 'uploads'), '');
+  private readonly storageProvider = createStorageProvider(
+    join(process.cwd(), 'uploads'),
+    '',
+  );
 
-  constructor(@InjectQueue('material-processing') private materialQueue: Queue) {
+  constructor(
+    @InjectQueue('material-processing') private materialQueue: Queue,
+  ) {
     this.ensureUploadDir();
   }
 
   private async ensureUploadDir() {
     try {
-      await fs.mkdir(join(process.cwd(), 'uploads', 'materials'), { recursive: true });
+      await fs.mkdir(join(process.cwd(), 'uploads', 'materials'), {
+        recursive: true,
+      });
     } catch {
       // Directory already exists
     }
   }
 
   async getMaterials(subject?: string) {
-    const where = subject ? { subject: { contains: subject, mode: 'insensitive' as const } } : {};
+    const where = subject
+      ? { subject: { contains: subject, mode: 'insensitive' as const } }
+      : {};
     return prisma.material.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -61,7 +75,9 @@ export class MaterialsService {
 
     const fileUrl = storedFile.url;
     const validTypes = Object.values(FileType);
-    const fileType = validTypes.includes(data.fileType.toUpperCase() as FileType)
+    const fileType = validTypes.includes(
+      data.fileType.toUpperCase() as FileType,
+    )
       ? (data.fileType.toUpperCase() as FileType)
       : FileType.OTHER;
 
@@ -88,7 +104,17 @@ export class MaterialsService {
   }
 
   /** Update material metadata. Only the uploader may edit. */
-  async updateMaterial(materialId: string, userId: string, data: { title?: string; description?: string; subject?: string; semester?: string; tags?: string[] }) {
+  async updateMaterial(
+    materialId: string,
+    userId: string,
+    data: {
+      title?: string;
+      description?: string;
+      subject?: string;
+      semester?: string;
+      tags?: string[];
+    },
+  ) {
     const material = await this.assertUploader(materialId, userId);
     return prisma.material.update({
       where: { id: material.id },
@@ -106,18 +132,23 @@ export class MaterialsService {
   async deleteMaterial(materialId: string, userId: string) {
     const material = await this.assertUploader(materialId, userId);
     await prisma.material.delete({ where: { id: materialId } });
-    
+
     if (material.s3Url) {
-      const key = material.s3Url.startsWith('/') ? material.s3Url.substring(1) : material.s3Url;
+      const key = material.s3Url.startsWith('/')
+        ? material.s3Url.substring(1)
+        : material.s3Url;
       await this.storageProvider.delete(key);
     }
-    
+
     return { deleted: true, id: materialId };
   }
 
   /** Increment download counter and return the new total. */
   async incrementDownload(materialId: string) {
-    const material = await prisma.material.findUnique({ where: { id: materialId }, select: { id: true } });
+    const material = await prisma.material.findUnique({
+      where: { id: materialId },
+      select: { id: true },
+    });
     if (!material) throw new NotFoundException('Không tìm thấy tài liệu');
     const updated = await prisma.material.update({
       where: { id: materialId },
@@ -128,7 +159,9 @@ export class MaterialsService {
   }
 
   private async assertUploader(materialId: string, userId: string) {
-    const material = await prisma.material.findUnique({ where: { id: materialId } });
+    const material = await prisma.material.findUnique({
+      where: { id: materialId },
+    });
     if (!material) throw new NotFoundException('Không tìm thấy tài liệu');
     if (material.uploaderId !== userId) {
       throw new ForbiddenException('Chỉ người tải lên mới có quyền này');
@@ -137,9 +170,18 @@ export class MaterialsService {
   }
 
   /** Add or update a user's review; recomputes the material's average rating. */
-  async reviewMaterial(materialId: string, userId: string, rating: number, comment?: string) {
-    if (rating < 1 || rating > 5) throw new BadRequestException('Điểm đánh giá phải từ 1 đến 5');
-    const material = await prisma.material.findUnique({ where: { id: materialId }, select: { id: true } });
+  async reviewMaterial(
+    materialId: string,
+    userId: string,
+    rating: number,
+    comment?: string,
+  ) {
+    if (rating < 1 || rating > 5)
+      throw new BadRequestException('Điểm đánh giá phải từ 1 đến 5');
+    const material = await prisma.material.findUnique({
+      where: { id: materialId },
+      select: { id: true },
+    });
     if (!material) throw new NotFoundException('Không tìm thấy tài liệu');
 
     const review = await prisma.materialReview.upsert({
@@ -155,7 +197,10 @@ export class MaterialsService {
     });
     await prisma.material.update({
       where: { id: materialId },
-      data: { rating: stats._avg.rating ?? 0, reviewCount: stats._count.rating },
+      data: {
+        rating: stats._avg.rating ?? 0,
+        reviewCount: stats._count.rating,
+      },
     });
 
     return review;
@@ -166,13 +211,18 @@ export class MaterialsService {
     return prisma.materialReview.findMany({
       where: { materialId },
       orderBy: { createdAt: 'desc' },
-      include: { user: { select: { id: true, fullName: true, avatarUrl: true } } },
+      include: {
+        user: { select: { id: true, fullName: true, avatarUrl: true } },
+      },
     });
   }
 
   /** Toggle bookmark for a material. Returns { bookmarked }. */
   async toggleBookmark(materialId: string, userId: string) {
-    const material = await prisma.material.findUnique({ where: { id: materialId }, select: { id: true } });
+    const material = await prisma.material.findUnique({
+      where: { id: materialId },
+      select: { id: true },
+    });
     if (!material) throw new NotFoundException('Không tìm thấy tài liệu');
 
     const existing = await prisma.materialBookmark.findUnique({
@@ -192,7 +242,11 @@ export class MaterialsService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       include: {
-        material: { include: { uploader: { select: { fullName: true, avatarUrl: true } } } },
+        material: {
+          include: {
+            uploader: { select: { fullName: true, avatarUrl: true } },
+          },
+        },
       },
     });
     return rows.map((r) => r.material);

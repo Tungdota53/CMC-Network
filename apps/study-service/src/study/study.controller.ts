@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { CurrentUser, resolveUserId } from '@campus-connect/common';
 import { StudyService } from './study.service';
 
@@ -28,7 +37,11 @@ export class StudyController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; [key: string]: unknown },
   ) {
-    return this.studyService.updateStudyGroup(id, resolveUserId(tokenUserId, data.userId), data);
+    return this.studyService.updateStudyGroup(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data,
+    );
   }
 
   @Delete(':id')
@@ -37,7 +50,10 @@ export class StudyController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.studyService.deleteStudyGroup(id, resolveUserId(tokenUserId, data?.userId));
+    return this.studyService.deleteStudyGroup(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 
   @Post(':id/join-requests')
@@ -46,7 +62,10 @@ export class StudyController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.studyService.requestToJoin(id, resolveUserId(tokenUserId, data.userId));
+    return this.studyService.requestToJoin(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+    );
   }
 
   @Get(':id/join-requests')
@@ -55,7 +74,10 @@ export class StudyController {
     @CurrentUser('sub') tokenUserId: string,
     @Query('userId') userId?: string,
   ) {
-    return this.studyService.listJoinRequests(id, resolveUserId(tokenUserId, userId));
+    return this.studyService.listJoinRequests(
+      id,
+      resolveUserId(tokenUserId, userId),
+    );
   }
 
   @Put(':id/join-requests/:requestId')
@@ -79,7 +101,11 @@ export class StudyController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; whiteboardData: any },
   ) {
-    return this.studyService.updateWhiteboard(id, resolveUserId(tokenUserId, data.userId), data.whiteboardData);
+    return this.studyService.updateWhiteboard(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data.whiteboardData,
+    );
   }
 
   @Put(':id/todo-list')
@@ -88,7 +114,11 @@ export class StudyController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; todoList: any },
   ) {
-    return this.studyService.updateTodoList(id, resolveUserId(tokenUserId, data.userId), data.todoList);
+    return this.studyService.updateTodoList(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data.todoList,
+    );
   }
 
   // --- STUDY REQUESTS ---
@@ -103,7 +133,10 @@ export class StudyController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; [key: string]: unknown },
   ) {
-    return this.studyService.createStudyRequest(resolveUserId(tokenUserId, data.userId), data);
+    return this.studyService.createStudyRequest(
+      resolveUserId(tokenUserId, data.userId),
+      data,
+    );
   }
 
   @Put('requests/:id')
@@ -112,7 +145,11 @@ export class StudyController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; [key: string]: unknown },
   ) {
-    return this.studyService.updateStudyRequest(id, resolveUserId(tokenUserId, data.userId), data);
+    return this.studyService.updateStudyRequest(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data,
+    );
   }
 
   @Delete('requests/:id')
@@ -121,6 +158,9 @@ export class StudyController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.studyService.deleteStudyRequest(id, resolveUserId(tokenUserId, data?.userId));
+    return this.studyService.deleteStudyRequest(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 }

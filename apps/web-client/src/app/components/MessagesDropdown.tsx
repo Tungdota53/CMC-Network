@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from 'react';
+
 import { useUser } from '../contexts/UserContext';
 import { apiFetch } from '../lib/api';
 import Link from 'next/link';
@@ -39,11 +40,11 @@ export default function MessagesDropdown() {
 
   const openChatWidget = (conversation: Conversation) => {
     setIsOpen(false);
-    // Find the other member to pass to ChatWidget
-    const otherMember = conversation.otherMembers?.[0]?.user;
-    if (otherMember) {
-      // ChatWidget listens for this event
-      window.dispatchEvent(new CustomEvent('openChat', { detail: otherMember }));
+    const otherUser = conversation.otherMembers?.[0]?.user;
+    if (otherUser) {
+      window.dispatchEvent(new CustomEvent('openChat', { detail: otherUser }));
+    } else {
+      window.open(`/chat?conversationId=${conversation.id}`, '_blank');
     }
   };
 
@@ -105,7 +106,7 @@ export default function MessagesDropdown() {
           </div>
           
           <div className="p-3 border-t border-slate-200 text-center bg-slate-50 hover:bg-slate-100 transition-colors rounded-b-2xl">
-            <Link href="/chat" onClick={() => setIsOpen(false)} className="text-indigo-600 hover:text-indigo-700 text-[13px] font-semibold w-full block">Xem tất cả trong Messenger</Link>
+            <button onClick={() => { setIsOpen(false); window.open('/chat', '_blank'); }} className="text-indigo-600 hover:text-indigo-700 text-[13px] font-semibold w-full block">Xem tất cả trong Messenger</button>
           </div>
         </div>
       )}

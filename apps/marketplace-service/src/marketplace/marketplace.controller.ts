@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser, resolveUserId } from '@campus-connect/common';
 import { MarketplaceService } from './marketplace.service';
@@ -54,7 +65,11 @@ export class MarketplaceController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; [key: string]: unknown },
   ) {
-    return this.marketplaceService.updateProduct(id, resolveUserId(tokenUserId, data.userId), data);
+    return this.marketplaceService.updateProduct(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data,
+    );
   }
 
   @Put(':id/status')
@@ -63,7 +78,11 @@ export class MarketplaceController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string; status: string },
   ) {
-    return this.marketplaceService.updateStatus(id, resolveUserId(tokenUserId, data.userId), data.status);
+    return this.marketplaceService.updateStatus(
+      id,
+      resolveUserId(tokenUserId, data.userId),
+      data.status,
+    );
   }
 
   @Delete(':id')
@@ -72,11 +91,21 @@ export class MarketplaceController {
     @CurrentUser('sub') tokenUserId: string,
     @Body() data: { userId?: string },
   ) {
-    return this.marketplaceService.deleteProduct(id, resolveUserId(tokenUserId, data?.userId));
+    return this.marketplaceService.deleteProduct(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 
   @Put(':id/buy')
-  async buyProduct(@Param('id') id: string) {
-    return this.marketplaceService.buyProduct(id);
+  async buyProduct(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string,
+    @Body() data: { userId?: string },
+  ) {
+    return this.marketplaceService.buyProduct(
+      id,
+      resolveUserId(tokenUserId, data?.userId),
+    );
   }
 }

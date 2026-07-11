@@ -4,7 +4,11 @@ import * as bcrypt from 'bcrypt';
 
 jest.mock('@campus-connect/database', () => {
   const mockPrisma = {
-    $transaction: jest.fn().mockImplementation((args) => Array.isArray(args) ? Promise.all(args) : args(mockPrisma)),
+    $transaction: jest
+      .fn()
+      .mockImplementation((args) =>
+        Array.isArray(args) ? Promise.all(args) : args(mockPrisma),
+      ),
     user: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
@@ -28,16 +32,24 @@ describe('AuthService — register', () => {
   });
 
   it('rejects registration when the email already exists', async () => {
-    jest.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'existing' } as never);
+    jest
+      .mocked(prisma.user.findUnique)
+      .mockResolvedValue({ id: 'existing' } as never);
     await expect(
-      service.register({ email: 'a@st.cmc.edu.vn', password: 'pw', fullName: 'A' }),
+      service.register({
+        email: 'a@st.cmc.edu.vn',
+        password: 'pw',
+        fullName: 'A',
+      }),
     ).rejects.toThrow(/đã tồn tại/i);
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it('hashes the password and derives studentId from a CMC email', async () => {
-    jest.mocked(prisma.user.findUnique).mockResolvedValue(null as never);
-    jest.mocked(prisma.user.create).mockResolvedValue({ id: 'new-user' } as never);
+    jest.mocked(prisma.user.findUnique).mockResolvedValue(null);
+    jest
+      .mocked(prisma.user.create)
+      .mockResolvedValue({ id: 'new-user' } as never);
 
     const result = await service.register({
       email: 'BIT220001@st.cmc.edu.vn',
@@ -46,7 +58,11 @@ describe('AuthService — register', () => {
     });
 
     expect(result.userId).toBe('new-user');
-    const data = (jest.mocked(prisma.user.create).mock.calls[0][0] as { data: { passwordHash: string; studentId: string } }).data;
+    const data = (
+      jest.mocked(prisma.user.create).mock.calls[0][0] as {
+        data: { passwordHash: string; studentId: string };
+      }
+    ).data;
     expect(data.passwordHash).not.toBe('secret'); // hashed
     expect(data.studentId).toBe('BIT220001');
   });
@@ -62,27 +78,36 @@ describe('AuthService — login', () => {
   });
 
   it('rejects invalid credentials', async () => {
-    jest.mocked(prisma.user.findFirst).mockResolvedValue(null as never);
-    await expect(service.login({ identifier: 'x@y.com', password: 'pw' })).rejects.toThrow(/sai tài khoản/i);
+    jest.mocked(prisma.user.findFirst).mockResolvedValue(null);
+    await expect(
+      service.login({ identifier: 'x@y.com', password: 'pw' }),
+    ).rejects.toThrow(/sai tài khoản/i);
   });
 
   it('issues a JWT and updates lastLoginAt on success', async () => {
     const hash = await bcrypt.hash('secret', 8);
     jest.mocked(prisma.user.findFirst).mockResolvedValue({
-      id: 'user-1', email: 'a@st.cmc.edu.vn', fullName: 'A', passwordHash: hash, role: 'STUDENT',
+      id: 'user-1',
+      email: 'a@st.cmc.edu.vn',
+      fullName: 'A',
+      passwordHash: hash,
+      role: 'STUDENT',
     } as never);
     jest.mocked(prisma.user.update).mockResolvedValue({} as never);
 
-    const result = await service.login({ identifier: 'a@st.cmc.edu.vn', password: 'secret' }) as any;
+    const result = (await service.login({
+      identifier: 'a@st.cmc.edu.vn',
+      password: 'secret',
+    })) as any;
 
     expect(result.access_token).toBe('signed.jwt.token');
     expect(jwt.signAsync).toHaveBeenCalledWith(
       { sub: 'user-1', email: 'a@st.cmc.edu.vn', role: 'STUDENT' },
-      { expiresIn: '15m' }
+      { expiresIn: '15m' },
     );
     expect(jwt.signAsync).toHaveBeenCalledWith(
       { sub: 'user-1', email: 'a@st.cmc.edu.vn', role: 'STUDENT' },
-      { expiresIn: '7d' }
+      { expiresIn: '7d' },
     );
     // DAU/MAU tracking
     expect(prisma.user.update).toHaveBeenCalledWith(

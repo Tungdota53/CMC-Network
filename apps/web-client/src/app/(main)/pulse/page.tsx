@@ -41,6 +41,15 @@ const studyMatches = [
 export default function PulsePage() {
   return (
     <div className="w-full flex flex-col gap-4 animate-fade-rise">
+      {/* Coming Soon banner */}
+      <div className="glass rounded-2xl p-4 flex items-center gap-3 border border-indigo-200 dark:border-indigo-500/20">
+        <span className="text-2xl">🚀</span>
+        <div>
+          <p className="font-bold text-token-primary text-sm">Campus Pulse — Sắp ra mắt</p>
+          <p className="text-token-secondary text-xs mt-0.5">Tính năng gamification & AI quest đang trong giai đoạn phát triển (Phase 5). UI bên dưới là bản xem trước.</p>
+        </div>
+      </div>
+
       <section className="w-full glass rounded-none sm:rounded-3xl border-x-0 sm:border-x p-4 sm:p-6 relative overflow-hidden">
         <div className="absolute -top-24 -right-20 w-72 h-72 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-20 -left-20 w-72 h-72 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />

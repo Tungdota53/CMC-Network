@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AllExceptionsFilter } from './all-exceptions.filter';
@@ -19,11 +19,10 @@ export interface BootstrapOptions {
 function parseOrigins(): string[] | boolean {
   const raw = process.env.ALLOWED_ORIGINS;
   if (!raw || raw.trim() === '') {
-    // Dev convenience: allow common local origins.
-    return [
-      'http://localhost:3000',
-      'http://localhost:5173',
-    ];
+    // Dev convenience: allow LAN devices to hit local services.
+    if (process.env.NODE_ENV !== 'production') return true;
+
+    return ['http://localhost:25080'];
   }
   if (raw.trim() === '*') return true;
   return raw.split(',').map((o) => o.trim()).filter(Boolean);
@@ -90,6 +89,30 @@ export async function bootstrapService(
 
   log.info(`🚀 ${options.serviceName} listening on port ${port}`);
   new Logger(options.serviceName).log(`Ready on http://localhost:${port}`);
+
+  // --- Graceful shutdown ---
+  const shutdown = async (signal: string) => {
+    log.info(`Received ${signal}, shutting down gracefully...`);
+    try {
+      await app.close();
+      log.info(`${options.serviceName} closed successfully`);
+      process.exit(0);
+    } catch (err) {
+      log.error(`Error during shutdown: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Catch uncaught errors to prevent silent crashes.
+  process.on('uncaughtException', (err) => {
+    log.error(`Uncaught exception: ${err.stack || err.message}`);
+  });
+  process.on('unhandledRejection', (reason) => {
+    log.error(`Unhandled rejection: ${String(reason)}`);
+  });
 
   return app;
 }

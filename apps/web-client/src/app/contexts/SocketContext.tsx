@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useUser } from './UserContext';
+import { getChatSocketUrl } from '../lib/api';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -33,9 +34,10 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       return () => window.clearTimeout(timeoutId);
     }
 
-    if (!process.env.NEXT_PUBLIC_CHAT_SOCKET_URL) return;
+    const socketUrl = getChatSocketUrl();
+    if (!socketUrl) return;
 
-    const socketInstance = io(process.env.NEXT_PUBLIC_CHAT_SOCKET_URL, {
+    const socketInstance = io(socketUrl, {
       transports: ['websocket'],
       autoConnect: true,
       query: { userId: user.id }, // BE-004: presence/online + typing keyed theo user đang kết nối

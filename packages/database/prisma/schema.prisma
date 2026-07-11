@@ -60,6 +60,7 @@ model User {
   givenMentorReviews     MentorReview[]        @relation("GivenMentorReviews")
   mentorReviews          MentorReview[]        @relation("MentorReviews")
   sentMessages           Message[]
+  messageReactions       MessageReaction[]
   notifications          Notification[]
   postLikes              PostLike[]
   postSaves              PostSave[]
@@ -492,11 +493,12 @@ model Conversation {
   id         String               @id @default(uuid()) @db.Uuid
   type       ConversationType     @default(DIRECT)
   name       String?
-  avatar     String?
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
-  members    ConversationMember[]
-  messages   Message[]
+  avatar        String?
+  backgroundUrl String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  members       ConversationMember[]
+  messages      Message[]
   studyGroup StudyGroup?
 
   @@map("conversations")
@@ -523,13 +525,30 @@ model Message {
   messageType    String        @default("text")
   mediaUrl       String?
   status         MessageStatus @default(SENT)
+  replyToId      String?       @db.Uuid
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo        Message?      @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies        Message[]     @relation("MessageReplies")
+  reactions      MessageReaction[]
 
   @@index([conversationId, createdAt(sort: Desc)])
   @@map("messages")
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @db.Uuid
+  userId    String   @db.Uuid
+  emoji     String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@map("message_reactions")
 }
 
 model UserBadge {

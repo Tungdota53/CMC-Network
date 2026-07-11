@@ -50,9 +50,28 @@ export default function EventsPage() {
   useEffect(() => {
     const loadEvents = async () => {
       try {
-        // Có thể cần lấy events của tôi để check isJoined, tạm thời load list chung
         const res = await apiFetch('/events?status=PUBLISHED');
-        if (res.ok) setEvents(await res.json());
+        if (!res.ok) return;
+        const data: EventItem[] = await res.json();
+
+        // Check join status for each event by fetching attendees
+        if (user?.id) {
+          const enriched = await Promise.all(
+            data.map(async (ev) => {
+              try {
+                const attRes = await apiFetch(`/events/${ev.id}/attendees`);
+                if (attRes.ok) {
+                  const atts: EventAttendee[] = await attRes.json();
+                  return { ...ev, isJoined: atts.some(a => a.userId === user.id || a.user?.id === user.id) };
+                }
+              } catch {}
+              return { ...ev, isJoined: false };
+            })
+          );
+          setEvents(enriched);
+        } else {
+          setEvents(data.map(ev => ({ ...ev, isJoined: false })));
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -61,7 +80,7 @@ export default function EventsPage() {
     };
 
     loadEvents();
-  }, []);
+  }, [user?.id]);
 
   const handleJoin = async (event: EventItem) => {
     if (!user?.id) return;

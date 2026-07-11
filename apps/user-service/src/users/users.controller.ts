@@ -1,26 +1,60 @@
-import { Controller, Get, Put, Post, Delete, Body, Param, Query, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Post,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
+  UseGuards,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CurrentUser, resolveUserId } from '@campus-connect/common';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  Roles,
+  RolesGuard,
+  resolveUserId,
+} from '@campus-connect/common';
 import { UsersService } from './users.service';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  // ========= ADMIN ROUTES (require ADMIN role) =========
+
   @Get('admin/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async getAllUsers() {
     return this.usersService.getAllUsersAdmin();
   }
 
   @Put('admin/:id/suspend')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async suspendUser(@Param('id') id: string) {
     return this.usersService.suspendUser(id);
   }
 
   @Put('admin/:id/role')
-  async changeUserRole(@Param('id') id: string, @Body() body: { role: string }) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async changeUserRole(
+    @Param('id') id: string,
+    @Body() body: { role: string },
+  ) {
     return this.usersService.changeUserRole(id, body.role);
   }
+
+  // ========= USER PROFILE (ownership verified) =========
 
   @Get(':id')
   async getProfile(@Param('id') id: string) {
@@ -28,14 +62,20 @@ export class UsersController {
   }
 
   @Put(':id')
-  async updateProfile(@Param('id') id: string, @Body() data: any) {
-    return this.usersService.updateProfile(id, data);
+  async updateProfile(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+    @Body() data: any,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.updateProfile(userId, data);
   }
 
   @Post(':id/avatar')
   @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(
-    @Param('id') id: string, 
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
     @UploadedFile(
       new ParseFilePipe({
         validators: [
@@ -43,9 +83,11 @@ export class UsersController {
           new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp)$/ }),
         ],
       }),
-    ) file: Express.Multer.File
+    )
+    file: Express.Multer.File,
   ) {
-    return this.usersService.uploadAvatar(id, file);
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.uploadAvatar(userId, file);
   }
 
   // ----- Public profile (FE-005) -----
@@ -56,8 +98,13 @@ export class UsersController {
   }
 
   @Put(':id/profile')
-  async updatePublicProfile(@Param('id') id: string, @Body() data: any) {
-    return this.usersService.updateProfile(id, data);
+  async updatePublicProfile(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+    @Body() data: any,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.updateProfile(userId, data);
   }
 
   @Get(':id/posts')
@@ -71,8 +118,13 @@ export class UsersController {
   }
 
   @Put(':id/cover')
-  async updateCover(@Param('id') id: string, @Body() body: { coverPhotoUrl: string }) {
-    return this.usersService.updateCover(id, body.coverPhotoUrl);
+  async updateCover(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+    @Body() body: { coverPhotoUrl: string },
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.updateCover(userId, body.coverPhotoUrl);
   }
 
   @Get(':id/friends')
@@ -101,32 +153,51 @@ export class UsersController {
   }
 
   @Post(':id/friends/request')
-  async sendFriendRequest(@Param('id') id: string, @Body() body: { receiverId: string }) {
-    return this.usersService.sendFriendRequest(id, body.receiverId);
+  async sendFriendRequest(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+    @Body() body: { receiverId: string },
+  ) {
+    const senderId = resolveUserId(tokenUserId, id);
+    return this.usersService.sendFriendRequest(senderId, body.receiverId);
   }
 
   @Put(':id/friends/request/:requestId')
   async respondFriendRequest(
     @Param('id') id: string,
     @Param('requestId') requestId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
     @Body() body: { status: 'accepted' | 'rejected' },
   ) {
-    return this.usersService.respondFriendRequest(id, requestId, body.status);
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.respondFriendRequest(
+      userId,
+      requestId,
+      body.status,
+    );
   }
 
   @Delete(':id/friends/request/:requestId')
-  async cancelFriendRequest(@Param('id') id: string, @Param('requestId') requestId: string) {
-    return this.usersService.cancelFriendRequest(id, requestId);
+  async cancelFriendRequest(
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.cancelFriendRequest(userId, requestId);
   }
 
   @Delete(':id/friends/:friendId')
-  async removeFriend(@Param('id') id: string, @Param('friendId') friendId: string) {
-    return this.usersService.removeFriend(id, friendId);
+  async removeFriend(
+    @Param('id') id: string,
+    @Param('friendId') friendId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.removeFriend(userId, friendId);
   }
 
   // ----- Portfolio: skills / achievements / certificates / projects -----
-  // Read endpoints are public (by :id). Mutating endpoints resolve the acting
-  // user from the JWT (preferred) with a body `userId` fallback (compat window).
 
   @Get(':id/portfolio')
   async getPortfolio(@Param('id') id: string) {
@@ -160,7 +231,11 @@ export class UsersController {
     @Body() body: { title: string; description?: string; userId?: string },
   ) {
     const userId = resolveUserId(tokenUserId, body.userId ?? id);
-    return this.usersService.addAchievement(userId, body.title, body.description);
+    return this.usersService.addAchievement(
+      userId,
+      body.title,
+      body.description,
+    );
   }
 
   @Delete(':id/achievements/:achievementId')
@@ -177,7 +252,14 @@ export class UsersController {
   async addCertificate(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string | undefined,
-    @Body() body: { name: string; issuer: string; issuedAt: string; credentialUrl?: string; userId?: string },
+    @Body()
+    body: {
+      name: string;
+      issuer: string;
+      issuedAt: string;
+      credentialUrl?: string;
+      userId?: string;
+    },
   ) {
     const userId = resolveUserId(tokenUserId, body.userId ?? id);
     return this.usersService.addCertificate(userId, body);
@@ -197,7 +279,15 @@ export class UsersController {
   async addProject(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string | undefined,
-    @Body() body: { title: string; description?: string; techStack?: string[]; githubUrl?: string; demoUrl?: string; userId?: string },
+    @Body()
+    body: {
+      title: string;
+      description?: string;
+      techStack?: string[];
+      githubUrl?: string;
+      demoUrl?: string;
+      userId?: string;
+    },
   ) {
     const userId = resolveUserId(tokenUserId, body.userId ?? id);
     return this.usersService.addProject(userId, body);

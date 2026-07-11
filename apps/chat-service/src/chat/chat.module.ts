@@ -7,5 +7,6 @@ import { PresenceService } from './presence.service';
 @Module({
   controllers: [ChatController],
   providers: [ChatGateway, ChatService, PresenceService],
+  exports: [PresenceService],
 })
 export class ChatModule {}

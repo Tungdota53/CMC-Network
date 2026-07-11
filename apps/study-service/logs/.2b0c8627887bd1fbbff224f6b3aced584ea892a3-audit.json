@@ -34,6 +34,21 @@
             "date": 1783393963980,
             "name": "logs\\study-service-2026-07-07.log",
             "hash": "c8b7b306378e8daabe0d8aa56271c5383fb9769782058dc4e2e00c796f1e7b31"
+        },
+        {
+            "date": 1783473593911,
+            "name": "logs\\study-service-2026-07-08.log",
+            "hash": "cfd3d704b7931f515ec0e0bb9001acd9523597537abd3becb5927e861d23d8af"
+        },
+        {
+            "date": 1783563259885,
+            "name": "logs\\study-service-2026-07-09.log",
+            "hash": "25619aaf24a627602678702e6d50a7e0357e90a57baa6fe80d55a53af19a45b7"
+        },
+        {
+            "date": 1783684627983,
+            "name": "logs\\study-service-2026-07-10.log",
+            "hash": "098455b3bf479c3a2f695dc88027078b7b56ec946b0e6416e411eb45d7cee7cf"
         }
     ],
     "hashType": "sha256"

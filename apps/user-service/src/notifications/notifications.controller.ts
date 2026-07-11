@@ -36,7 +36,10 @@ export class NotificationsController {
 
   @Get(':userId')
   async list(@Param('userId') userId: string, @Query('limit') limit?: string) {
-    const rows = await this.notificationsService.list(userId, limit ? Number(limit) : 30);
+    const rows = await this.notificationsService.list(
+      userId,
+      limit ? Number(limit) : 30,
+    );
     return {
       success: true,
       data: rows.map((n) => ({
@@ -72,7 +75,13 @@ export class NotificationsController {
   @Post()
   async create(
     @CurrentUser('sub') tokenUserId: string,
-    @Body() body: { userId?: string; type: string; content: string; relatedId?: string },
+    @Body()
+    body: {
+      userId?: string;
+      type: string;
+      content: string;
+      relatedId?: string;
+    },
   ) {
     return this.notificationsService.create(
       resolveUserId(tokenUserId, body.userId),

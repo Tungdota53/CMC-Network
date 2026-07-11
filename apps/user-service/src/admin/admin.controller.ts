@@ -1,16 +1,29 @@
-import { Controller, Get, Post, Put, Delete, Param, Query, Body } from '@nestjs/common';
-import { CurrentUser, resolveUserId } from '@campus-connect/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  Roles,
+  RolesGuard,
+  resolveUserId,
+} from '@campus-connect/common';
 import { AdminService } from './admin.service';
 
 /**
- * Admin analytics + moderation.
- *
- * NOTE: during the backward-compat window the service runs with optionalAuth,
- * so these routes are not yet hard-gated by RolesGuard. Once the frontend
- * sends admin JWTs, switch the service to enableAuth:true and add
- * @UseGuards(JwtAuthGuard, RolesGuard) + @Roles('ADMIN') here.
+ * Admin analytics + moderation. Protected by JwtAuthGuard + RolesGuard.
  */
 @Controller('admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -54,8 +67,17 @@ export class ReportsController {
   @Post()
   async create(
     @CurrentUser('sub') tokenUserId: string,
-    @Body() body: { reporterId?: string; targetId: string; targetType: string; reason: string },
+    @Body()
+    body: {
+      reporterId?: string;
+      targetId: string;
+      targetType: string;
+      reason: string;
+    },
   ) {
-    return this.adminService.createReport(resolveUserId(tokenUserId, body.reporterId), body);
+    return this.adminService.createReport(
+      resolveUserId(tokenUserId, body.reporterId),
+      body,
+    );
   }
 }

@@ -26,7 +26,13 @@ export class MentorsController {
   @Post('register/:userId')
   async registerMentor(
     @Param('userId') userId: string,
-    @Body() data: { bio?: string; expertise?: string[]; gpa?: number; schedule?: unknown },
+    @Body()
+    data: {
+      bio?: string;
+      expertise?: string[];
+      gpa?: number;
+      schedule?: unknown;
+    },
   ) {
     return this.mentorsService.registerMentor(userId, data);
   }
@@ -34,7 +40,13 @@ export class MentorsController {
   @Post('bookings/:menteeId')
   async createBooking(
     @Param('menteeId') menteeId: string,
-    @Body() data: { mentorId: string; scheduledAt: string; topic?: string; notes?: string },
+    @Body()
+    data: {
+      mentorId: string;
+      scheduledAt: string;
+      topic?: string;
+      notes?: string;
+    },
   ) {
     return this.mentorsService.createBooking(menteeId, data);
   }
@@ -43,9 +55,14 @@ export class MentorsController {
   async updateBookingStatus(
     @Param('userId') userId: string,
     @Param('bookingId') bookingId: string,
-    @Body() body: { status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW' },
+    @Body()
+    body: { status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW' },
   ) {
-    return this.mentorsService.updateBookingStatus(userId, bookingId, body.status);
+    return this.mentorsService.updateBookingStatus(
+      userId,
+      bookingId,
+      body.status,
+    );
   }
 
   @Post('reviews/:menteeId')

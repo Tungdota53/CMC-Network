@@ -1,6 +1,14 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
-import { createStorageProvider, validateUpload, type StorageProvider } from '@campus-connect/common';
+import {
+  createStorageProvider,
+  validateUpload,
+  type StorageProvider,
+} from '@campus-connect/common';
 import { join } from 'path';
 
 @Injectable()
@@ -39,7 +47,7 @@ export class MarketplaceService {
     }
     if (query.category) where.category = query.category;
     if (query.condition) where.condition = query.condition;
-    
+
     if (query.minPrice !== undefined || query.maxPrice !== undefined) {
       where.price = {};
       if (query.minPrice !== undefined) where.price.gte = query.minPrice;
@@ -101,9 +109,18 @@ export class MarketplaceService {
   }
 
   /** Upload a product image (validated). Returns its public URL. */
-  async uploadImage(file: { buffer: Buffer; originalname: string; mimetype?: string; size?: number }) {
+  async uploadImage(file: {
+    buffer: Buffer;
+    originalname: string;
+    mimetype?: string;
+    size?: number;
+  }) {
     validateUpload(
-      { mimetype: file.mimetype, size: file.size ?? file.buffer.length, originalname: file.originalname },
+      {
+        mimetype: file.mimetype,
+        size: file.size ?? file.buffer.length,
+        originalname: file.originalname,
+      },
       { preset: 'image', maxSizeBytes: 10 * 1024 * 1024 },
     );
     const stored = await this.storage.put({
@@ -116,7 +133,16 @@ export class MarketplaceService {
     return { url: stored.url };
   }
 
-  async buyProduct(productId: string) {
+  async buyProduct(productId: string, buyerId: string) {
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product) throw new NotFoundException('Không tìm thấy sản phẩm');
+    if (product.status === 'SOLD')
+      throw new ForbiddenException('Sản phẩm đã được bán');
+    if (product.sellerId === buyerId)
+      throw new ForbiddenException('Không thể mua sản phẩm của chính mình');
+
     return prisma.product.update({
       where: { id: productId },
       data: { status: 'SOLD' },
@@ -124,7 +150,9 @@ export class MarketplaceService {
   }
 
   private async assertSeller(productId: string, userId: string) {
-    const product = await prisma.product.findUnique({ where: { id: productId } });
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
     if (!product) throw new NotFoundException('Không tìm thấy sản phẩm');
     if (product.sellerId !== userId) {
       throw new ForbiddenException('Chỉ người đăng bán mới có quyền này');
