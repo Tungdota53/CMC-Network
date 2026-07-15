@@ -8,3 +8,8 @@ coverage
 .vscode
 .idea
 *.log
+__pycache__/
+*.pyc
+.ua/
+logs*
+*-audit.json
