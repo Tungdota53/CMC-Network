@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { MicrosoftStrategy } from './microsoft.strategy';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
+import { EmailService } from './auth/email.service';
 
 @Module({
   imports: [
@@ -13,6 +14,6 @@ import { AuthService } from './auth/auth.service';
     CommonModule.register({ enableAuth: false }),
   ],
   controllers: [AppController, AuthController],
-  providers: [AppService, AuthService, MicrosoftStrategy],
+  providers: [AppService, AuthService, EmailService, MicrosoftStrategy],
 })
 export class AppModule {}

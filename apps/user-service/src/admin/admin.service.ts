@@ -111,9 +111,26 @@ export class AdminService {
     });
   }
 
-  async listReports(status?: string) {
+  async listReports(
+    filters: { status?: string; targetType?: string; q?: string } = {},
+  ) {
     return prisma.report.findMany({
-      where: status ? { status: status as never } : undefined,
+      where: {
+        ...(filters.status ? { status: filters.status as never } : {}),
+        ...(filters.targetType
+          ? { targetType: filters.targetType as never }
+          : {}),
+        ...(filters.q
+          ? {
+              OR: [
+                { reason: { contains: filters.q, mode: 'insensitive' } },
+                ...(filters.q.length === 36
+                  ? [{ targetId: { equals: filters.q } }]
+                  : []),
+              ],
+            }
+          : {}),
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         reporter: { select: { id: true, fullName: true, avatarUrl: true } },
@@ -122,19 +139,37 @@ export class AdminService {
   }
 
   async resolveReport(
+    actorId: string,
     reportId: string,
     status: 'REVIEWED' | 'RESOLVED' | 'DISMISSED',
+    note?: string,
   ) {
     const report = await prisma.report.findUnique({ where: { id: reportId } });
     if (!report) throw new NotFoundException('Không tìm thấy báo cáo');
-    return prisma.report.update({
-      where: { id: reportId },
-      data: { status: status as never },
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.report.update({
+        where: { id: reportId },
+        data: { status: status as never },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: 'REPORT_STATUS_UPDATED',
+          metadata: {
+            reportId,
+            status,
+            note,
+            targetId: report.targetId,
+            targetType: report.targetType,
+          },
+        },
+      });
+      return updated;
     });
   }
 
   /** Delete reported content by type. Used by moderators. */
-  async deleteContent(targetType: string, targetId: string) {
+  async deleteContent(actorId: string, targetType: string, targetId: string) {
     switch (targetType) {
       case 'POST':
         await prisma.post.delete({ where: { id: targetId } });
@@ -150,6 +185,77 @@ export class AdminService {
           `Không hỗ trợ xóa loại nội dung: ${targetType}`,
         );
     }
+    await prisma.auditLog.create({
+      data: {
+        actorId,
+        action: 'CONTENT_DELETED_BY_MODERATOR',
+        metadata: { targetType, targetId },
+      },
+    });
     return { deleted: true, targetType, targetId };
+  }
+
+  async listAuditLogs(limit = 50) {
+    return prisma.auditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 100),
+      include: {
+        actor: { select: { id: true, fullName: true, avatarUrl: true } },
+        target: { select: { id: true, fullName: true, avatarUrl: true } },
+      },
+    });
+  }
+
+  async listUsers(filters: { search?: string; role?: string } = {}) {
+    const users = await prisma.user.findMany({
+      where: {
+        ...(filters.role && filters.role !== 'ALL'
+          ? { role: filters.role as never }
+          : {}),
+        ...(filters.search
+          ? {
+              OR: [
+                { fullName: { contains: filters.search, mode: 'insensitive' } },
+                { email: { contains: filters.search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        role: true,
+        isVerified: true,
+        hasBlueBadge: true,
+        createdAt: true,
+        isSuspended: true,
+      },
+    });
+
+    return users.map((u) => ({
+      ...u,
+      status: u.isSuspended ? 'BANNED' : 'ACTIVE',
+    }));
+  }
+
+  async updateUserStatus(
+    userId: string,
+    status: 'ACTIVE' | 'BANNED' | 'PENDING',
+  ) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { isSuspended: status === 'BANNED' },
+    });
+  }
+
+  async toggleBlueBadge(userId: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    return prisma.user.update({
+      where: { id: userId },
+      data: { hasBlueBadge: !user.hasBlueBadge },
+    });
   }
 }

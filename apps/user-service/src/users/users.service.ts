@@ -6,6 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
+import * as bcrypt from 'bcrypt';
 import {
   NotificationDispatcher,
   validateUpload,
@@ -60,63 +61,99 @@ export class UsersService {
     }
   }
 
-  async getProfile(userId: string) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        studentId: true,
-        department: true,
-        major: true,
-        cohort: true,
-        bio: true,
-        avatarUrl: true,
-        location: true,
-        reputationScore: true,
-        role: true,
-        isVerified: true,
+  private buildProfileSlug(user: { id: string; studentId?: string | null; email?: string | null }) {
+    const source = user.studentId || user.email?.split('@')[0] || user.id;
+    return source
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || user.id;
+  }
+
+  private isUuid(value: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  }
+
+  private async findUserByProfileIdentifier(identifier: string, select: any) {
+    if (this.isUuid(identifier)) {
+      return prisma.user.findUnique({ where: { id: identifier }, select });
+    }
+
+    return prisma.user.findFirst({
+      where: {
+        OR: [
+          { studentId: { equals: identifier, mode: 'insensitive' } },
+          { email: { startsWith: `${identifier}@`, mode: 'insensitive' } },
+        ],
       },
+      select,
+    });
+  }
+
+  async getUserCount() {
+    const count = await prisma.user.count({
+      where: { isSuspended: false },
+    });
+    return { count };
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.findUserByProfileIdentifier(userId, {
+      id: true,
+      email: true,
+      fullName: true,
+      studentId: true,
+      department: true,
+      major: true,
+      cohort: true,
+      bio: true,
+      avatarUrl: true,
+      coverPhotoUrl: true,
+      location: true,
+      reputationScore: true,
+      role: true,
+      isVerified: true,
+      hasBlueBadge: true,
     });
 
     if (!user) {
       throw new NotFoundException('Không tìm thấy người dùng');
     }
-    return user;
+    return { ...user, profileSlug: this.buildProfileSlug(user as any), status: 'ACTIVE' };
   }
 
   /** Full public profile: core fields + counts + badges + skills. */
   async getPublicProfile(userId: string) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        fullName: true,
-        studentId: true,
-        department: true,
-        major: true,
-        cohort: true,
-        bio: true,
-        avatarUrl: true,
-        coverPhotoUrl: true,
-        location: true,
-        reputationScore: true,
-        role: true,
-        isVerified: true,
-        createdAt: true,
-        badges: { select: { badge: true, earnedAt: true } },
-        skills: true,
-        _count: {
-          select: { posts: true, friendships: true, friendships2: true },
-        },
+    const user = await this.findUserByProfileIdentifier(userId, {
+      id: true,
+      email: true,
+      fullName: true,
+      studentId: true,
+      department: true,
+      major: true,
+      cohort: true,
+      bio: true,
+      avatarUrl: true,
+      coverPhotoUrl: true,
+      location: true,
+      reputationScore: true,
+      role: true,
+      isVerified: true,
+      hasBlueBadge: true,
+      createdAt: true,
+      badges: { select: { badge: true, earnedAt: true } },
+      skills: true,
+      _count: {
+        select: { posts: true, friendships: true, friendships2: true },
       },
     });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
 
-    const { _count, ...rest } = user;
+    const { _count, ...rest } = user as any;
     return {
       ...rest,
+      profileSlug: this.buildProfileSlug(user as any),
       postCount: _count.posts,
       friendCount: _count.friendships + _count.friendships2,
     };
@@ -163,11 +200,78 @@ export class UsersService {
     'bio',
     'location',
     'department',
-    'major',
-    'cohort',
     'avatarUrl',
     'coverPhotoUrl',
   ] as const;
+
+  async updateEmail(userId: string, newEmail: string) {
+    const normalized = newEmail?.trim().toLowerCase();
+    const parts = normalized?.split('@') ?? [];
+    const domain = parts.length === 2 ? parts[1] : '';
+    const allowedDomains = (process.env.ALLOWED_EMAIL_DOMAINS ?? '')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (
+      !normalized ||
+      parts.length !== 2 ||
+      !parts[0] ||
+      !domain ||
+      !/^[a-z0-9.-]+$/.test(domain)
+    ) {
+      throw new BadRequestException('Email không hợp lệ');
+    }
+    if (allowedDomains.length > 0 && !allowedDomains.includes(domain)) {
+      throw new BadRequestException('Email không thuộc miền được phép');
+    }
+    const existing = await prisma.user.findUnique({
+      where: { email: normalized },
+      select: { id: true },
+    });
+    if (existing && existing.id !== userId) {
+      throw new ConflictException('Email đã được sử dụng');
+    }
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        email: normalized,
+        emailVerified: false,
+        isVerified: false,
+        otpCode: null,
+        otpExpiry: null,
+      },
+    });
+    return { email: normalized, emailVerified: false, isVerified: false };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    if (!newPassword || newPassword.length < 6) {
+      throw new BadRequestException('Mật khẩu mới phải có ít nhất 6 ký tự');
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+    if (!user || !user.passwordHash) {
+      throw new NotFoundException('Không tìm thấy tài khoản');
+    }
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) {
+      throw new BadRequestException('Mật khẩu hiện tại không đúng');
+    }
+    const salt = await bcrypt.genSalt();
+    const newHash = await bcrypt.hash(newPassword, salt);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash },
+    });
+    return { message: 'Đổi mật khẩu thành công' };
+  }
 
   async updateProfile(userId: string, data: any) {
     const sanitized: Record<string, unknown> = {};
@@ -197,7 +301,7 @@ export class UsersService {
         size: file.size ?? file.buffer.length,
         originalname: file.originalname,
       },
-      { preset: 'image', maxSizeBytes: 5 * 1024 * 1024 },
+      { preset: 'image', maxSizeBytes: 20 * 1024 * 1024 },
     );
 
     const user = await prisma.user.findUnique({
@@ -224,6 +328,50 @@ export class UsersService {
     }
 
     return { message: 'Upload ảnh đại diện thành công', avatarUrl };
+  }
+
+  async uploadCover(
+    userId: string,
+    file: {
+      buffer: Buffer;
+      originalname: string;
+      mimetype?: string;
+      size?: number;
+    },
+  ) {
+    validateUpload(
+      {
+        mimetype: file.mimetype,
+        size: file.size ?? file.buffer.length,
+        originalname: file.originalname,
+      },
+      { preset: 'image', maxSizeBytes: 20 * 1024 * 1024 },
+    );
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { coverPhotoUrl: true },
+    });
+
+    const storedFile = await this.storageProvider.put({
+      buffer: file.buffer,
+      originalName: file.originalname,
+      mimeType: file.mimetype || 'image/png',
+      size: file.size || file.buffer.length,
+      folder: 'covers',
+    });
+
+    const coverPhotoUrl = storedFile.url;
+    await this.updateProfile(userId, { coverPhotoUrl });
+
+    if (user?.coverPhotoUrl) {
+      const oldKey = user.coverPhotoUrl.startsWith('/')
+        ? user.coverPhotoUrl.substring(1)
+        : user.coverPhotoUrl;
+      await this.storageProvider.delete(oldKey);
+    }
+
+    return { message: 'Upload ảnh bìa thành công', coverPhotoUrl };
   }
 
   async sendFriendRequest(senderId: string, receiverId: string) {
@@ -355,6 +503,15 @@ export class UsersService {
     return prisma.friendRequest.delete({ where: { id: requestId } });
   }
 
+  /** Cancel an outgoing friend request by receiver (target) id. */
+  async cancelFriendRequestByTarget(userId: string, targetId: string) {
+    const request = await prisma.friendRequest.findFirst({
+      where: { senderId: userId, receiverId: targetId, status: 'pending' },
+    });
+    if (!request) throw new NotFoundException('Không tìm thấy lời mời đã gửi');
+    return prisma.friendRequest.delete({ where: { id: request.id } });
+  }
+
   async removeFriend(userId: string, friendId: string) {
     const friendship = await prisma.friendship.findFirst({
       where: {
@@ -370,6 +527,105 @@ export class UsersService {
     return prisma.friendship.delete({ where: { id: friendship.id } });
   }
 
+  /**
+   * Accept a pending friend request identified by the *sender* (target) id,
+   * not the request id. Matches FE `POST /friends/accept/:targetId`.
+   */
+  async acceptFriendRequestByTarget(userId: string, targetId: string) {
+    const request = await prisma.friendRequest.findFirst({
+      where: { senderId: targetId, receiverId: userId, status: 'pending' },
+    });
+    if (!request) throw new NotFoundException('Không tìm thấy lời mời kết bạn');
+    return this.respondFriendRequest(userId, request.id, 'accepted');
+  }
+
+  /** Reject a pending friend request by sender (target) id. */
+  async rejectFriendRequestByTarget(userId: string, targetId: string) {
+    const request = await prisma.friendRequest.findFirst({
+      where: { senderId: targetId, receiverId: userId, status: 'pending' },
+    });
+    if (!request) throw new NotFoundException('Không tìm thấy lời mời kết bạn');
+    return this.respondFriendRequest(userId, request.id, 'rejected');
+  }
+
+  /** Block a user: remove any friendship/requests, then persist the block. */
+  async blockUser(userId: string, targetId: string) {
+    if (userId === targetId)
+      throw new BadRequestException('Không thể chặn chính mình');
+
+    const target = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: { id: true },
+    });
+    if (!target) throw new NotFoundException('Không tìm thấy người dùng');
+
+    await prisma.friendship.deleteMany({
+      where: {
+        OR: [
+          { userAId: userId, userBId: targetId },
+          { userAId: targetId, userBId: userId },
+        ],
+      },
+    });
+    await prisma.friendRequest.deleteMany({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: targetId },
+          { senderId: targetId, receiverId: userId },
+        ],
+      },
+    });
+
+    await prisma.userBlock.upsert({
+      where: {
+        blockerId_blockedId: { blockerId: userId, blockedId: targetId },
+      },
+      create: { blockerId: userId, blockedId: targetId },
+      update: {},
+    });
+    return { blocked: true };
+  }
+
+  /** Unblock a previously blocked user (no-op if not blocked). */
+  async unblockUser(userId: string, targetId: string) {
+    await prisma.userBlock.deleteMany({
+      where: { blockerId: userId, blockedId: targetId },
+    });
+    return { blocked: false };
+  }
+
+  /** Users the given user has blocked. */
+  async getBlockedUsers(userId: string) {
+    const blocks = await prisma.userBlock.findMany({
+      where: { blockerId: userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        blocked: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+            hasBlueBadge: true,
+            major: true,
+            cohort: true,
+          },
+        },
+      },
+    });
+    return blocks.map((b) => b.blocked);
+  }
+
+  /** Friends shared between the current user and a target user. */
+  async getMutualFriends(userId: string, targetId: string) {
+    const [myFriends, theirFriends] = await Promise.all([
+      this.getFriends(userId),
+      this.getFriends(targetId),
+    ]);
+    const theirIds = new Set(theirFriends.map((f) => f.id));
+    return myFriends.filter((f) => theirIds.has(f.id));
+  }
+
   async getFriends(userId: string) {
     const friendships = await prisma.friendship.findMany({
       where: {
@@ -382,6 +638,7 @@ export class UsersService {
             fullName: true,
             avatarUrl: true,
             isVerified: true,
+            hasBlueBadge: true,
             major: true,
             cohort: true,
           },
@@ -392,6 +649,7 @@ export class UsersService {
             fullName: true,
             avatarUrl: true,
             isVerified: true,
+            hasBlueBadge: true,
             major: true,
             cohort: true,
           },
@@ -442,7 +700,12 @@ export class UsersService {
       request.senderId === userId ? request.receiverId : request.senderId,
     );
     const excludedIds = [userId, ...friendIds, ...pendingUserIds];
-    const where = { id: { notIn: excludedIds } };
+    const where = {
+      id: { notIn: excludedIds },
+      emailVerified: true,
+      isVerified: true,
+      isSuspended: false,
+    };
     const profileMatches: Array<{ major: string } | { cohort: string }> = [];
     if (user.major) profileMatches.push({ major: user.major });
     if (user.cohort) profileMatches.push({ cohort: user.cohort });
@@ -499,6 +762,8 @@ export class UsersService {
     return prisma.user.findMany({
       where: {
         id: { notIn: [userId, ...friendIds, ...pendingUserIds] },
+        emailVerified: true,
+        isSuspended: false,
         OR: [
           { fullName: { contains: keyword, mode: 'insensitive' } },
           { email: { contains: keyword, mode: 'insensitive' } },

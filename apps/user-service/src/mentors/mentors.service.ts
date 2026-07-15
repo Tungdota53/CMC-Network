@@ -13,6 +13,7 @@ const MENTOR_SELECT = {
   cohort: true,
   department: true,
   isVerified: true,
+  hasBlueBadge: true,
 } as const;
 
 @Injectable()
@@ -111,6 +112,10 @@ export class MentorsService {
     if (data.mentorId === menteeId) {
       throw new BadRequestException('Không thể đặt lịch với chính mình');
     }
+    const scheduledAt = new Date(data.scheduledAt);
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new BadRequestException('Thời gian đặt lịch không hợp lệ');
+    }
 
     const mentorProfile = await prisma.mentorProfile.findUnique({
       where: { userId: data.mentorId },
@@ -118,11 +123,23 @@ export class MentorsService {
     });
     if (!mentorProfile) throw new NotFoundException('Mentor không tồn tại');
 
+    const windowStart = new Date(scheduledAt.getTime() - 30 * 60 * 1000);
+    const windowEnd = new Date(scheduledAt.getTime() + 30 * 60 * 1000);
+    const conflict = await prisma.mentorBooking.findFirst({
+      where: {
+        mentorId: data.mentorId,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+        scheduledAt: { gte: windowStart, lte: windowEnd },
+      },
+    });
+    if (conflict)
+      throw new BadRequestException('Mentor đã có lịch gần khung giờ này');
+
     return prisma.mentorBooking.create({
       data: {
         mentorId: data.mentorId,
         menteeId,
-        scheduledAt: new Date(data.scheduledAt),
+        scheduledAt,
         topic: data.topic,
         notes: data.notes,
       },

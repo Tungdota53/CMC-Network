@@ -36,6 +36,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     let message: string | string[] = 'Đã có lỗi xảy ra. Vui lòng thử lại.';
     let error = 'Internal Server Error';
+    let resolvedStatus: number = status;
+
+    // Prisma known-request errors: map to sensible HTTP codes thay vì 500.
+    const prismaCode = (exception as { code?: string })?.code;
+    const isPrismaKnownError =
+      typeof prismaCode === 'string' &&
+      /^P\d{4}$/.test(prismaCode) &&
+      (exception as { name?: string })?.name === 'PrismaClientKnownRequestError';
+    const isPrismaValidationError =
+      (exception as { name?: string })?.name === 'PrismaClientValidationError';
 
     if (exception instanceof HttpException) {
       const response = exception.getResponse();
@@ -46,6 +56,33 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = (r.message as string | string[]) ?? message;
         error = (r.error as string) ?? exception.name;
       }
+    } else if (isPrismaKnownError) {
+      switch (prismaCode) {
+        case 'P2025': // Không tìm thấy bản ghi
+          resolvedStatus = HttpStatus.NOT_FOUND;
+          error = 'Not Found';
+          message = 'Không tìm thấy dữ liệu yêu cầu.';
+          break;
+        case 'P2002': // Vi phạm ràng buộc duy nhất
+          resolvedStatus = HttpStatus.CONFLICT;
+          error = 'Conflict';
+          message = 'Dữ liệu đã tồn tại.';
+          break;
+        case 'P2003': // Vi phạm khóa ngoại
+        case 'P2023': // ID/UUID không hợp lệ
+          resolvedStatus = HttpStatus.BAD_REQUEST;
+          error = 'Bad Request';
+          message = 'Tham số không hợp lệ.';
+          break;
+        default:
+          resolvedStatus = HttpStatus.BAD_REQUEST;
+          error = 'Bad Request';
+          message = 'Yêu cầu không hợp lệ.';
+      }
+    } else if (isPrismaValidationError) {
+      resolvedStatus = HttpStatus.BAD_REQUEST;
+      error = 'Bad Request';
+      message = 'Tham số không hợp lệ.';
     } else if (exception instanceof Error) {
       error = exception.name;
       if (process.env.NODE_ENV !== 'production') {
@@ -53,24 +90,24 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     }
 
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (resolvedStatus >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
-        `${req.method} ${req.url} -> ${status}: ${
+        `${req.method} ${req.url} -> ${resolvedStatus}: ${
           exception instanceof Error ? exception.stack : String(exception)
         }`,
       );
     } else {
-      this.logger.warn(`${req.method} ${req.url} -> ${status}: ${JSON.stringify(message)}`);
+      this.logger.warn(`${req.method} ${req.url} -> ${resolvedStatus}: ${JSON.stringify(message)}`);
     }
 
     const body: ErrorBody = {
-      statusCode: status,
+      statusCode: resolvedStatus,
       message,
       error,
       path: req.url,
       timestamp: new Date().toISOString(),
     };
 
-    res.status(status).json(body);
+    res.status(resolvedStatus).json(body);
   }
 }

@@ -14,6 +14,8 @@ export interface BootstrapOptions {
   globalPrefix?: string;
   /** Serve a static directory (used by services that store uploads). */
   staticAssets?: { root: string; prefix?: string };
+  /** Hook for service-specific setup that must run before app.listen(). */
+  beforeListen?: (app: NestExpressApplication) => void | Promise<void>;
 }
 
 function parseOrigins(): string[] | boolean {
@@ -80,6 +82,10 @@ export async function bootstrapService(
     app.useStaticAssets(options.staticAssets.root, {
       prefix: options.staticAssets.prefix,
     });
+  }
+
+  if (options.beforeListen) {
+    await options.beforeListen(app);
   }
 
   app.enableShutdownHooks();

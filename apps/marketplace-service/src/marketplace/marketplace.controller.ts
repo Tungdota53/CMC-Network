@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -9,9 +10,15 @@ import {
   Query,
   UploadedFile,
   UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CurrentUser, resolveUserId } from '@campus-connect/common';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  VerifiedUserGuard,
+} from '@campus-connect/common';
+import 'multer';
 import { MarketplaceService } from './marketplace.service';
 
 @Controller('marketplace')
@@ -32,80 +39,91 @@ export class MarketplaceController {
     @Query('maxPrice') maxPrice?: string,
     @Query('status') status?: string,
   ) {
+    const parsedMinPrice = this.parseOptionalPrice(minPrice, 'minPrice');
+    const parsedMaxPrice = this.parseOptionalPrice(maxPrice, 'maxPrice');
+
     return this.marketplaceService.searchProducts({
       keyword,
       category,
       condition,
-      minPrice: minPrice ? Number(minPrice) : undefined,
-      maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      minPrice: parsedMinPrice,
+      maxPrice: parsedMaxPrice,
       status,
     });
   }
 
+  @Get(':id')
+  async getProduct(@Param('id') id: string) {
+    return this.marketplaceService.getProductById(id);
+  }
+
   @Post()
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async createProduct(
-    @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { sellerId?: string; [key: string]: unknown },
+    @CurrentUser('sub') sellerId: string,
+    @Body() data: { sellerId?: string; [key: string]: unknown } = {},
   ) {
     return this.marketplaceService.createProduct({
       ...data,
-      sellerId: resolveUserId(tokenUserId, data.sellerId),
+      sellerId,
     });
   }
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
+  )
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     return this.marketplaceService.uploadImage(file);
   }
 
   @Put(':id')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async updateProduct(
     @Param('id') id: string,
-    @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { userId?: string; [key: string]: unknown },
+    @CurrentUser('sub') userId: string,
+    @Body() data: { userId?: string; [key: string]: unknown } = {},
   ) {
-    return this.marketplaceService.updateProduct(
-      id,
-      resolveUserId(tokenUserId, data.userId),
-      data,
-    );
+    return this.marketplaceService.updateProduct(id, userId, data);
   }
 
   @Put(':id/status')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async updateStatus(
     @Param('id') id: string,
-    @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { userId?: string; status: string },
+    @CurrentUser('sub') userId: string,
+    @Body() data: { userId?: string; status?: string } = {},
   ) {
-    return this.marketplaceService.updateStatus(
-      id,
-      resolveUserId(tokenUserId, data.userId),
-      data.status,
-    );
+    return this.marketplaceService.updateStatus(id, userId, data.status ?? '');
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async deleteProduct(
     @Param('id') id: string,
-    @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { userId?: string },
+    @CurrentUser('sub') userId: string,
   ) {
-    return this.marketplaceService.deleteProduct(
-      id,
-      resolveUserId(tokenUserId, data?.userId),
-    );
+    return this.marketplaceService.deleteProduct(id, userId);
   }
 
   @Put(':id/buy')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async buyProduct(
     @Param('id') id: string,
-    @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { userId?: string },
+    @CurrentUser('sub') userId: string,
   ) {
-    return this.marketplaceService.buyProduct(
-      id,
-      resolveUserId(tokenUserId, data?.userId),
-    );
+    return this.marketplaceService.buyProduct(id, userId);
+  }
+
+  private parseOptionalPrice(value: string | undefined, field: string) {
+    if (value === undefined || value === '') return undefined;
+
+    const parsedValue = Number(value);
+    if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+      throw new BadRequestException(`${field} must be a non-negative number`);
+    }
+
+    return parsedValue;
   }
 }

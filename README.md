@@ -158,6 +158,16 @@ Bao gồm 25+ models:
 - File Upload Validation (type, size)
 - Email verification (OTP)
 
+## 🚢 Deployment
+
+PM2/deploy/cache checklist: `DEPLOYMENT_STABILITY_CHECKLIST.md`.
+
+Healthcheck sau deploy:
+
+```bash
+npm run deploy:healthcheck
+```
+
 ## 📊 Ước tính chi phí hạ tầng (10,000 users)
 
 | Service | Plan | Cost/month |

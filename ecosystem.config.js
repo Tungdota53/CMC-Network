@@ -1,3 +1,27 @@
+const fs = require('fs');
+const path = require('path');
+
+function loadRootEnv() {
+  const envPath = path.join(__dirname, '.env');
+  if (!fs.existsSync(envPath)) return {};
+
+  return fs
+    .readFileSync(envPath, 'utf8')
+    .split(/\r?\n/)
+    .reduce((env, line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return env;
+      const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+      if (!match) return env;
+
+      const [, key, rawValue] = match;
+      env[key] = rawValue.replace(/^['"]|['"]$/g, '');
+      return env;
+    }, {});
+}
+
+const rootEnv = loadRootEnv();
+
 /**
  * PM2 Ecosystem — CampusConnect
  *
@@ -24,8 +48,17 @@ module.exports = {
       exec_mode: 'fork',
       max_memory_restart: '400M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
         PORT: 3001,
+        AUTH_SERVICE_URL: 'http://localhost:3002',
+        USER_SERVICE_URL: 'http://localhost:3003',
+        SOCIAL_SERVICE_URL: 'http://localhost:3004',
+        CHAT_SERVICE_URL: 'http://localhost:3005',
+        STUDY_SERVICE_URL: 'http://localhost:3006',
+        MATERIAL_SERVICE_URL: 'http://localhost:3007',
+        MARKETPLACE_SERVICE_URL: 'http://localhost:3008',
+        AI_SERVICE_URL: 'http://localhost:8000/api/v1',
       },
     },
 
@@ -33,11 +66,12 @@ module.exports = {
     {
       name: 'auth-service',
       cwd: './apps/auth-service',
-      script: 'dist/main.js',
+      script: 'dist/src/main.js',
       instances: 2,            // CPU-bound (bcrypt hashing)
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
         PORT: 3002,
       },
@@ -52,6 +86,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
         PORT: 3003,
       },
@@ -66,6 +101,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
         PORT: 3004,
       },
@@ -76,10 +112,11 @@ module.exports = {
       name: 'chat-service',
       cwd: './apps/chat-service',
       script: 'dist/main.js',
-      instances: 2,            // Redis adapter handles cross-instance WS
+      instances: 1,            // Keep Socket.IO rooms on one worker; Redis adapter is wired too late in current bootstrap.
       exec_mode: 'cluster',
       max_memory_restart: '500M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
         PORT: 3005,
       },
@@ -94,6 +131,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
         PORT: 3006,
       },
@@ -108,6 +146,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '500M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
         PORT: 3007,
       },
@@ -122,6 +161,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
         PORT: 3008,
       },
@@ -137,8 +177,24 @@ module.exports = {
       exec_mode: 'fork',
       max_memory_restart: '500M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
         PORT: 3000,
+      },
+    },
+
+    // --- AI Service (FastAPI) ---
+    {
+      name: 'ai-service',
+      cwd: './apps/ai-service',
+      script: 'python3',
+      args: '-m uvicorn main:app --host 0.0.0.0 --port 8000',
+      instances: 1,
+      exec_mode: 'fork',
+      max_memory_restart: '400M',
+      env: {
+        ...rootEnv,
+        NODE_ENV: 'production',
       },
     },
 
@@ -152,6 +208,7 @@ module.exports = {
       exec_mode: 'fork',
       max_memory_restart: '300M',
       env: {
+        ...rootEnv,
         NODE_ENV: 'production',
       },
     },

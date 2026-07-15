@@ -42,6 +42,7 @@ export type {
 
 export * from './roles.guard';
 export * from './not-suspended.guard';
+export * from './verified-user.guard';
 export * from './rate-limit.guard';
 
 export {

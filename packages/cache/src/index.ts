@@ -38,6 +38,22 @@ class InMemoryRedis {
     return deletedCount;
   }
 
+  async incr(key: string): Promise<number> {
+    const current = await this.get(key);
+    const next = (Number(current ?? 0) || 0) + 1;
+    const existing = this.store.get(key);
+    this.store.set(key, { value: String(next), expiry: existing?.expiry });
+    return next;
+  }
+
+  async expire(key: string, seconds: number): Promise<number> {
+    const item = this.store.get(key);
+    if (!item) return 0;
+    item.expiry = Date.now() + seconds * 1000;
+    this.store.set(key, item);
+    return 1;
+  }
+
   async keys(pattern: string): Promise<string[]> {
     const regexStr = '^' + pattern.replace(/\*/g, '.*') + '$';
     const regex = new RegExp(regexStr);

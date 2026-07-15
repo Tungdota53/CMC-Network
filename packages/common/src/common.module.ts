@@ -72,8 +72,14 @@ export class CommonModule {
         }),
       ],
       controllers: [HealthController],
-      providers: [...providers, JwtAuthGuard, OptionalJwtGuard, RolesGuard],
-      exports: [JwtModule, JwtAuthGuard, RolesGuard],
+      providers: [
+        ...providers,
+        JwtAuthGuard,
+        OptionalJwtGuard,
+        RolesGuard,
+        RateLimitGuard,
+      ],
+      exports: [JwtModule, JwtAuthGuard, RolesGuard, RateLimitGuard],
     };
   }
 }

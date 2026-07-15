@@ -1,4 +1,18 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  Roles,
+  RolesGuard,
+} from '@campus-connect/common';
 import { ReputationService } from './reputation.service';
 
 @Controller('reputation')
@@ -8,6 +22,12 @@ export class ReputationController {
   @Get('leaderboard')
   async getLeaderboard(@Query('limit') limit?: string) {
     return this.reputationService.getLeaderboard(limit ? Number(limit) : 20);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getMyReputation(@CurrentUser('sub') tokenUserId: string | undefined) {
+    return this.reputationService.getUserReputation(tokenUserId ?? '');
   }
 
   @Get(':userId')
@@ -21,18 +41,26 @@ export class ReputationController {
   }
 
   @Post(':userId/award')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async addPoints(
     @Param('userId') userId: string,
-    @Body() body: { action: string; reason?: string },
+    @Body() body: { action?: string; reason?: string } = {},
   ) {
-    return this.reputationService.addPoints(userId, body.action, body.reason);
+    return this.reputationService.addPoints(
+      userId,
+      body.action ?? '',
+      body.reason,
+    );
   }
 
   @Post(':userId/badge')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   async awardBadge(
     @Param('userId') userId: string,
-    @Body() body: { badge: string },
+    @Body() body: { badge?: string } = {},
   ) {
-    return this.reputationService.awardBadge(userId, body.badge);
+    return this.reputationService.awardBadge(userId, body.badge ?? '');
   }
 }

@@ -22,13 +22,42 @@ jest.mock('@campus-connect/database', () => {
   };
 });
 
+jest.mock('@campus-connect/cache', () => {
+  const store = new Map<string, string>();
+  return {
+    getRedisClient: () => ({
+      get: jest.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
+      set: jest.fn((key: string, value: string) => {
+        store.set(key, value);
+        return Promise.resolve('OK');
+      }),
+      del: jest.fn((key: string) => {
+        store.delete(key);
+        return Promise.resolve(1);
+      }),
+      incr: jest.fn((key: string) => {
+        const next = Number(store.get(key) ?? 0) + 1;
+        store.set(key, String(next));
+        return Promise.resolve(next);
+      }),
+      expire: jest.fn(() => Promise.resolve(1)),
+    }),
+  };
+});
+
+beforeAll(() => {
+  process.env.JWT_SECRET = 'test-jwt-secret';
+  process.env.ALLOWED_EMAIL_DOMAINS = 'st.cmc.edu.vn,st.cmcu.edu.vn,cmc.edu.vn';
+});
+
 describe('AuthService — register', () => {
   let service: AuthService;
   const jwt = { signAsync: jest.fn().mockResolvedValue('signed.jwt.token') };
+  const email = { sendOtpEmail: jest.fn().mockResolvedValue(true) };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new AuthService(jwt as never);
+    service = new AuthService(jwt as never, email as never);
   });
 
   it('rejects registration when the email already exists', async () => {
@@ -71,10 +100,11 @@ describe('AuthService — register', () => {
 describe('AuthService — login', () => {
   let service: AuthService;
   const jwt = { signAsync: jest.fn().mockResolvedValue('signed.jwt.token') };
+  const email = { sendOtpEmail: jest.fn().mockResolvedValue(true) };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new AuthService(jwt as never);
+    service = new AuthService(jwt as never, email as never);
   });
 
   it('rejects invalid credentials', async () => {
@@ -92,6 +122,9 @@ describe('AuthService — login', () => {
       fullName: 'A',
       passwordHash: hash,
       role: 'STUDENT',
+      emailVerified: true,
+      isVerified: true,
+      isSuspended: false,
     } as never);
     jest.mocked(prisma.user.update).mockResolvedValue({} as never);
 

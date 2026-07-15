@@ -1,135 +1,125 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { apiFetch } from '../../lib/api';
-import { useUser } from '../../contexts/UserContext';
-import { SkeletonCard } from '../../components/Skeleton';
-import EmptyState from '../../components/EmptyState';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { Bookmark, FileText, Loader2, MessageSquare, Search } from 'lucide-react';
+import api from '@/lib/api';
+import { mapBackendPost, type Post } from '@/hooks/useFeed';
+import { useAuthStore } from '@/store/authStore';
+import { PostCard } from '@/components/feed/PostCard';
+import { EmptyState, ErrorState, SegmentedTabs } from '@/components/mobile';
+import { useState } from 'react';
 
-// BE-006: trang "Bài viết đã lưu"
-// Endpoints: GET /posts/saved/:userId, POST /posts/:id/save (toggle)
+type SavedTab = 'posts' | 'materials';
 
-type SavedUser = { id?: string; fullName?: string; avatarUrl?: string | null };
-
-type SavedPost = {
+interface SavedMaterial {
   id: string;
-  userId: string;
-  content: string;
-  mediaUrls?: string[];
-  likes?: number;
-  commentCount?: number;
-  shareCount?: number;
-  saveCount?: number;
-  createdAt: string;
-  user?: SavedUser;
-};
+  title: string;
+  description?: string | null;
+  fileType?: string | null;
+  courseName?: string | null;
+  createdAt?: string;
+}
 
-const getAvatar = (user: SavedUser | null | undefined, fallbackId: string) => user?.avatarUrl || `https://i.pravatar.cc/150?u=${fallbackId}`;
+const tabs = [
+  { value: 'posts' as const, label: 'Bài viết', icon: <MessageSquare className="h-4 w-4" aria-hidden="true" /> },
+  { value: 'materials' as const, label: 'Tài liệu', icon: <FileText className="h-4 w-4" aria-hidden="true" /> },
+];
 
 export default function SavedPage() {
-  const { user } = useUser();
-  const [posts, setPosts] = useState<SavedPost[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [actingId, setActingId] = useState<string | null>(null);
+  const { user } = useAuthStore();
+  const [tab, setTab] = useState<SavedTab>('posts');
 
-  const load = useCallback(async () => {
-    if (!user?.id) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const res = await apiFetch(`/posts/saved/${user.id}`);
-      if (!res.ok) throw new Error('Không thể tải bài viết đã lưu');
-      const data = await res.json();
-      setPosts(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể tải bài viết đã lưu');
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+  const savedPosts = useQuery({
+    queryKey: ['saved-posts', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const res = await api.get(`/posts/saved/${user?.id}`);
+      const payload = res.data?.data ?? res.data;
+      return (Array.isArray(payload) ? payload : (payload?.posts ?? [])).map(mapBackendPost) as Post[];
+    },
+  });
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timeoutId);
-  }, [load]);
+  const savedMaterials = useQuery({
+    queryKey: ['saved-materials'],
+    queryFn: async () => {
+      const res = await api.get('/materials/bookmarks');
+      const payload = res.data?.data ?? res.data;
+      return (Array.isArray(payload) ? payload : (payload?.materials ?? payload?.bookmarks ?? [])) as SavedMaterial[];
+    },
+  });
 
-  const handleUnsave = async (post: SavedPost) => {
-    if (!user?.id) return;
-    setActingId(post.id);
-    setPosts((prev) => prev.filter((p) => p.id !== post.id));
-    try {
-      await apiFetch(`/posts/${post.id}/save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      });
-    } catch {
-      // nếu lỗi, để người dùng tải lại trang
-    } finally {
-      setActingId(null);
-    }
-  };
+  const isLoading = tab === 'posts' ? savedPosts.isLoading : savedMaterials.isLoading;
+  const isError = tab === 'posts' ? savedPosts.isError : savedMaterials.isError;
 
   return (
-    <div className="w-full flex flex-col mx-auto space-y-6 pb-20">
-      <div className="glass rounded-3xl p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-yellow-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl" />
-        <div className="relative z-10">
-          <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-500">Bài viết đã lưu</h1>
-          <p className="text-gray-400 text-sm mt-1">Tất cả bài viết bạn đã đánh dấu lưu để đọc lại sau.</p>
+    <div className="mx-auto w-full max-w-[860px] space-y-4 pb-24 pt-3 sm:pt-6">
+      <section className="rounded-3xl border border-border bg-card p-4 shadow-sm sm:p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Bookmark className="h-6 w-6" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-extrabold text-foreground">Đã lưu</h1>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Gom bài viết và tài liệu đã đánh dấu để quay lại nhanh khi học hoặc thảo luận.
+            </p>
+          </div>
         </div>
-      </div>
+      </section>
 
-      {error && <div className="glass rounded-2xl p-4 text-red-500 border border-red-500/20">{error}</div>}
-      {loading && (
-        <div className="w-full space-y-6">
-          <SkeletonCard />
-          <SkeletonCard />
+      <SegmentedTabs items={tabs} value={tab} onChange={setTab} ariaLabel="Nội dung đã lưu" />
+
+      {isLoading ? (
+        <div className="flex min-h-48 items-center justify-center rounded-3xl border border-border bg-card">
+          <Loader2 className="h-7 w-7 animate-spin text-primary" aria-label="Đang tải nội dung đã lưu" />
         </div>
-      )}
-
-      {!loading && !error && posts.length === 0 && (
+      ) : isError ? (
+        <ErrorState
+          title="Không tải được nội dung đã lưu"
+          description="Kiểm tra mạng rồi thử lại."
+          action={(
+            <button
+              type="button"
+              onClick={() => (tab === 'posts' ? savedPosts.refetch() : savedMaterials.refetch())}
+              className="min-h-11 rounded-2xl bg-red-600 px-4 text-sm font-semibold text-white"
+            >
+              Tải lại
+            </button>
+          )}
+        />
+      ) : tab === 'posts' ? (
+        savedPosts.data && savedPosts.data.length > 0 ? (
+          <div className="space-y-4">
+            {savedPosts.data.map((post) => <PostCard key={post.id} post={post} />)}
+          </div>
+        ) : (
+          <EmptyState
+            title="Chưa lưu bài viết nào"
+            description="Bấm biểu tượng lưu ở bài viết để thêm vào đây."
+            action={<Link href="/feed" className="inline-flex min-h-11 items-center rounded-2xl bg-primary px-4 text-sm font-semibold text-primary-foreground">Mở bảng tin</Link>}
+          />
+        )
+      ) : savedMaterials.data && savedMaterials.data.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {savedMaterials.data.map((material) => (
+            <Link key={material.id} href={`/materials/${material.id}`} className="rounded-3xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/40 hover:shadow-md">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-500">
+                <FileText className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <h2 className="line-clamp-2 text-base font-bold text-foreground">{material.title}</h2>
+              <p className="mt-2 line-clamp-2 text-sm leading-5 text-muted-foreground">{material.description || material.courseName || 'Tài liệu đã lưu'}</p>
+              <span className="mt-3 inline-flex min-h-10 items-center text-sm font-semibold text-primary">Mở tài liệu</span>
+            </Link>
+          ))}
+        </div>
+      ) : (
         <EmptyState
-          icon="🔖"
-          title="Bạn chưa lưu bài viết nào"
-          description='Nhấn nút "Lưu" trên bất kỳ bài viết nào để đánh dấu đọc lại sau.'
+          title="Chưa lưu tài liệu nào"
+          description="Bookmark tài liệu học tập để xem lại nhanh."
+          action={<Link href="/materials" className="inline-flex min-h-11 items-center gap-2 rounded-2xl bg-primary px-4 text-sm font-semibold text-primary-foreground"><Search className="h-4 w-4" /> Tìm tài liệu</Link>}
         />
       )}
-
-      {posts.map((post) => (
-        <div key={post.id} className="w-full glass rounded-3xl overflow-hidden hover:border-white/20 transition-colors">
-          <div className="flex justify-between items-start p-5">
-            <div className="flex items-center gap-3">
-              <img src={getAvatar(post.user, post.userId)} className="w-12 h-12 rounded-full object-cover border border-white/10" alt="" />
-              <div>
-                <h3 className="font-bold text-[16px] text-gray-100 leading-tight">{post.user?.fullName || 'Người dùng'}</h3>
-                <p className="text-[13px] text-gray-500 mt-1">{new Date(post.createdAt).toLocaleString('vi-VN')}</p>
-              </div>
-            </div>
-            <button onClick={() => handleUnsave(post)} disabled={actingId === post.id} className="px-4 h-9 rounded-full bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 border border-yellow-500/30 text-[13px] font-semibold transition-colors disabled:opacity-50">
-              {actingId === post.id ? '...' : '🔖 Bỏ lưu'}
-            </button>
-          </div>
-          {post.content && <p className="px-5 pb-4 text-gray-300 text-[15px] leading-relaxed">{post.content}</p>}
-          {(post.mediaUrls || []).length > 0 && (
-            <div className="px-5 pb-5 grid grid-cols-1 gap-2">
-              {(post.mediaUrls || []).map((url) => (
-                <img key={url} src={url} className="w-full max-h-[420px] rounded-2xl object-cover border border-white/10" alt="" />
-              ))}
-            </div>
-          )}
-          <div className="px-5 py-3 border-t border-white/5 text-[13px] text-gray-500 flex gap-4">
-            <span>❤️ {post.likes ?? 0}</span>
-            <span>💬 {post.commentCount ?? 0}</span>
-            <span>🔗 {post.shareCount ?? 0}</span>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

@@ -40,16 +40,18 @@ class RedisIoAdapter extends IoAdapter {
 }
 
 async function bootstrap() {
-  const app = await bootstrapService(AppModule, {
+  await bootstrapService(AppModule, {
     serviceName: 'chat-service',
     port: 38080,
     staticAssets: { root: join(process.cwd(), 'uploads'), prefix: '/uploads/' },
+    beforeListen: async (app) => {
+      // Must run before app.listen(), otherwise Nest initializes gateways with
+      // the default in-memory adapter and cluster workers cannot fanout calls.
+      const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+      const ioAdapter = new RedisIoAdapter(app);
+      await ioAdapter.connectToRedis(redisUrl);
+      app.useWebSocketAdapter(ioAdapter);
+    },
   });
-
-  // Wire up Redis adapter for cross-instance WebSocket fanout.
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  const ioAdapter = new RedisIoAdapter(app);
-  await ioAdapter.connectToRedis(redisUrl);
-  app.useWebSocketAdapter(ioAdapter);
 }
-bootstrap();
+void bootstrap();

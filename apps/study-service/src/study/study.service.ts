@@ -10,9 +10,51 @@ import { prisma, ConversationType } from '@campus-connect/database';
 export class StudyService {
   async getStudyGroups() {
     return prisma.studyGroup.findMany({
-      include: { creator: { select: { fullName: true, avatarUrl: true } } },
+      include: {
+        creator: {
+          select: {
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+            hasBlueBadge: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getStudyGroupById(id: string) {
+    const group = await prisma.studyGroup.findUnique({
+      where: { id },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+            hasBlueBadge: true,
+          },
+        },
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                avatarUrl: true,
+                major: true,
+                cohort: true,
+              },
+            },
+          },
+        },
+        conversation: { select: { id: true, name: true } },
+      },
+    });
+    if (!group) throw new NotFoundException('Không tìm thấy nhóm học');
+    return group;
   }
 
   async createStudyGroup(data: any) {
@@ -249,7 +291,15 @@ export class StudyService {
   async getStudyRequests() {
     return prisma.studyRequest.findMany({
       include: {
-        user: { select: { fullName: true, avatarUrl: true, major: true } },
+        user: {
+          select: {
+            fullName: true,
+            avatarUrl: true,
+            major: true,
+            isVerified: true,
+            hasBlueBadge: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });

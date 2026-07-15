@@ -1,350 +1,247 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from 'react';
-import { useUser } from '../../contexts/UserContext';
-import { apiFetch } from '../../lib/api';
-import toast from 'react-hot-toast';
-
-type TabId = 'account' | 'privacy' | 'notifications' | 'security';
-
-const TABS: { id: TabId; label: string; icon: string }[] = [
-  { id: 'account', label: 'Tài khoản', icon: '👤' },
-  { id: 'privacy', label: 'Quyền riêng tư', icon: '🔒' },
-  { id: 'notifications', label: 'Thông báo', icon: '🔔' },
-  { id: 'security', label: 'Bảo mật', icon: '🛡️' },
-];
+import { useState } from 'react';
+import { useAuthStore } from '@/store/authStore';
+import { useRouter } from 'next/navigation';
+import { LogOut, User, Lock, Shield, Palette, Mail, Loader2, X, Check } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { useMutation } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/hooks/useNotifications';
+import { useUiStore } from '@/store/uiStore';
 
 export default function SettingsPage() {
-  const { user, isLoading, updateProfile } = useUser();
-  const [activeTab, setActiveTab] = useState<TabId>('account');
+  const { logout, user } = useAuthStore();
+  const router = useRouter();
 
-  // Account form
-  const [accountForm, setAccountForm] = useState({ fullName: '', bio: '', location: '' });
-  const [savingAccount, setSavingAccount] = useState(false);
+  const { theme, setTheme } = useUiStore();
+  const darkMode = theme === 'dark';
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const { data: notif } = useNotificationPreferences();
+  const updateNotif = useUpdateNotificationPreferences();
 
-  // Privacy toggles — persisted to localStorage until backend supports them
-  const [privacy, setPrivacy] = useState(() => {
-    if (typeof window === 'undefined') return { profilePublic: true, showEmail: false, showStudentId: true, allowFriendRequests: true };
-    try {
-      const saved = localStorage.getItem('settings_privacy');
-      return saved ? JSON.parse(saved) : { profilePublic: true, showEmail: false, showStudentId: true, allowFriendRequests: true };
-    } catch { return { profilePublic: true, showEmail: false, showStudentId: true, allowFriendRequests: true }; }
-  });
-
-  // Notification toggles — persisted to localStorage
-  const [notifications, setNotifications] = useState(() => {
-    if (typeof window === 'undefined') return { likes: true, comments: true, friendRequests: true, messages: true, events: false };
-    try {
-      const saved = localStorage.getItem('settings_notifications');
-      return saved ? JSON.parse(saved) : { likes: true, comments: true, friendRequests: true, messages: true, events: false };
-    } catch { return { likes: true, comments: true, friendRequests: true, messages: true, events: false }; }
-  });
-
-  // Persist privacy to localStorage on change
-  useEffect(() => {
-    try { localStorage.setItem('settings_privacy', JSON.stringify(privacy)); } catch {}
-  }, [privacy]);
-
-  // Persist notifications to localStorage on change
-  useEffect(() => {
-    try { localStorage.setItem('settings_notifications', JSON.stringify(notifications)); } catch {}
-  }, [notifications]);
-
-  // Password change
-  const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
-  const [changingPassword, setChangingPassword] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      const timeoutId = window.setTimeout(() => setAccountForm({
-        fullName: user.fullName || '',
-        bio: user.bio || '',
-        location: user.location || '',
-      }), 0);
-      return () => window.clearTimeout(timeoutId);
-    }
-  }, [user]);
-
-  const handleSaveAccount = async () => {
-    setSavingAccount(true);
-    try {
-      await updateProfile({
-        fullName: accountForm.fullName,
-        bio: accountForm.bio,
-        location: accountForm.location || null,
-      });
-      toast.success('Đã lưu thông tin tài khoản');
-    } catch {
-      toast.error('Lưu thất bại, vui lòng thử lại');
-    } finally {
-      setSavingAccount(false);
-    }
+  const toggleDarkMode = () => {
+    setTheme(darkMode ? 'light' : 'dark');
   };
 
-  const handleChangePassword = async () => {
-    if (!passwordForm.current || !passwordForm.next) {
-      toast.error('Vui lòng nhập đầy đủ mật khẩu');
-      return;
-    }
-    if (passwordForm.next !== passwordForm.confirm) {
-      toast.error('Mật khẩu xác nhận không khớp');
-      return;
-    }
-    if (passwordForm.next.length < 6) {
-      toast.error('Mật khẩu mới phải có ít nhất 6 ký tự');
-      return;
-    }
-    setChangingPassword(true);
-    try {
-      const res = await apiFetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          currentPassword: passwordForm.current,
-          newPassword: passwordForm.next,
-        }),
+  const passwordMutation = useMutation({
+    mutationFn: async () => {
+      return api.put(`/users/${user?.id}/password`, {
+        currentPassword,
+        newPassword,
       });
-      if (res.ok) {
-        toast.success('Đổi mật khẩu thành công');
-        setPasswordForm({ current: '', next: '', confirm: '' });
-      } else {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.message || 'Đổi mật khẩu thất bại');
-      }
-    } catch {
-      toast.error('Có lỗi xảy ra, vui lòng thử lại');
-    } finally {
-      setChangingPassword(false);
-    }
+    },
+    onSuccess: () => {
+      setShowPasswordModal(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      alert('Đổi mật khẩu thành công');
+    },
+    onError: (err: any) => {
+      alert(err?.message || 'Đổi mật khẩu thất bại');
+    },
+  });
+
+  const emailMutation = useMutation({
+    mutationFn: async () => {
+      return api.put(`/users/${user?.id}/email`, { email: newEmail });
+    },
+    onSuccess: () => {
+      setShowEmailModal(false);
+      setNewEmail('');
+      alert('Cập nhật email thành công');
+    },
+    onError: (err: any) => {
+      alert(err?.message || 'Cập nhật email thất bại');
+    },
+  });
+
+  const handleLogout = async () => {
+    await logout();
+    router.push('/login');
   };
 
-  if (isLoading || !user) {
-    return (
-      <div className="w-full h-96 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      alert('Mật khẩu xác nhận không khớp');
+      return;
+    }
+    if (newPassword.length < 6) {
+      alert('Mật khẩu mới phải có ít nhất 6 ký tự');
+      return;
+    }
+    passwordMutation.mutate();
+  };
+
+  const handleEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail.includes('@')) {
+      alert('Email không hợp lệ');
+      return;
+    }
+    emailMutation.mutate();
+  };
 
   return (
-    <div className="w-full flex flex-col mx-auto space-y-6 pb-20">
-      {/* HEADER */}
-      <div className="glass rounded-3xl border border-slate-200 p-6">
-        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Cài đặt & Quyền riêng tư</h1>
-        <p className="text-slate-500 text-[14px] mt-1">Quản lý tài khoản, quyền riêng tư và tùy chọn thông báo của bạn.</p>
+    <div className="max-w-3xl py-8 px-4">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold font-display text-foreground mb-2">Cài đặt & Quyền riêng tư</h1>
+        <p className="text-foreground/60 text-[15px]">Quản lý tài khoản, tuỳ chỉnh giao diện và các thiết lập cá nhân của bạn.</p>
       </div>
 
-      <div className="flex gap-6">
-        {/* TABS SIDEBAR */}
-        <div className="w-1/3 shrink-0">
-          <div className="glass rounded-3xl border border-slate-200 p-3 sticky top-24">
-            {TABS.map(tab => (
+      <div className="space-y-6">
+        {/* Giao diện */}
+        <section className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="p-5 border-b border-border">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Palette className="w-5 h-5 text-primary" />
+              Giao diện
+            </h2>
+          </div>
+          <div className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-[15px]">Chế độ Dark Mode</p>
+                <p className="text-sm text-foreground/60">Chuyển đổi giữa giao diện sáng và tối</p>
+              </div>
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left font-medium text-sm transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-indigo-50 text-indigo-600 border border-indigo-200'
-                    : 'text-slate-600 hover:bg-slate-100/80 border border-transparent'
-                }`}
+                onClick={toggleDarkMode}
+                className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${darkMode ? 'bg-primary' : 'bg-gray-300'}`}
               >
-                <span className="text-lg">{tab.icon}</span>
-                {tab.label}
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${darkMode ? 'right-1' : 'left-1'}`} />
               </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Tài khoản */}
+        <section className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="p-5 border-b border-border">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <User className="w-5 h-5 text-primary" />
+              Thông tin tài khoản
+            </h2>
+          </div>
+          <div className="p-0 divide-y divide-border">
+            <button
+              onClick={() => { setNewEmail(user?.email || ''); setShowEmailModal(true); }}
+              className="w-full p-5 hover:bg-hover transition-colors flex items-center justify-between text-left"
+            >
+              <div>
+                <p className="font-medium text-[15px]">Địa chỉ Email</p>
+                <p className="text-sm text-foreground/60 mt-1">{user?.email || 'Đang tải...'}</p>
+              </div>
+              <span className="text-primary text-sm font-medium flex items-center gap-1">
+                <Mail className="w-4 h-4" /> Chỉnh sửa
+              </span>
+            </button>
+            <button
+              onClick={() => setShowPasswordModal(true)}
+              className="w-full p-5 hover:bg-hover transition-colors flex items-center justify-between text-left"
+            >
+              <div>
+                <p className="font-medium text-[15px]">Mật khẩu</p>
+                <p className="text-sm text-foreground/60 mt-1">Đổi mật khẩu định kỳ để bảo mật tài khoản</p>
+              </div>
+              <span className="text-primary text-sm font-medium flex items-center gap-1">
+                <Lock className="w-4 h-4" /> Đổi mật khẩu
+              </span>
+            </button>
+          </div>
+        </section>
+
+        {/* Thông báo */}
+        <section className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="p-5 border-b border-border">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" />
+              Thông báo & Quyền riêng tư
+            </h2>
+          </div>
+          <div className="p-0 divide-y divide-border">
+            {[
+              { key: 'push', label: 'Thông báo PUSH', desc: 'Bật/tắt thông báo trong ứng dụng' },
+              { key: 'email', label: 'Thông báo Email', desc: 'Gửi tóm tắt hoạt động qua email' },
+              { key: 'likes', label: 'Lượt thích', desc: 'Báo khi có người thả cảm xúc bài viết' },
+              { key: 'comments', label: 'Bình luận', desc: 'Báo khi có bình luận mới' },
+              { key: 'mentions', label: 'Nhắc tên', desc: 'Báo khi có người nhắc đến bạn' },
+              { key: 'friendRequests', label: 'Bạn bè', desc: 'Báo lời mời và chấp nhận kết bạn' },
+              { key: 'system', label: 'Hệ thống', desc: 'Thông báo quan trọng từ CMC Network' },
+              { key: 'quietHours', label: 'Chế độ yên lặng', desc: 'Tạm dừng thông báo thường, vẫn nhận hệ thống' },
+            ].map(item => (
+              <div key={item.key} className="p-5 flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-[15px]">{item.label}</p>
+                  <p className="text-sm text-foreground/60 mt-1">{item.desc}</p>
+                </div>
+                <button
+                  onClick={() => updateNotif.mutate({ [item.key]: !notif?.[item.key as keyof typeof notif] })}
+                  disabled={!notif || updateNotif.isPending}
+                  className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors disabled:opacity-50 ${notif?.[item.key as keyof typeof notif] ? 'bg-primary' : 'bg-gray-300'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${notif?.[item.key as keyof typeof notif] ? 'right-1' : 'left-1'}`} />
+                </button>
+              </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* CONTENT */}
-        <div className="flex-1">
-          <div className="glass rounded-3xl border border-slate-200 p-6">
-            {activeTab === 'account' && (
-              <div className="space-y-5">
-                <h2 className="font-bold text-slate-800 text-lg">Thông tin tài khoản</h2>
+        {/* Danger Zone */}
+        <section className="pt-6">
+          <Button
+            onClick={handleLogout}
+            className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold border border-red-500/20 h-14 rounded-2xl transition-all flex items-center justify-center gap-3 group"
+          >
+            <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            <span className="text-[16px]">Đăng xuất khỏi hệ thống</span>
+          </Button>
+        </section>
+      </div>
 
-                <div className="grid grid-cols-2 gap-5">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Họ và tên</label>
-                    <input
-                      type="text"
-                      value={accountForm.fullName}
-                      onChange={e => setAccountForm({ ...accountForm, fullName: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Mã sinh viên</label>
-                    <input
-                      type="text"
-                      value={user.studentId || ''}
-                      disabled
-                      className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-slate-500 cursor-not-allowed"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Email</label>
-                  <input
-                    type="text"
-                    value={user.email || ''}
-                    disabled
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-slate-500 cursor-not-allowed"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Tiểu sử</label>
-                  <textarea
-                    rows={3}
-                    value={accountForm.bio}
-                    onChange={e => setAccountForm({ ...accountForm, bio: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none shadow-inner"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Đến từ</label>
-                  <input
-                    type="text"
-                    value={accountForm.location}
-                    onChange={e => setAccountForm({ ...accountForm, location: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner"
-                  />
-                </div>
-
-                <div className="flex justify-end pt-2">
-                  <button
-                    onClick={handleSaveAccount}
-                    disabled={savingAccount}
-                    className="bg-indigo-600 px-8 py-2.5 rounded-full text-white font-bold hover:bg-indigo-700 shadow-md transition-all disabled:opacity-60"
-                  >
-                    {savingAccount ? 'Đang lưu...' : 'Lưu thay đổi'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'privacy' && (
-              <div className="space-y-2">
-                <h2 className="font-bold text-slate-800 text-lg mb-4">Quyền riêng tư</h2>
-                <ToggleRow
-                  label="Hồ sơ công khai"
-                  desc="Cho phép mọi người trong trường xem trang cá nhân của bạn"
-                  checked={privacy.profilePublic}
-                  onChange={v => setPrivacy({ ...privacy, profilePublic: v })}
-                />
-                <ToggleRow
-                  label="Hiển thị email"
-                  desc="Email của bạn sẽ hiện trên trang cá nhân"
-                  checked={privacy.showEmail}
-                  onChange={v => setPrivacy({ ...privacy, showEmail: v })}
-                />
-                <ToggleRow
-                  label="Hiển thị mã sinh viên"
-                  desc="MSSV sẽ hiện công khai trên hồ sơ"
-                  checked={privacy.showStudentId}
-                  onChange={v => setPrivacy({ ...privacy, showStudentId: v })}
-                />
-                <ToggleRow
-                  label="Cho phép lời mời kết bạn"
-                  desc="Người khác có thể gửi lời mời kết bạn cho bạn"
-                  checked={privacy.allowFriendRequests}
-                  onChange={v => setPrivacy({ ...privacy, allowFriendRequests: v })}
-                />
-                <p className="text-xs text-slate-400 pt-3">Các tùy chọn quyền riêng tư được lưu trên trình duyệt. Sẽ đồng bộ khi backend hỗ trợ.</p>
-              </div>
-            )}
-
-            {activeTab === 'notifications' && (
-              <div className="space-y-2">
-                <h2 className="font-bold text-slate-800 text-lg mb-4">Tùy chọn thông báo</h2>
-                <ToggleRow label="Lượt thích" desc="Khi ai đó thích bài viết của bạn" checked={notifications.likes} onChange={v => setNotifications({ ...notifications, likes: v })} />
-                <ToggleRow label="Bình luận" desc="Khi ai đó bình luận bài viết của bạn" checked={notifications.comments} onChange={v => setNotifications({ ...notifications, comments: v })} />
-                <ToggleRow label="Lời mời kết bạn" desc="Khi ai đó gửi lời mời kết bạn" checked={notifications.friendRequests} onChange={v => setNotifications({ ...notifications, friendRequests: v })} />
-                <ToggleRow label="Tin nhắn" desc="Khi bạn nhận được tin nhắn mới" checked={notifications.messages} onChange={v => setNotifications({ ...notifications, messages: v })} />
-                <ToggleRow label="Sự kiện" desc="Nhắc nhở về sự kiện sắp diễn ra" checked={notifications.events} onChange={v => setNotifications({ ...notifications, events: v })} />
-                <p className="text-xs text-slate-400 pt-3">Các tùy chọn thông báo được lưu trên trình duyệt. Sẽ đồng bộ khi backend hỗ trợ.</p>
-              </div>
-            )}
-
-            {activeTab === 'security' && (
-              <div className="space-y-5">
-                <h2 className="font-bold text-slate-800 text-lg">Đổi mật khẩu</h2>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Mật khẩu hiện tại</label>
-                  <input
-                    type="password"
-                    value={passwordForm.current}
-                    onChange={e => setPasswordForm({ ...passwordForm, current: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-5">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Mật khẩu mới</label>
-                    <input
-                      type="password"
-                      value={passwordForm.next}
-                      onChange={e => setPasswordForm({ ...passwordForm, next: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Xác nhận mật khẩu mới</label>
-                    <input
-                      type="password"
-                      value={passwordForm.confirm}
-                      onChange={e => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-inner"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end pt-2">
-                  <button
-                    onClick={handleChangePassword}
-                    disabled={changingPassword}
-                    className="bg-indigo-600 px-8 py-2.5 rounded-full text-white font-bold hover:bg-indigo-700 shadow-md transition-all disabled:opacity-60"
-                  >
-                    {changingPassword ? 'Đang đổi...' : 'Đổi mật khẩu'}
-                  </button>
-                </div>
-              </div>
-            )}
+      {/* Password Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowPasswordModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">Đổi mật khẩu</h3>
+              <button onClick={() => setShowPasswordModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+              <input type="password" placeholder="Mật khẩu hiện tại" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-gray-700" />
+              <input type="password" placeholder="Mật khẩu mới" value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-gray-700" />
+              <input type="password" placeholder="Xác nhận mật khẩu mới" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-gray-700" />
+              <button type="submit" disabled={passwordMutation.isPending} className="w-full py-3 bg-primary text-white font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {passwordMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Check className="w-5 h-5" /> Xác nhận</>}
+              </button>
+            </form>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
+      )}
 
-function ToggleRow({
-  label,
-  desc,
-  checked,
-  onChange,
-}: {
-  label: string;
-  desc: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0">
-      <div className="pr-4">
-        <p className="font-medium text-slate-800 text-[15px]">{label}</p>
-        <p className="text-[13px] text-slate-500 mt-0.5">{desc}</p>
-      </div>
-      <button
-        onClick={() => onChange(!checked)}
-        className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${checked ? 'bg-indigo-600' : 'bg-slate-300'}`}
-        aria-pressed={checked}
-        aria-label={label}
-      >
-        <span
-          className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-5' : ''}`}
-        />
-      </button>
+      {/* Email Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowEmailModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">Cập nhật Email</h3>
+              <button onClick={() => setShowEmailModal(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
+              <input type="email" placeholder="Email mới" value={newEmail} onChange={e => setNewEmail(e.target.value)} required className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-gray-700" />
+              <button type="submit" disabled={emailMutation.isPending} className="w-full py-3 bg-primary text-white font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {emailMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Check className="w-5 h-5" /> Xác nhận</>}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

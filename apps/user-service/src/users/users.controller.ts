@@ -22,6 +22,7 @@ import {
   RolesGuard,
   resolveUserId,
 } from '@campus-connect/common';
+import 'multer';
 import { UsersService } from './users.service';
 
 @Controller('users')
@@ -49,12 +50,22 @@ export class UsersController {
   @Roles('ADMIN')
   async changeUserRole(
     @Param('id') id: string,
-    @Body() body: { role: string },
+    @Body() body: { role?: string } = {},
   ) {
-    return this.usersService.changeUserRole(id, body.role);
+    return this.usersService.changeUserRole(id, body.role ?? 'USER');
   }
 
   // ========= USER PROFILE (ownership verified) =========
+
+  @Get('count')
+  async getUserCount() {
+    return this.usersService.getUserCount();
+  }
+
+  @Get('me')
+  async getMe(@CurrentUser('sub') tokenUserId: string | undefined) {
+    return this.usersService.getProfile(resolveUserId(tokenUserId));
+  }
 
   @Get(':id')
   async getProfile(@Param('id') id: string) {
@@ -65,7 +76,7 @@ export class UsersController {
   async updateProfile(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string | undefined,
-    @Body() data: any,
+    @Body() data: any = {},
   ) {
     const userId = resolveUserId(tokenUserId, id);
     return this.usersService.updateProfile(userId, data);
@@ -79,7 +90,7 @@ export class UsersController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+          new MaxFileSizeValidator({ maxSize: 20 * 1024 * 1024 }),
           new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp)$/ }),
         ],
       }),
@@ -88,6 +99,25 @@ export class UsersController {
   ) {
     const userId = resolveUserId(tokenUserId, id);
     return this.usersService.uploadAvatar(userId, file);
+  }
+
+  @Post(':id/cover')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadCover(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 20 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp)$/ }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.uploadCover(userId, file);
   }
 
   // ----- Public profile (FE-005) -----
@@ -101,10 +131,34 @@ export class UsersController {
   async updatePublicProfile(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string | undefined,
-    @Body() data: any,
+    @Body() data: any = {},
   ) {
     const userId = resolveUserId(tokenUserId, id);
     return this.usersService.updateProfile(userId, data);
+  }
+
+  @Put(':id/email')
+  async updateEmail(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+    @Body() body: { email?: string } = {},
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.updateEmail(userId, body.email ?? '');
+  }
+
+  @Put(':id/password')
+  async changePassword(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+    @Body() body: { currentPassword?: string; newPassword?: string } = {},
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.changePassword(
+      userId,
+      body.currentPassword ?? '',
+      body.newPassword ?? '',
+    );
   }
 
   @Get(':id/posts')
@@ -121,10 +175,10 @@ export class UsersController {
   async updateCover(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string | undefined,
-    @Body() body: { coverPhotoUrl: string },
+    @Body() body: { coverPhotoUrl?: string } = {},
   ) {
     const userId = resolveUserId(tokenUserId, id);
-    return this.usersService.updateCover(userId, body.coverPhotoUrl);
+    return this.usersService.updateCover(userId, body.coverPhotoUrl ?? '');
   }
 
   @Get(':id/friends')
@@ -132,14 +186,27 @@ export class UsersController {
     return this.usersService.getFriends(id);
   }
 
-  @Get(':id/friends/requests')
+  @Get([':id/friends/requests', ':id/friends/requests/incoming'])
   async getFriendRequests(@Param('id') id: string) {
     return this.usersService.getFriendRequests(id);
   }
 
-  @Get(':id/friends/requests/sent')
+  @Get([':id/friends/requests/sent', ':id/friends/requests/outgoing'])
   async getSentFriendRequests(@Param('id') id: string) {
     return this.usersService.getSentFriendRequests(id);
+  }
+
+  @Get(':id/friends/blocked')
+  async getBlockedUsers(@Param('id') id: string) {
+    return this.usersService.getBlockedUsers(id);
+  }
+
+  @Get(':id/friends/mutual/:targetId')
+  async getMutualFriends(
+    @Param('id') id: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return this.usersService.getMutualFriends(id, targetId);
   }
 
   @Get(':id/friends/suggestions')
@@ -156,10 +223,72 @@ export class UsersController {
   async sendFriendRequest(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string | undefined,
-    @Body() body: { receiverId: string },
+    @Body() body: { receiverId?: string } = {},
   ) {
     const senderId = resolveUserId(tokenUserId, id);
-    return this.usersService.sendFriendRequest(senderId, body.receiverId);
+    return this.usersService.sendFriendRequest(senderId, body.receiverId ?? '');
+  }
+
+  // ----- Target-id based friend actions (FE `/friends/*/:targetId`) -----
+
+  @Post(':id/friends/request/:targetId')
+  async sendFriendRequestByTarget(
+    @Param('id') id: string,
+    @Param('targetId') targetId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    const senderId = resolveUserId(tokenUserId, id);
+    return this.usersService.sendFriendRequest(senderId, targetId);
+  }
+
+  @Post(':id/friends/accept/:targetId')
+  async acceptFriendRequestByTarget(
+    @Param('id') id: string,
+    @Param('targetId') targetId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.acceptFriendRequestByTarget(userId, targetId);
+  }
+
+  @Delete(':id/friends/cancel/:targetId')
+  async cancelFriendRequestByTarget(
+    @Param('id') id: string,
+    @Param('targetId') targetId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.cancelFriendRequestByTarget(userId, targetId);
+  }
+
+  @Post(':id/friends/reject/:targetId')
+  async rejectFriendRequestByTarget(
+    @Param('id') id: string,
+    @Param('targetId') targetId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.rejectFriendRequestByTarget(userId, targetId);
+  }
+
+  @Post(':id/friends/block/:targetId')
+  async blockUser(
+    @Param('id') id: string,
+    @Param('targetId') targetId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.blockUser(userId, targetId);
+  }
+
+  @Delete(':id/friends/block/:targetId')
+  async unblockUser(
+    @Param('id') id: string,
+    @Param('targetId') targetId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    const userId = resolveUserId(tokenUserId, id);
+    return this.usersService.unblockUser(userId, targetId);
   }
 
   @Put(':id/friends/request/:requestId')
@@ -167,13 +296,13 @@ export class UsersController {
     @Param('id') id: string,
     @Param('requestId') requestId: string,
     @CurrentUser('sub') tokenUserId: string | undefined,
-    @Body() body: { status: 'accepted' | 'rejected' },
+    @Body() body: { status?: 'accepted' | 'rejected' } = {},
   ) {
     const userId = resolveUserId(tokenUserId, id);
     return this.usersService.respondFriendRequest(
       userId,
       requestId,
-      body.status,
+      body.status ?? 'rejected',
     );
   }
 
@@ -208,10 +337,10 @@ export class UsersController {
   async addSkill(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string | undefined,
-    @Body() body: { skill: string; level?: string; userId?: string },
+    @Body() body: { skill?: string; level?: string; userId?: string } = {},
   ) {
     const userId = resolveUserId(tokenUserId, body.userId ?? id);
-    return this.usersService.addSkill(userId, body.skill, body.level);
+    return this.usersService.addSkill(userId, body.skill ?? '', body.level);
   }
 
   @Delete(':id/skills/:skillId')
@@ -228,12 +357,13 @@ export class UsersController {
   async addAchievement(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string | undefined,
-    @Body() body: { title: string; description?: string; userId?: string },
+    @Body()
+    body: { title?: string; description?: string; userId?: string } = {},
   ) {
     const userId = resolveUserId(tokenUserId, body.userId ?? id);
     return this.usersService.addAchievement(
       userId,
-      body.title,
+      body.title ?? '',
       body.description,
     );
   }
@@ -259,7 +389,7 @@ export class UsersController {
       issuedAt: string;
       credentialUrl?: string;
       userId?: string;
-    },
+    } = { name: '', issuer: '', issuedAt: '' },
   ) {
     const userId = resolveUserId(tokenUserId, body.userId ?? id);
     return this.usersService.addCertificate(userId, body);
@@ -287,7 +417,7 @@ export class UsersController {
       githubUrl?: string;
       demoUrl?: string;
       userId?: string;
-    },
+    } = { title: '' },
   ) {
     const userId = resolveUserId(tokenUserId, body.userId ?? id);
     return this.usersService.addProject(userId, body);

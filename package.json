@@ -10,6 +10,7 @@
     "dev:admin": "turbo run dev --filter=admin-dashboard",
     "dev:web": "turbo run dev --filter=web-client --filter=admin-dashboard",
     "dev:backend": "turbo run start:dev --concurrency=20 --filter=!web-client --filter=!admin-dashboard",
+    "deploy:healthcheck": "node scripts/deploy-healthcheck.js",
     "lint": "turbo run lint",
     "test": "npm run test --workspaces --if-present"
   },
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
+    "bcrypt": "^5.1.1",
     "ioredis": "^5.11.1",
     "redis": "^6.1.0"
   }

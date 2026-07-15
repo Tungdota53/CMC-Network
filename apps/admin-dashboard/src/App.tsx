@@ -6,197 +6,165 @@ interface StatCard {
   change: string;
   positive: boolean;
   icon: string;
-  color: string;
 }
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  status: 'active' | 'suspended' | 'pending';
-  avatar: string;
-  joinedAt: string;
+interface Node {
+  id: string;
+  location: string;
+  uptime: string;
+  status: 'active' | 'warning' | 'offline';
 }
 
 const stats: StatCard[] = [
-  { title: 'Tổng người dùng', value: '12,847', change: '+12.5%', positive: true, icon: '👥', color: 'from-blue-500 to-blue-600' },
-  { title: 'Bài viết hôm nay', value: '1,234', change: '+8.2%', positive: true, icon: '📝', color: 'from-green-500 to-green-600' },
-  { title: 'Báo cáo vi phạm', value: '23', change: '-5.1%', positive: true, icon: '⚠️', color: 'from-red-500 to-red-600' },
-  { title: 'Tài liệu mới', value: '456', change: '+3.7%', positive: true, icon: '📚', color: 'from-purple-500 to-purple-600' },
+  { title: 'Active Nodes', value: '1,482', change: '+5.2%', positive: true, icon: '🌐' },
+  { title: 'Network Latency', value: '22ms', change: '-3ms', positive: true, icon: '⚡' },
+  { title: 'Data Throughput', value: '14.8 Gbps', change: '+12%', positive: true, icon: '📊' },
+  { title: 'Total Events', value: '105,739', change: '+1.5%', positive: true, icon: '🔔' },
 ];
 
-const users: User[] = [
-  { id: 1, name: 'Nguyễn Văn A', email: 'nguyenvana@cmc.edu.vn', role: 'Sinh viên', status: 'active', avatar: 'https://i.pravatar.cc/150?img=1', joinedAt: '2024-09-15' },
-  { id: 2, name: 'Trần Thị B', email: 'tranthib@cmc.edu.vn', role: 'Giảng viên', status: 'active', avatar: 'https://i.pravatar.cc/150?img=5', joinedAt: '2024-08-20' },
-  { id: 3, name: 'Lê Văn C', email: 'levanc@cmc.edu.vn', role: 'Sinh viên', status: 'suspended', avatar: 'https://i.pravatar.cc/150?img=3', joinedAt: '2024-10-01' },
-  { id: 4, name: 'Phạm Thị D', email: 'phamthid@cmc.edu.vn', role: 'Admin', status: 'active', avatar: 'https://i.pravatar.cc/150?img=9', joinedAt: '2024-07-10' },
-  { id: 5, name: 'Hoàng Văn E', email: 'hoangvane@cmc.edu.vn', role: 'Sinh viên', status: 'pending', avatar: 'https://i.pravatar.cc/150?img=12', joinedAt: '2024-11-05' },
-  { id: 6, name: 'Đặng Thị F', email: 'dangthif@cmc.edu.vn', role: 'Sinh viên', status: 'active', avatar: 'https://i.pravatar.cc/150?img=15', joinedAt: '2024-10-28' },
+const nodes: Node[] = [
+  { id: '1', location: 'San Francisco (SF)', uptime: '99.8%', status: 'active' },
+  { id: '2', location: 'New York (NY)', uptime: '99.9%', status: 'active' },
+  { id: '3', location: 'London (LDN)', uptime: '99.6%', status: 'warning' },
+  { id: '4', location: 'Tokyo (TYO)', uptime: '99.9%', status: 'active' },
+  { id: '5', location: 'Singapore (SGP)', uptime: '99.8%', status: 'active' },
 ];
 
 const navItems = [
-  { icon: '📊', label: 'Tổng quan', active: true },
-  { icon: '👥', label: 'Người dùng', active: false },
-  { icon: '📝', label: 'Bài viết', active: false },
-  { icon: '📚', label: 'Tài liệu', active: false },
-  { icon: '🛒', label: 'Marketplace', active: false },
-  { icon: '⚠️', label: 'Báo cáo', active: false },
-  { icon: '⚙️', label: 'Cài đặt', active: false },
+  { icon: '📊', label: 'Dashboard', active: true },
+  { icon: '🌐', label: 'Network Nodes', active: false },
+  { icon: '📈', label: 'Analytics', active: false },
+  { icon: '🏢', label: 'Infrastructure', active: false },
+  { icon: '🛡️', label: 'Security', active: false },
+  { icon: '⚙️', label: 'Settings', active: false },
 ];
 
-const statusColors: Record<User['status'], string> = {
-  active: 'bg-green-100 text-green-700',
-  suspended: 'bg-red-100 text-red-700',
-  pending: 'bg-yellow-100 text-yellow-700',
-};
-
-const statusLabels: Record<User['status'], string> = {
-  active: 'Hoạt động',
-  suspended: 'Đã khóa',
-  pending: 'Chờ duyệt',
-};
+const CMCLogo = () => (
+  <div className="cmc-logo-icon">
+    <svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20 40 C 5 40, 5 20, 25 20 C 30 5, 55 5, 65 15 C 75 5, 95 10, 95 30 C 100 30, 100 40, 85 40 Z" />
+      <path d="M 28 40 L 40 20 L 50 40 L 60 20 L 72 40" />
+      <circle cx="20" cy="40" r="3" fill="#0ea5e9" stroke="none"/>
+      <circle cx="25" cy="20" r="3" fill="#0ea5e9" stroke="none"/>
+      <circle cx="65" cy="15" r="3" fill="#0ea5e9" stroke="none"/>
+      <circle cx="95" cy="30" r="3" fill="#0ea5e9" stroke="none"/>
+      <circle cx="85" cy="40" r="3" fill="#0ea5e9" stroke="none"/>
+      <circle cx="28" cy="40" r="3" fill="#0ea5e9" stroke="none"/>
+      <circle cx="40" cy="20" r="3" fill="#0ea5e9" stroke="none"/>
+      <circle cx="50" cy="40" r="3" fill="#0ea5e9" stroke="none"/>
+      <circle cx="60" cy="20" r="3" fill="#0ea5e9" stroke="none"/>
+      <circle cx="72" cy="40" r="3" fill="#0ea5e9" stroke="none"/>
+    </svg>
+  </div>
+);
 
 export default function App() {
-  const [activeNav, setActiveNav] = useState('Tổng quan');
+  const [activeNav, setActiveNav] = useState('Dashboard');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="app-container">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 h-screen sticky top-0 flex flex-col">
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
-              C
-            </div>
-            <div>
-              <h1 className="font-bold text-gray-900 text-lg">CampusConnect</h1>
-              <p className="text-xs text-gray-500">Admin Dashboard</p>
-            </div>
-          </div>
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <CMCLogo />
+          <div className="brand-text">CMC <span>NETWORK</span></div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="nav-menu">
           {navItems.map(item => (
             <button
               key={item.label}
               onClick={() => setActiveNav(item.label)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                activeNav === item.label
-                  ? 'bg-blue-50 text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
+              className={`nav-item ${activeNav === item.label ? 'active' : ''}`}
             >
-              <span className="text-lg">{item.icon}</span>
+              <span>{item.icon}</span>
               {item.label}
             </button>
           ))}
         </nav>
-
-        <div className="p-4 border-t border-gray-100">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <img src="https://i.pravatar.cc/150?img=11" alt="Admin" className="w-9 h-9 rounded-full" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">Admin</p>
-              <p className="text-xs text-gray-500 truncate">admin@cmc.edu.vn</p>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900">Tổng quan</h2>
-          <p className="text-gray-500 mt-1">Thống kê tổng quan hệ thống CampusConnect</p>
-        </div>
+      <main className="main-content">
+        <header className="header">
+          <div>
+            <h1 className="page-title">Overview</h1>
+          </div>
+          <div className="search-bar">
+            <span>🔍</span>
+            <input 
+              type="text" 
+              placeholder="Search nodes, alerts..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </header>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="metrics-grid">
           {stats.map(stat => (
-            <div key={stat.title} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 bg-gradient-to-br ${stat.color} rounded-xl flex items-center justify-center text-2xl shadow-md`}>
-                  {stat.icon}
-                </div>
-                <span className={`text-sm font-medium px-2.5 py-1 rounded-full ${
-                  stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                }`}>
-                  {stat.change}
-                </span>
+            <div key={stat.title} className="glass-panel metric-card">
+              <div className="metric-header">
+                <span>{stat.title}</span>
+                <span>{stat.icon}</span>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-              <p className="text-sm text-gray-500 mt-1">{stat.title}</p>
+              <div className="metric-value">{stat.value}</div>
+              <div className={`metric-change ${stat.positive ? 'positive' : 'negative'}`}>
+                {stat.change}
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Users Table */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-          <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h3 className="text-lg font-semibold text-gray-900">Quản lý người dùng</h3>
-            <input
-              type="text"
-              placeholder="🔍 Tìm kiếm người dùng..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-64"
-            />
+        {/* Dashboard Grid */}
+        <div className="dashboard-grid">
+          
+          {/* Main Chart Area */}
+          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '500' }}>Network Activity</h3>
+            <div className="chart-placeholder">
+              <div className="fake-wave"></div>
+              {/* Fake X-axis labels */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', color: 'var(--text-muted)', fontSize: '0.8rem', zIndex: 2 }}>
+                <span>06/20</span>
+                <span>07/15</span>
+                <span>08/10</span>
+                <span>09/05</span>
+                <span>10/01</span>
+                <span>11/20</span>
+              </div>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          {/* Connected Nodes List */}
+          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '500' }}>Connected Nodes</h3>
+            <table className="data-table">
               <thead>
-                <tr className="bg-gray-50/50">
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Người dùng</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Vai trò</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Trạng thái</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ngày tham gia</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Thao tác</th>
+                <tr>
+                  <th>Location</th>
+                  <th>Uptime</th>
+                  <th>Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredUsers.map(user => (
-                  <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full" />
-                        <div>
-                          <p className="font-medium text-gray-900">{user.name}</p>
-                          <p className="text-sm text-gray-500">{user.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-600">{user.role}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 text-xs font-medium rounded-full ${statusColors[user.status]}`}>
-                        {statusLabels[user.status]}
+              <tbody>
+                {nodes.map(node => (
+                  <tr key={node.id}>
+                    <td style={{ fontWeight: 500 }}>{node.location}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{node.uptime}</td>
+                    <td>
+                      <span className={`status-badge status-${node.status}`}>
+                        {node.status.toUpperCase()}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{user.joinedAt}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-2">
-                        <button className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors font-medium">
-                          Sửa
-                        </button>
-                        <button className="px-3 py-1.5 text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors font-medium">
-                          Xóa
-                        </button>
-                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
         </div>
       </main>
     </div>

@@ -11,7 +11,16 @@ export class EventsService {
   async getEvents(status?: string) {
     return prisma.event.findMany({
       where: status ? { status: status as any } : undefined,
-      include: { organizer: { select: { fullName: true, avatarUrl: true } } },
+      include: {
+        organizer: {
+          select: {
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+            hasBlueBadge: true,
+          },
+        },
+      },
       orderBy: { startDate: 'asc' },
     });
   }
@@ -32,6 +41,28 @@ export class EventsService {
         image: data.image,
       },
     });
+  }
+
+  async getEvent(eventId: string) {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+            hasBlueBadge: true,
+          },
+        },
+        attendees: {
+          select: { id: true, userId: true, status: true, createdAt: true },
+        },
+      },
+    });
+    if (!event) throw new NotFoundException('Không tìm thấy sự kiện');
+    return event;
   }
 
   /** Update an event. Only the organizer may edit. */

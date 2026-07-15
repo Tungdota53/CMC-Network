@@ -192,6 +192,9 @@ describe('UsersService friendship', () => {
     expect(mockedPrisma.user.findMany).toHaveBeenCalledWith({
       where: {
         id: { notIn: ['user-1', 'friend-1', 'pending-1', 'pending-2'] },
+        emailVerified: true,
+        isVerified: true,
+        isSuspended: false,
         OR: [{ major: 'SE' }, { cohort: 'K15' }],
       },
       take: 8,
@@ -221,7 +224,12 @@ describe('UsersService friendship', () => {
     await service.getFriendSuggestions('user-1');
 
     expect(mockedPrisma.user.findMany).toHaveBeenLastCalledWith({
-      where: { id: { notIn: ['user-1'] } },
+      where: {
+        id: { notIn: ['user-1'] },
+        emailVerified: true,
+        isVerified: true,
+        isSuspended: false,
+      },
       take: 8,
       select: {
         id: true,

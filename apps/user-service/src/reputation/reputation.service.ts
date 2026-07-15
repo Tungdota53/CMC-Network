@@ -24,6 +24,49 @@ const SCORE_BADGES: { threshold: number; badge: string }[] = [
   { threshold: 500, badge: 'TOP_CONTRIBUTOR' },
 ];
 
+const BADGE_CATALOG = [
+  {
+    badge: 'ACTIVE_SHARER',
+    name: 'Người chia sẻ',
+    description: 'Đạt 100 XP uy tín',
+    category: 'CONTRIBUTION',
+    iconName: 'Share2',
+    requiredPoints: 100,
+  },
+  {
+    badge: 'TOP_CONTRIBUTOR',
+    name: 'Top contributor',
+    description: 'Đạt 500 XP uy tín',
+    category: 'CONTRIBUTION',
+    iconName: 'Trophy',
+    requiredPoints: 500,
+  },
+  {
+    badge: 'MARKETPLACE_TRUSTED',
+    name: 'Giao dịch tin cậy',
+    description: 'Bán sản phẩm thành công',
+    category: 'SPECIAL',
+    iconName: 'BadgeCheck',
+    requiredPoints: 80,
+  },
+  {
+    badge: 'EVENT_ORGANIZER',
+    name: 'Người tổ chức',
+    description: 'Tổ chức sự kiện cộng đồng',
+    category: 'SPECIAL',
+    iconName: 'CalendarCheck',
+    requiredPoints: 120,
+  },
+  {
+    badge: 'MENTOR_EXCELLENT',
+    name: 'Mentor xuất sắc',
+    description: 'Hoàn thành nhiều phiên mentor',
+    category: 'MENTOR',
+    iconName: 'GraduationCap',
+    requiredPoints: 150,
+  },
+] as const;
+
 @Injectable()
 export class ReputationService {
   /** Ghi nhận một hành động uy tín, cộng điểm và xét trao huy hiệu. */
@@ -35,6 +78,24 @@ export class ReputationService {
       select: { id: true },
     });
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
+
+    // Idempotent ledger: callers pass a stable reason/reference, e.g. productId/sessionId/eventId.
+    // If same user/action/reason already exists, do not double-award XP.
+    if (reason) {
+      const existing = await prisma.reputationHistory.findFirst({
+        where: { userId, action: action as never, reason },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (existing) {
+        const current = await this.getUserReputation(userId);
+        return {
+          reputationScore: current.reputationScore,
+          pointsAdded: 0,
+          newBadges: [],
+          idempotent: true,
+        };
+      }
+    }
 
     const [, updatedUser] = await prisma.$transaction([
       prisma.reputationHistory.create({
@@ -98,20 +159,48 @@ export class ReputationService {
 
   /** Huy hiệu + điểm hiện tại của user. */
   async getUserReputation(userId: string) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        fullName: true,
-        reputationScore: true,
-        badges: {
-          select: { badge: true, earnedAt: true },
-          orderBy: { earnedAt: 'desc' },
+    const [user, history] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          fullName: true,
+          reputationScore: true,
+          badges: {
+            select: { badge: true, earnedAt: true },
+            orderBy: { earnedAt: 'desc' },
+          },
         },
-      },
-    });
+      }),
+      this.getHistory(userId),
+    ]);
     if (!user) throw new NotFoundException('Không tìm thấy người dùng');
-    return user;
+
+    const earned = new Map(user.badges.map((b) => [b.badge, b.earnedAt]));
+    const badges = BADGE_CATALOG.map((item) => {
+      const earnedAt = earned.get(item.badge);
+      return {
+        id: item.badge,
+        badge: item.badge,
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        iconName: item.iconName,
+        requiredPoints: item.requiredPoints,
+        progress: Math.min(user.reputationScore, item.requiredPoints),
+        isUnlocked: Boolean(earnedAt),
+        earnedAt,
+      };
+    });
+
+    return {
+      ...user,
+      xp: user.reputationScore,
+      level: Math.floor(user.reputationScore / 100) + 1,
+      nextLevelXp: (Math.floor(user.reputationScore / 100) + 1) * 100,
+      badges,
+      history,
+    };
   }
 
   /** Bảng xếp hạng theo điểm uy tín. */

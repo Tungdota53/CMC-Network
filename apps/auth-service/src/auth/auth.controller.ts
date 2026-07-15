@@ -10,7 +10,12 @@ import {
   Res,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { JwtAuthGuard, CurrentUser } from '@campus-connect/common';
+import {
+  JwtAuthGuard,
+  CurrentUser,
+  RateLimit,
+  RateLimitGuard,
+} from '@campus-connect/common';
 import { AuthService } from './auth.service';
 import {
   RegisterDto,
@@ -19,6 +24,10 @@ import {
   RefreshTokenDto,
   Verify2FAAndEnableDto,
   Verify2FALoginDto,
+  VerifyEmailDto,
+  ResendOtpDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
 } from './dto/auth.dto';
 
 @Controller('auth')
@@ -26,14 +35,50 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 5, windowMs: 60_000 })
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 10, windowMs: 60_000 })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('verify-email')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 8, windowMs: 60_000 })
+  async verifyEmail(@Body() body: VerifyEmailDto, @Req() req: any) {
+    return this.authService.verifyEmail(body, req.ip);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('resend-otp')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 3, windowMs: 60_000 })
+  async resendOtp(@Body() body: ResendOtpDto, @Req() req: any) {
+    return this.authService.resendOtp(body, req.ip);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('forgot-password')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 3, windowMs: 60_000 })
+  async forgotPassword(@Body() body: ForgotPasswordDto, @Req() req: any) {
+    return this.authService.forgotPassword(body, req.ip);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('reset-password')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 5, windowMs: 60_000 })
+  async resetPassword(@Body() body: ResetPasswordDto, @Req() req: any) {
+    return this.authService.resetPassword(body, req.ip);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -41,19 +86,19 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async changePassword(
     @CurrentUser('sub') userId: string,
-    @Body() body: ChangePasswordDto,
+    @Body() body: Partial<ChangePasswordDto> = {},
   ) {
     return this.authService.changePassword(
       userId,
-      body.currentPassword,
-      body.newPassword,
+      body.currentPassword ?? '',
+      body.newPassword ?? '',
     );
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('refresh')
-  async refresh(@Body() body: RefreshTokenDto) {
-    return this.authService.refreshToken(body.refreshToken);
+  async refresh(@Body() body: Partial<RefreshTokenDto> = {}) {
+    return this.authService.refreshToken(body.refreshToken ?? '');
   }
 
   @HttpCode(HttpStatus.OK)
@@ -68,15 +113,18 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async verify2FAAndEnable(
     @CurrentUser('sub') userId: string,
-    @Body() body: Verify2FAAndEnableDto,
+    @Body() body: Partial<Verify2FAAndEnableDto> = {},
   ) {
-    return this.authService.verify2FAAndEnable(userId, body.token);
+    return this.authService.verify2FAAndEnable(userId, body.token ?? '');
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('2fa/verify-login')
-  async verify2FALogin(@Body() body: Verify2FALoginDto) {
-    return this.authService.verify2FALogin(body.temp2faToken, body.token);
+  async verify2FALogin(@Body() body: Partial<Verify2FALoginDto> = {}) {
+    return this.authService.verify2FALogin(
+      body.temp2faToken ?? '',
+      body.token ?? '',
+    );
   }
 
   @Get('microsoft')

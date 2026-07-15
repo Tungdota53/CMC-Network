@@ -31,13 +31,29 @@ export class SearchService {
         SELECT id, "fullName", "avatarUrl", major, cohort
         FROM users
         WHERE "isSuspended" = false 
-          AND ("fullName" ILIKE ${'%' + keyword + '%'} OR "email" ILIKE ${'%' + keyword + '%'})
-        ORDER BY GREATEST(SIMILARITY("fullName", ${keyword}), SIMILARITY("email", ${keyword})) DESC
+          AND "emailVerified" = true
+          AND "isVerified" = true
+          AND (
+            "fullName" ILIKE ${'%' + keyword + '%'}
+            OR "email" ILIKE ${'%' + keyword + '%'}
+            OR "studentId" ILIKE ${'%' + keyword + '%'}
+            OR major ILIKE ${'%' + keyword + '%'}
+            OR cohort ILIKE ${'%' + keyword + '%'}
+          )
+        ORDER BY GREATEST(
+          SIMILARITY("fullName", ${keyword}),
+          SIMILARITY("email", ${keyword}),
+          SIMILARITY(COALESCE("studentId", ''), ${keyword}),
+          SIMILARITY(COALESCE(major, ''), ${keyword}),
+          SIMILARITY(COALESCE(cohort, ''), ${keyword})
+        ) DESC
         LIMIT ${take};
       `.catch(() =>
         prisma.user.findMany({
           where: {
             isSuspended: false,
+            emailVerified: true,
+            isVerified: true,
             OR: [
               { fullName: contains },
               { email: contains },

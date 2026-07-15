@@ -9,7 +9,7 @@ import type { Request, Response, NextFunction } from 'express';
 export class SecurityHeadersMiddleware implements NestMiddleware {
   use(_req: Request, res: Response, next: NextFunction) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('X-DNS-Prefetch-Control', 'off');
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');

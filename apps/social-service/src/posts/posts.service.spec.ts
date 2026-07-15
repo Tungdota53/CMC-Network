@@ -34,12 +34,17 @@ jest.mock('@campus-connect/database', () => {
 });
 
 const notifier = { push: jest.fn().mockResolvedValue(undefined) };
+const cache = {
+  get: jest.fn(),
+  set: jest.fn(),
+  del: jest.fn(),
+};
 
 describe('PostsService — create & like', () => {
   let service: PostsService;
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new PostsService(notifier as never);
+    service = new PostsService(notifier as never, cache as never);
   });
 
   it('creates a post with the given author id (no firstUser fallback)', async () => {
@@ -80,7 +85,7 @@ describe('PostsService — stories 24h expiry', () => {
   let service: PostsService;
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new PostsService(notifier as never);
+    service = new PostsService(notifier as never, cache as never);
   });
 
   it('queries only stories newer than the 24h cutoff', async () => {

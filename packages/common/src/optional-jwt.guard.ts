@@ -2,7 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
-  BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
@@ -65,7 +65,7 @@ export function resolveUserId(
 ): string {
   const id = tokenUserId || fallbackId;
   if (!id) {
-    throw new BadRequestException('Thiếu thông tin người dùng (token hoặc userId).');
+    throw new UnauthorizedException('Thiếu thông tin người dùng (token hoặc userId).');
   }
   return id;
 }

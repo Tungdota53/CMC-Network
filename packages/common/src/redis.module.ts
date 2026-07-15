@@ -47,6 +47,12 @@ export class RedisModule implements OnModuleInit, OnModuleDestroy {
             },
             lazyConnect: true,
           });
+          RedisModule.client.on('error', (err) => {
+            Logger.warn(
+              `Redis connection error — continuing with in-memory fallback where available: ${err.message}`,
+              'RedisModule',
+            );
+          });
         }
         return RedisModule.client;
       },

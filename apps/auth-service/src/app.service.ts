@@ -33,6 +33,8 @@ export class AppService {
           major: info.major,
           cohort: info.cohort,
           role: 'STUDENT',
+          emailVerified: true,
+          isVerified: true,
         },
       });
     }

@@ -1,56 +1,53 @@
-import type { Metadata } from 'next';
-import { Inter, Outfit } from 'next/font/google';
-import './globals.css';
+import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
+import "./globals.css";
+import { Providers } from "@/components/providers/Providers";
 
-const inter = Inter({
-  subsets: ['latin', 'vietnamese'],
-  variable: '--font-sans',
-  display: 'swap',
-});
-
-const outfit = Outfit({
-  subsets: ['latin'],
-  variable: '--font-heading',
-  display: 'swap',
+const googleSans = localFont({
+  src: "../../public/fonts/GoogleSans-Variable.ttf",
+  variable: "--font-google-sans",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: 'CMC NetWork',
-  description: 'Mạng xã hội sinh viên hiện đại',
+  title: "CMC Network — Kết nối sinh viên, mở rộng tri thức",
+  description:
+    "Nền tảng mạng xã hội nội bộ dành cho sinh viên CMC University. Chia sẻ kiến thức, giao lưu kết bạn và tham gia các sự kiện thú vị.",
+  keywords: ["CMC", "Network", "sinh viên", "mạng xã hội", "đại học"],
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "CMC Network",
+  },
+  icons: {
+    icon: "/logo.png",
+    apple: "/new-logo.png",
+  },
 };
 
-// Inline pre-paint script: read theme from localStorage (or system pref) and
-// stamp `class="dark"` on <html> before first paint to avoid the white flash.
-const themeBootstrap = `
-(function () {
-  try {
-    var stored = localStorage.getItem('theme');
-    var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    var dark = stored ? stored === 'dark' : systemDark;
-    if (dark) document.documentElement.classList.add('dark');
-  } catch (e) {}
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#3b82f6",
+};
 
-  // Polyfill for crypto.randomUUID on insecure contexts (HTTP LAN)
-  if (!window.crypto) window.crypto = {};
-  if (!window.crypto.randomUUID) {
-    window.crypto.randomUUID = function() {
-      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-      });
-    };
-  }
-})();
-`;
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="vi" suppressHydrationWarning className={`${inter.variable} ${outfit.variable}`}>
+    <html lang="vi" className={`${googleSans.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+        <meta name="darkreader-lock" content="true" />
       </head>
-      <body className="antialiased font-sans">
-        {children}
+      <body className="min-h-full flex flex-col font-sans">
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

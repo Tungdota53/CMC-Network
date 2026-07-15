@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Param,
   Query,
@@ -14,7 +15,7 @@ import {
   JwtAuthGuard,
   Roles,
   RolesGuard,
-  resolveUserId,
+  VerifiedUserGuard,
 } from '@campus-connect/common';
 import { AdminService } from './admin.service';
 
@@ -38,29 +39,79 @@ export class AdminController {
   }
 
   @Get('reports')
-  async listReports(@Query('status') status?: string) {
-    return this.adminService.listReports(status);
+  async listReports(
+    @Query('status') status?: string,
+    @Query('targetType') targetType?: string,
+    @Query('q') q?: string,
+  ) {
+    return this.adminService.listReports({
+      status: status === 'ALL' ? undefined : status,
+      targetType: targetType === 'ALL' ? undefined : targetType,
+      q,
+    });
+  }
+
+  @Get('audit-logs')
+  async auditLogs(@Query('limit') limit?: string) {
+    return this.adminService.listAuditLogs(limit ? Number(limit) : 50);
   }
 
   @Put('reports/:id/resolve')
   async resolveReport(
+    @CurrentUser('sub') actorId: string,
     @Param('id') id: string,
-    @Body() body: { status: 'REVIEWED' | 'RESOLVED' | 'DISMISSED' },
+    @Body()
+    body: {
+      status?: 'REVIEWED' | 'RESOLVED' | 'DISMISSED';
+      note?: string;
+    } = {},
   ) {
-    return this.adminService.resolveReport(id, body.status);
+    return this.adminService.resolveReport(
+      actorId,
+      id,
+      body.status ?? 'REVIEWED',
+      body.note,
+    );
   }
 
   @Delete('content/:targetType/:targetId')
   async deleteContent(
+    @CurrentUser('sub') actorId: string,
     @Param('targetType') targetType: string,
     @Param('targetId') targetId: string,
   ) {
-    return this.adminService.deleteContent(targetType.toUpperCase(), targetId);
+    return this.adminService.deleteContent(
+      actorId,
+      targetType.toUpperCase(),
+      targetId,
+    );
+  }
+
+  @Get('users')
+  async listUsers(
+    @Query('search') search?: string,
+    @Query('role') role?: string,
+  ) {
+    return this.adminService.listUsers({ search, role });
+  }
+
+  @Patch('users/:id/status')
+  async updateUserStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'ACTIVE' | 'BANNED' | 'PENDING' },
+  ) {
+    return this.adminService.updateUserStatus(id, body.status);
+  }
+
+  @Patch('users/:id/badge')
+  async toggleBlueBadge(@Param('id') id: string) {
+    return this.adminService.toggleBlueBadge(id);
   }
 }
 
 /** Public-facing report submission (any authenticated user can report). */
 @Controller('reports')
+@UseGuards(JwtAuthGuard, VerifiedUserGuard)
 export class ReportsController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -73,11 +124,8 @@ export class ReportsController {
       targetId: string;
       targetType: string;
       reason: string;
-    },
+    } = { targetId: '', targetType: '', reason: '' },
   ) {
-    return this.adminService.createReport(
-      resolveUserId(tokenUserId, body.reporterId),
-      body,
-    );
+    return this.adminService.createReport(tokenUserId, body);
   }
 }

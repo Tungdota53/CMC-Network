@@ -1,195 +1,250 @@
-"use client";
+'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
-import UserMenu from '../components/UserMenu';
-import AuthGuard from '../components/AuthGuard';
-import SidebarProfile from '../components/SidebarProfile';
-import RightSidebar from '../components/RightSidebar';
-import ChatWidget from '../components/ChatWidget';
-import MessagesDropdown from '../components/MessagesDropdown';
-import MobileBottomNav from '../components/MobileBottomNav';
-import NotificationsDropdown from '../components/NotificationsDropdown';
-import GlobalSearch from '../components/GlobalSearch';
-import ThemeToggle from '../components/ThemeToggle';
-import { UserProvider } from '../contexts/UserContext';
-import { SocketProvider } from '../contexts/SocketContext';
-import { Toaster } from 'react-hot-toast';
+import { Home, User, Bell, MessageCircle, Settings, Search, Users, BookOpen, Library, Bot, GraduationCap, Calendar, Star, LineChart, ShoppingBag, Ticket, Flag, Shield, UserCircle, Bookmark } from 'lucide-react';
+import { Avatar } from '@/components/ui/Avatar';
+import { RightSidebar } from '@/components/sidebar-right/RightSidebar';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { GlobalSearchInput } from '@/components/navigation/GlobalSearchInput';
+import { GlobalChat } from '@/components/chat/shared/GlobalChat';
+import { CallProvider } from '@/components/chat/call/CallProvider';
+import { ProfileDropdown } from '@/components/navigation/ProfileDropdown';
+import { MessageDropdown } from '@/components/navigation/MessageDropdown';
+import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/authStore';
+import { BottomNav } from '@/components/mobile';
 
-// ==================== PREMIUM LINE ICONS ====================
-const Icons = {
-  Home: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>,
-  Pulse: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12h3l2.2-5 4.1 10 2.5-6H21"/><path strokeLinecap="round" strokeLinejoin="round" d="M20 5.5A9 9 0 103.7 16"/></svg>,
-  Users: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>,
-  Book: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>,
-  Calendar: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
-  Store: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>,
-  AI: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>,
-  Search: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>,
-  Bell: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>,
-  Bookmark: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>,
-  Trophy: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8m-4-4v4m-5-16h10v3a5 5 0 01-10 0V5zm10 1h2a2 2 0 010 4h-.5M7 6H5a2 2 0 000 4h.5"/></svg>,
-  Message: <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>,
-};
+import { CMCLogo } from '@/components/CMCLogo';
 
-export default function MainLayout({ children }: { children: React.ReactNode }) {
+export default function MainLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
-
-  const isActivePath = (path: string) => pathname === path || (path !== '/' && pathname.startsWith(path));
+  const { user } = useAuthStore();
+  const isProfilePage = pathname.startsWith('/profile');
+  const isMessagesPage = pathname.startsWith('/messages');
+  const isFriendsPage = pathname.startsWith('/friends');
+  const isFeedPage = pathname === '/' || pathname.startsWith('/feed');
 
   return (
-    <AuthGuard>
-      <UserProvider>
-        <SocketProvider>
-        {/* TOP NAVBAR - PREMIUM GLASSMORPHISM */}
-        <nav className="fixed top-0 left-0 right-0 h-16 glass-panel z-50 flex items-center justify-between px-3 sm:px-6 transition-all duration-300 supports-[backdrop-filter]:bg-white/72 dark:supports-[backdrop-filter]:bg-slate-950/64">
-        
-        {/* Logo & Search */}
-        <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative w-10 h-10 rounded-2xl overflow-hidden flex items-center justify-center shadow-lg shadow-indigo-500/10 group-hover:shadow-indigo-500/30 transition-all duration-300 border border-white/10 bg-zinc-900">
-              <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <img src="/logo.png" alt="CMC Network" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-            </div>
-            <span className="text-[22px] font-black hidden md:block tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-yellow-200 to-indigo-400 drop-shadow-md">
-              CMC NetWork
-            </span>
-          </Link>
-          
-          
-          <div className="hidden sm:block"><GlobalSearch /></div>
-        </div>
-
-        {/* Center Navigation */}
-        <div className="hidden lg:flex items-center gap-1 h-full absolute left-1/2 -translate-x-1/2">
-          {[
-            { icon: Icons.Home, path: '/', label: 'Feed' },
-            { icon: Icons.Pulse, path: '/pulse', label: 'Pulse' },
-            { icon: Icons.Users, path: '/groups', label: 'Nhóm' },
-            { icon: Icons.Message, path: '/chat', label: 'Tin nhắn' },
-            { icon: Icons.Book, path: '/materials', label: 'Tài liệu' },
-            { icon: Icons.Store, path: '/marketplace', label: 'Chợ' },
-          ].map((item, i) => {
-            const active = isActivePath(item.path);
-
-            return (
-            <Link 
-              key={i} 
-              href={item.path}
-              target={item.path === '/chat' ? '_blank' : undefined}
-              rel={item.path === '/chat' ? 'noopener noreferrer' : undefined}
-              aria-label={item.label}
-              aria-current={active ? 'page' : undefined}
-              className={`px-5 h-14 flex items-center justify-center rounded-2xl transition-all relative group ${
-                active
-                  ? 'text-indigo-600 dark:text-indigo-300 bg-indigo-50/80 dark:bg-indigo-500/10'
-                  : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-100/60 dark:hover:bg-slate-800/70'
-              }`}
-            >
-              <div className="group-hover:-translate-y-0.5 transition-transform duration-300">{item.icon}</div>
-              {active ? (
-                <motion.div layoutId="navIndicator" className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3px] bg-indigo-600 dark:bg-indigo-300 rounded-t-full w-10" />
-              ) : (
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[3px] bg-indigo-600 dark:bg-indigo-300 rounded-t-full w-0 opacity-0 group-hover:w-10 group-hover:opacity-30 transition-all duration-300" />
-              )}
-            </Link>
-            );
-          })}
-        </div>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button aria-label="Tìm kiếm" className="sm:hidden w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-[#3A3B3C] text-slate-800 dark:text-slate-200 transition-colors active:scale-95">
-            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          </button>
-          <div className="hidden sm:block">
-            <ThemeToggle />
-          </div>
-          <MessagesDropdown />
-          <div className="hidden sm:block">
-            <NotificationsDropdown />
-          </div>
-          <div className="hidden sm:block pl-2 border-l border-slate-200 dark:border-slate-700">
-            <UserMenu />
-          </div>
-        </div>
-      </nav>
-
-      {/* MAIN LAYOUT */}
-      <main className="pt-16 lg:pt-24 pb-20 lg:pb-10 max-w-[1600px] mx-auto flex justify-center w-full min-h-screen px-0 sm:px-4 gap-6">
-        
-        {/* LEFT SIDEBAR */}
-        <div className="hidden xl:block w-[300px] shrink-0 sticky top-24 h-[calc(100vh-100px)] overflow-y-auto no-scrollbar pb-6">
-          <div className="glass p-5 flex flex-col gap-2 mb-5">
-            <SidebarProfile />
-          </div>
-          
-          <div className="glass p-3 flex flex-col gap-1 mb-5">
-            {[
-              { icon: Icons.Pulse, label: 'Live Campus Pulse', color: 'text-sky-500', path: '/pulse' },
-              { icon: Icons.Users, label: 'Nhóm học tập', color: 'text-indigo-500', path: '/groups' },
-              { icon: Icons.Message, label: 'Tin nhắn', color: 'text-pink-500', path: '/chat' },
-              { icon: Icons.Book, label: 'Kho tài liệu', color: 'text-violet-500', path: '/materials' },
-              { icon: Icons.Calendar, label: 'Sự kiện', color: 'text-rose-500', path: '/events' },
-              { icon: Icons.Store, label: 'Chợ sinh viên', color: 'text-emerald-500', path: '/marketplace' },
-              { icon: Icons.Trophy, label: 'Bảng xếp hạng', color: 'text-amber-500', path: '/leaderboard' },
-              { icon: Icons.Bookmark, label: 'Đã lưu', color: 'text-orange-500', path: '/saved' },
-            ].map((item, i) => (
-              <Link href={item.path} key={i} target={item.path === '/chat' ? '_blank' : undefined} rel={item.path === '/chat' ? 'noopener noreferrer' : undefined} aria-current={isActivePath(item.path) ? 'page' : undefined} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors group ${isActivePath(item.path) ? 'bg-indigo-50/90 dark:bg-indigo-500/10' : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/80'}`}>
-                <div className={`transition-transform duration-300 ${item.color} group-hover:scale-110`}>{item.icon}</div>
-                <span className="font-medium text-token-secondary group-hover:text-token-primary text-sm">{item.label}</span>
-              </Link>
-            ))}
-          </div>
-          
-          <div className="glass p-4">
-             <h4 className="text-token-tertiary font-semibold text-xs uppercase tracking-wider mb-4 pl-2">Thành tựu (Reputation)</h4>
-             <div className="flex flex-col gap-4">
-               <div className="flex items-center gap-3 p-2 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-xl transition-colors cursor-default group">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-600 text-lg group-hover:scale-105 transition-transform dark:bg-amber-900/30 dark:border-amber-700">🏆</div>
-                  <div>
-                    <div className="text-sm font-medium text-token-primary">Sinh Viên Xuất Sắc</div>
-                    <div className="text-xs text-amber-600 mt-0.5">1,250 Điểm</div>
-                  </div>
-               </div>
-               <div className="flex items-center gap-3 p-2 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-xl transition-colors cursor-default group">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 text-lg group-hover:scale-105 transition-transform dark:bg-indigo-900/30 dark:border-indigo-700">💎</div>
-                  <div>
-                    <div className="text-sm font-medium text-token-primary">Chuyên Gia React</div>
-                    <div className="text-xs text-indigo-600 mt-0.5">Top 5%</div>
-                  </div>
-               </div>
-             </div>
-          </div>
-        </div>
-
-        {/* CENTER FEED */}
-        <div className="w-full max-w-[640px] shrink-0 pb-10">
-          {children}
-        </div>
-
-        {/* RIGHT SIDEBAR */}
-        <RightSidebar />
-        
-      </main>
+    <CallProvider>
+    <div className="min-h-screen bg-background flex flex-col relative overflow-x-clip">
+      {/* Ambient Background Blobs for Glassmorphism */}
+      <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2 pointer-events-none -z-10"></div>
+      <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-[120px] translate-x-1/3 translate-y-1/3 pointer-events-none -z-10"></div>
       
-      <ChatWidget />
-      <MobileBottomNav />
-      <Toaster 
-        position="bottom-left"
-        toastOptions={{
-          style: {
-            background: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(16px)',
-            color: '#0f172a',
-            border: '1px solid rgba(226, 232, 240, 0.8)',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-          }
-        }}
-      />
-        </SocketProvider>
-      </UserProvider>
-    </AuthGuard>
+      {/* Header / Navbar - Apple Liquid Glass Style */}
+      <header className="h-14 sticky top-0 z-50 flex items-center justify-between px-4">
+        {/* Glass Background - Placed as absolute child so it doesn't trap dropdown blurs */}
+        <div className="absolute inset-0 bg-card/70 backdrop-blur-md border-b border-border/60 shadow-sm z-[-1]"></div>
+        
+        {/* Left: Logo & Search */}
+        <div className="flex items-center gap-2 flex-1 lg:flex-none">
+          <Link href="/feed" className="flex items-center shrink-0 group mr-2">
+            <img src="/new-logo-transparent.png" alt="CMC Network Logo" className="h-10 w-auto object-contain drop-shadow-md transition-transform group-hover:scale-105" />
+          </Link>
+          <div className="hidden sm:block">
+            <GlobalSearchInput />
+          </div>
+        </div>
+
+        {/* Center: Navigation (Desktop) */}
+        <div className="hidden md:flex items-center justify-center h-full flex-1 max-w-[650px] gap-2 px-4">
+          <Link href="/feed" className="group flex flex-1 items-center justify-center h-full relative px-2">
+            {pathname.startsWith('/feed') && (
+              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+            )}
+            <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/feed') ? "" : "hover:bg-white/5")}>
+              <Home 
+                className={cn("w-[28px] h-[28px] transition-all duration-300 ease-out group-hover:scale-110", pathname.startsWith('/feed') ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] scale-110" : "text-slate-400 group-hover:text-slate-200")} 
+                fill={pathname.startsWith('/feed') ? "currentColor" : "none"} 
+                strokeWidth={pathname.startsWith('/feed') ? 2.5 : 2}
+              />
+            </div>
+          </Link>
+          <Link href="/friends" className="group flex flex-1 items-center justify-center h-full relative px-2">
+            {pathname.startsWith('/friends') && (
+              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+            )}
+            <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/friends') ? "" : "hover:bg-white/5")}>
+              <Users 
+                className={cn("w-[28px] h-[28px] transition-all duration-300 ease-out group-hover:scale-110", pathname.startsWith('/friends') ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] scale-110" : "text-slate-400 group-hover:text-slate-200")} 
+                fill={pathname.startsWith('/friends') ? "currentColor" : "none"}
+                strokeWidth={pathname.startsWith('/friends') ? 2.5 : 2}
+              />
+            </div>
+          </Link>
+          <Link href="/study" className="group flex flex-1 items-center justify-center h-full relative px-2">
+            {pathname.startsWith('/study') && (
+              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+            )}
+            <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/study') ? "" : "hover:bg-white/5")}>
+              <BookOpen 
+                className={cn("w-[28px] h-[28px] transition-all duration-300 ease-out group-hover:scale-110", pathname.startsWith('/study') ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] scale-110" : "text-slate-400 group-hover:text-slate-200")} 
+                fill={pathname.startsWith('/study') ? "currentColor" : "none"}
+                strokeWidth={pathname.startsWith('/study') ? 2.5 : 2}
+              />
+            </div>
+          </Link>
+          <Link href="/groups" className="group flex flex-1 items-center justify-center h-full relative px-2">
+            {pathname.startsWith('/groups') && (
+              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+            )}
+            <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/groups') ? "" : "hover:bg-white/5")}>
+              <svg 
+                viewBox="0 0 24 24" 
+                fill={pathname.startsWith('/groups') ? "currentColor" : "none"} 
+                stroke="currentColor" 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                className={cn("w-[28px] h-[28px] transition-all duration-300 ease-out group-hover:scale-110", pathname.startsWith('/groups') ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] scale-110 stroke-[2.5]" : "text-slate-400 group-hover:text-slate-200 stroke-2")}
+              >
+                <path d="M12 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z" />
+                <path d="M17.5 8a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z" />
+                <path d="M6.5 8a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z" />
+                <path d="M22 21c0-2-2.5-3.5-5.5-3.5v3.5Z" />
+                <path d="M2 21c0-2 2.5-3.5 5.5-3.5v3.5Z" />
+                <path d="M6.5 21C6.5 18 9 15.5 12 15.5s5.5 2.5 5.5 5.5Z" />
+              </svg>
+            </div>
+          </Link>
+          <Link href="/marketplace" className="group flex flex-1 items-center justify-center h-full relative px-2">
+            {pathname.startsWith('/marketplace') && (
+              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+            )}
+            <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/marketplace') ? "" : "hover:bg-white/5")}>
+              <ShoppingBag 
+                className={cn("w-[28px] h-[28px] transition-all duration-300 ease-out group-hover:scale-110", pathname.startsWith('/marketplace') ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] scale-110" : "text-slate-400 group-hover:text-slate-200")} 
+                fill={pathname.startsWith('/marketplace') ? "currentColor" : "none"}
+                strokeWidth={pathname.startsWith('/marketplace') ? 2.5 : 2}
+              />
+            </div>
+          </Link>
+        </div>
+
+        {/* Right: Actions & Profile */}
+        <div className="flex items-center justify-end gap-2 lg:w-[320px]">
+          {/* Menu Icon (Optional - like Facebook grid menu) */}
+          <button className="hidden sm:flex w-10 h-10 rounded-full bg-hover hover:bg-foreground/10 transition-colors items-center justify-center text-foreground shrink-0">
+            <svg viewBox="0 0 44 44" width="20" height="20" fill="currentColor">
+              <circle cx="7" cy="7" r="6"></circle><circle cx="22" cy="7" r="6"></circle><circle cx="37" cy="7" r="6"></circle>
+              <circle cx="7" cy="22" r="6"></circle><circle cx="22" cy="22" r="6"></circle><circle cx="37" cy="22" r="6"></circle>
+              <circle cx="7" cy="37" r="6"></circle><circle cx="22" cy="37" r="6"></circle><circle cx="37" cy="37" r="6"></circle>
+            </svg>
+          </button>
+          
+          <MessageDropdown />
+          <NotificationBell />
+          <ProfileDropdown />
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <div className={cn("flex-1 flex w-full mx-auto justify-between", (!isMessagesPage && !isFriendsPage) && "max-w-[1600px]", isFriendsPage && "w-full max-w-none")}>
+        
+        {!isProfilePage && !isMessagesPage && !isFriendsPage && (
+          <aside className="w-[280px] hidden lg:block p-3 sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-foreground/20">
+            <nav className="space-y-1">
+
+            {/* --- Học Tập & Hỗ Trợ --- */}
+            <Link href="/timetable" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center">
+                <Calendar className="w-6 h-6 text-green-500" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Lịch học thông minh</span>
+            </Link>
+            <Link href="/grades" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <LineChart className="w-6 h-6 text-emerald-500" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Theo dõi GPA</span>
+            </Link>
+            <Link href="/study" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-orange-500/10 flex items-center justify-center">
+                <BookOpen className="w-6 h-6 text-orange-500" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Góc Học Tập (Nhóm)</span>
+            </Link>
+            <Link href="/materials" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-purple-500/10 flex items-center justify-center">
+                <Library className="w-6 h-6 text-purple-500" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Kho Tài Liệu & AI</span>
+            </Link>
+            <Link href="/ai" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+                <Bot className="w-6 h-6 text-white" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Trợ Lý AI</span>
+            </Link>
+            <Link href="/professors" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                <Star className="w-6 h-6 text-yellow-500" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Review Giảng viên</span>
+            </Link>
+            <Link href="/mentors" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-indigo-500/10 flex items-center justify-center">
+                <GraduationCap className="w-6 h-6 text-indigo-500" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Mentor Connect</span>
+            </Link>
+
+            <div className="border-t border-border/50 my-2"></div>
+            {/* --- Đời Sống & Cộng Đồng --- */}
+
+            <Link href="/marketplace" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-cyan-500/10 flex items-center justify-center">
+                <ShoppingBag className="w-6 h-6 text-cyan-500" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Chợ sinh viên</span>
+            </Link>
+            <Link href="/events" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-pink-500/10 flex items-center justify-center">
+                <Ticket className="w-6 h-6 text-pink-500" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Sự kiện</span>
+            </Link>
+            <Link href="/clubs" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-red-500/10 flex items-center justify-center">
+                <Flag className="w-6 h-6 text-red-500" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">CLB & Cộng đồng</span>
+            </Link>
+            <Link href="/reputation" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-hover transition-colors">
+              <div className="w-9 h-9 rounded-full bg-blue-600/10 flex items-center justify-center">
+                <Shield className="w-6 h-6 text-blue-600" />
+              </div>
+              <span className="font-semibold text-[15px] text-foreground">Uy tín & Danh hiệu</span>
+            </Link>
+
+            </nav>
+          </aside>
+        )}
+
+        <main className={cn(
+          "flex-1 w-full mx-auto", 
+          isMessagesPage ? "max-w-none p-0 h-[calc(100vh-3.5rem)] overflow-hidden" : 
+          isFriendsPage ? "max-w-none p-0" :
+          isProfilePage ? "max-w-[1090px] py-6 px-4" : 
+          isFeedPage ? "max-w-[960px] py-6 px-4 max-md:pb-[calc(var(--mobile-bottom-nav-height)+var(--mobile-safe-bottom)+1rem)]" : "max-w-[1400px] py-6 px-4 max-md:pb-[calc(var(--mobile-bottom-nav-height)+var(--mobile-safe-bottom)+1rem)]"
+        )}>
+          {children}
+        </main>
+
+        {/* Right Sidebar */}
+        {isFeedPage && (
+          <aside className="w-[280px] hidden xl:block sticky top-14 h-[calc(100vh-3.5rem)]">
+            <RightSidebar />
+          </aside>
+        )}
+      </div>
+      {!isMessagesPage && <BottomNav />}
+      <GlobalChat />
+    </div>
+    </CallProvider>
   );
 }

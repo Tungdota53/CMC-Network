@@ -7,8 +7,14 @@ import {
   Put,
   Delete,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { CurrentUser, resolveUserId } from '@campus-connect/common';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  VerifiedUserGuard,
+  resolveUserId,
+} from '@campus-connect/common';
 import { EventsService } from './events.service';
 
 @Controller('events')
@@ -21,9 +27,10 @@ export class EventsController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async createEvent(
     @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { organizerId?: string; [key: string]: unknown },
+    @Body() data: { organizerId?: string; [key: string]: unknown } = {},
   ) {
     return this.eventsService.createEvent({
       ...data,
@@ -31,11 +38,17 @@ export class EventsController {
     });
   }
 
+  @Get(':id')
+  async getEvent(@Param('id') id: string) {
+    return this.eventsService.getEvent(id);
+  }
+
   @Put(':id')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async updateEvent(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { userId?: string; [key: string]: unknown },
+    @Body() data: { userId?: string; [key: string]: unknown } = {},
   ) {
     return this.eventsService.updateEvent(
       id,
@@ -45,10 +58,11 @@ export class EventsController {
   }
 
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async deleteEvent(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { userId?: string },
+    @Body() data: { userId?: string } = {},
   ) {
     return this.eventsService.deleteEvent(
       id,
@@ -57,6 +71,7 @@ export class EventsController {
   }
 
   @Post(':id/join')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async joinEvent(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string,
@@ -66,6 +81,7 @@ export class EventsController {
   }
 
   @Delete(':id/join')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async leaveEvent(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string,
@@ -78,10 +94,11 @@ export class EventsController {
   }
 
   @Post(':id/checkin')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async checkIn(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { userId?: string },
+    @Body() data: { userId?: string } = {},
   ) {
     return this.eventsService.checkIn(
       id,

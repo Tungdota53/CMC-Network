@@ -34,6 +34,44 @@ export class NotificationsController {
     };
   }
 
+  @Get('preferences/me')
+  async getPreferences(
+    @CurrentUser('sub') tokenUserId: string,
+    @Query('userId') userId?: string,
+  ) {
+    return {
+      success: true,
+      data: await this.notificationsService.getPreferences(
+        resolveUserId(tokenUserId, userId),
+      ),
+    };
+  }
+
+  @Post('preferences/me')
+  async updatePreferences(
+    @CurrentUser('sub') tokenUserId: string,
+    @Query('userId') userId: string | undefined,
+    @Body()
+    body: Partial<{
+      likes: boolean;
+      comments: boolean;
+      mentions: boolean;
+      friendRequests: boolean;
+      system: boolean;
+      push: boolean;
+      email: boolean;
+      quietHours: boolean;
+    }> = {},
+  ) {
+    return {
+      success: true,
+      data: await this.notificationsService.updatePreferences(
+        resolveUserId(tokenUserId, userId),
+        body,
+      ),
+    };
+  }
+
   @Get(':userId')
   async list(@Param('userId') userId: string, @Query('limit') limit?: string) {
     const rows = await this.notificationsService.list(
@@ -81,7 +119,7 @@ export class NotificationsController {
       type: string;
       content: string;
       relatedId?: string;
-    },
+    } = { type: '', content: '' },
   ) {
     return this.notificationsService.create(
       resolveUserId(tokenUserId, body.userId),

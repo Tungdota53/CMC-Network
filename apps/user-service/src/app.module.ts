@@ -8,6 +8,9 @@ import { ReputationModule } from './reputation/reputation.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 import { SearchModule } from './search/search.module';
+import { AcademicsModule } from './academics/academics.module';
+import { ProfessorsModule } from './professors/professors.module';
+import { ClubsModule } from './clubs/clubs.module';
 
 @Module({
   imports: [
@@ -18,6 +21,9 @@ import { SearchModule } from './search/search.module';
     NotificationsModule,
     AdminModule,
     SearchModule,
+    AcademicsModule,
+    ProfessorsModule,
+    ClubsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

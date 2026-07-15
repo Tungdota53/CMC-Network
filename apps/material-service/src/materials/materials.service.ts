@@ -15,8 +15,10 @@ import { join } from 'path';
 export class MaterialsService {
   private readonly storageProvider = createStorageProvider(
     join(process.cwd(), 'uploads'),
-    '',
+    '/uploads',
   );
+
+  private readonly invalidMaterialIds = new Set(['undefined', 'null', '']);
 
   constructor(
     @InjectQueue('material-processing') private materialQueue: Queue,
@@ -36,15 +38,103 @@ export class MaterialsService {
 
   async getMaterials(subject?: string) {
     const where = subject
-      ? { subject: { contains: subject, mode: 'insensitive' as const } }
-      : {};
-    return prisma.material.findMany({
+      ? {
+          deletedAt: null,
+          subject: { contains: subject, mode: 'insensitive' as const },
+        }
+      : { deletedAt: null };
+    const materials = await prisma.material.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       include: {
-        uploader: { select: { id: true, fullName: true, avatarUrl: true } },
+        _count: { select: { bookmarks: true } },
+        uploader: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+          },
+        },
       },
     });
+    return materials.map((material: any) => ({
+      ...material,
+      bookmarkCount: material._count.bookmarks,
+    }));
+  }
+
+  async getLegacyRecommendations() {
+    return prisma.material.findMany({
+      where: {
+        deletedAt: null,
+        status: 'READY',
+      },
+      orderBy: [{ rating: 'desc' }, { downloadCount: 'desc' }],
+      take: 4,
+      include: {
+        uploader: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+          },
+        },
+      },
+    });
+  }
+
+  async getMaterial(materialId: string) {
+    this.assertValidMaterialId(materialId);
+
+    const material = await prisma.material.findUnique({
+      where: { id: materialId },
+      include: {
+        _count: { select: { bookmarks: true } },
+        uploader: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+          },
+        },
+        reviews: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                avatarUrl: true,
+                isVerified: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!material) throw new NotFoundException('Không tìm thấy tài liệu');
+    const materialWithCounts = material as any;
+    return {
+      ...materialWithCounts,
+      bookmarkCount: materialWithCounts._count.bookmarks,
+      aiSummary: material.aiSummary ?? this.buildSummary(material),
+      aiFlashcards: this.buildFlashcards(material),
+      aiQuizQuestions: this.buildQuiz(material),
+    };
+  }
+
+  async getFlashcards(materialId: string) {
+    const material = await this.getMaterial(materialId);
+    return material.aiFlashcards;
+  }
+
+  async getQuiz(materialId: string) {
+    const material = await this.getMaterial(materialId);
+    return material.aiQuizQuestions;
   }
 
   async uploadMaterial(data: {
@@ -56,13 +146,16 @@ export class MaterialsService {
     fileName: string;
     mimeType?: string;
   }) {
+    const title = this.requireText(data.title, 'Tên tài liệu');
+    const subject = this.requireText(data.subject, 'Môn học');
+
     validateUpload(
       {
         mimetype: data.mimeType || 'application/octet-stream',
         size: data.fileBuffer?.length ?? 0,
         originalname: data.fileName,
       },
-      { preset: 'document', maxSizeBytes: 50 * 1024 * 1024 },
+      { preset: 'document', maxSizeBytes: 20 * 1024 * 1024 },
     );
 
     const storedFile = await this.storageProvider.put({
@@ -85,9 +178,15 @@ export class MaterialsService {
     const material = await prisma.material.create({
       data: {
         uploaderId: data.uploaderId,
-        title: data.title,
+        title,
         s3Url: fileUrl,
-        subject: data.subject,
+        subject,
+        description: this.optionalText(
+          (data as { description?: unknown }).description,
+        ),
+        semester: this.optionalText((data as { semester?: unknown }).semester),
+        tags: this.normalizeTags((data as { tags?: unknown }).tags),
+        fileSize: this.formatFileSize(data.fileBuffer.length),
         fileType,
         status: 'PROCESSING',
       },
@@ -119,11 +218,26 @@ export class MaterialsService {
     return prisma.material.update({
       where: { id: material.id },
       data: {
-        title: data.title ?? material.title,
-        description: data.description ?? material.description,
-        subject: data.subject ?? material.subject,
-        semester: data.semester ?? material.semester,
-        tags: data.tags ?? material.tags,
+        title:
+          data.title === undefined
+            ? material.title
+            : this.requireText(data.title, 'Tên tài liệu'),
+        description:
+          data.description === undefined
+            ? material.description
+            : this.optionalText(data.description),
+        subject:
+          data.subject === undefined
+            ? material.subject
+            : this.requireText(data.subject, 'Môn học'),
+        semester:
+          data.semester === undefined
+            ? material.semester
+            : this.optionalText(data.semester),
+        tags:
+          data.tags === undefined
+            ? material.tags
+            : this.normalizeTags(data.tags),
       },
     });
   }
@@ -134,9 +248,7 @@ export class MaterialsService {
     await prisma.material.delete({ where: { id: materialId } });
 
     if (material.s3Url) {
-      const key = material.s3Url.startsWith('/')
-        ? material.s3Url.substring(1)
-        : material.s3Url;
+      const key = this.storageKeyFromUrl(material.s3Url);
       await this.storageProvider.delete(key);
     }
 
@@ -145,6 +257,8 @@ export class MaterialsService {
 
   /** Increment download counter and return the new total. */
   async incrementDownload(materialId: string) {
+    this.assertValidMaterialId(materialId);
+
     const material = await prisma.material.findUnique({
       where: { id: materialId },
       select: { id: true },
@@ -159,6 +273,8 @@ export class MaterialsService {
   }
 
   private async assertUploader(materialId: string, userId: string) {
+    this.assertValidMaterialId(materialId);
+
     const material = await prisma.material.findUnique({
       where: { id: materialId },
     });
@@ -176,6 +292,8 @@ export class MaterialsService {
     rating: number,
     comment?: string,
   ) {
+    this.assertValidMaterialId(materialId);
+
     if (rating < 1 || rating > 5)
       throw new BadRequestException('Điểm đánh giá phải từ 1 đến 5');
     const material = await prisma.material.findUnique({
@@ -208,17 +326,28 @@ export class MaterialsService {
 
   /** List reviews for a material. */
   async getReviews(materialId: string) {
+    this.assertValidMaterialId(materialId);
+
     return prisma.materialReview.findMany({
       where: { materialId },
       orderBy: { createdAt: 'desc' },
       include: {
-        user: { select: { id: true, fullName: true, avatarUrl: true } },
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            isVerified: true,
+          },
+        },
       },
     });
   }
 
   /** Toggle bookmark for a material. Returns { bookmarked }. */
   async toggleBookmark(materialId: string, userId: string) {
+    this.assertValidMaterialId(materialId);
+
     const material = await prisma.material.findUnique({
       where: { id: materialId },
       select: { id: true },
@@ -244,11 +373,184 @@ export class MaterialsService {
       include: {
         material: {
           include: {
-            uploader: { select: { fullName: true, avatarUrl: true } },
+            uploader: {
+              select: { fullName: true, avatarUrl: true, isVerified: true },
+            },
           },
         },
       },
     });
     return rows.map((r) => r.material);
+  }
+
+  private buildSummary(material: {
+    title: string;
+    subject: string;
+    description?: string | null;
+    aiSummary?: string | null;
+    tags: string[];
+    status: string;
+  }) {
+    const tags = material.tags.length
+      ? ` Chủ đề liên quan: ${material.tags.join(', ')}.`
+      : '';
+    const description = material.description?.trim()
+      ? ` Nội dung chính: ${material.description.trim()}`
+      : '';
+    return (
+      material.aiSummary?.trim() ||
+      `Tài liệu "${material.title}" thuộc môn ${material.subject}.${description}${tags} Trạng thái xử lý: ${material.status}. Dùng tài liệu này để ôn nhanh khái niệm chính, tự kiểm tra bằng flashcard và làm quiz củng cố kiến thức.`
+    );
+  }
+
+  private buildFlashcards(material: {
+    title: string;
+    subject: string;
+    description?: string | null;
+    aiSummary?: string | null;
+    tags: string[];
+    status: string;
+  }) {
+    const summary = this.buildSummary(material);
+    const concepts = this.extractConcepts(material);
+    const cards = concepts.slice(0, 6).map((concept, index) => ({
+      front:
+        index === 0
+          ? `Khái niệm trọng tâm của "${material.title}" là gì?`
+          : `Ý chính #${index + 1} cần nhớ là gì?`,
+      back: concept,
+    }));
+
+    return cards.length >= 3
+      ? cards
+      : [
+          {
+            front: `Tài liệu "${material.title}" phục vụ môn nào?`,
+            back: material.subject,
+          },
+          {
+            front: `Chủ đề trọng tâm cần ôn trong tài liệu này là gì?`,
+            back: concepts[0] || material.subject,
+          },
+          {
+            front: 'Tóm tắt ngắn của tài liệu này là gì?',
+            back: summary,
+          },
+        ];
+  }
+
+  private buildQuiz(material: {
+    title: string;
+    subject: string;
+    description?: string | null;
+    aiSummary?: string | null;
+    tags: string[];
+  }) {
+    const concepts = this.extractConcepts(material);
+    const correctTopic = concepts[0] || material.subject;
+    const secondTopic =
+      concepts[1] || 'Đọc kỹ mục tiêu và ví dụ trong tài liệu';
+    const thirdTopic = concepts[2] || 'Tự kiểm tra bằng flashcard và quiz';
+
+    return [
+      {
+        question: `Tài liệu "${material.title}" thuộc môn nào?`,
+        options: [
+          material.subject,
+          'Kỹ năng mềm',
+          'Giáo dục thể chất',
+          'Ngoại khóa',
+        ],
+        answer: 0,
+      },
+      {
+        question: `Ý chính nào phù hợp nhất với tài liệu "${material.title}"?`,
+        options: [
+          'Nội dung không liên quan đến môn học',
+          secondTopic,
+          'Thông tin tài khoản cá nhân',
+          'Cài đặt hệ thống',
+        ],
+        answer: 1,
+      },
+      {
+        question: `Chủ đề nào nên ưu tiên khi ôn tài liệu này?`,
+        options: [
+          correctTopic,
+          'Nội dung không liên quan',
+          thirdTopic,
+          'Cài đặt giao diện',
+        ],
+        answer: 0,
+      },
+    ];
+  }
+
+  private assertValidMaterialId(materialId: string) {
+    if (this.invalidMaterialIds.has(materialId)) {
+      throw new BadRequestException('Mã tài liệu không hợp lệ');
+    }
+  }
+
+  private requireText(value: unknown, field: string) {
+    const text = this.optionalText(value);
+    if (!text) throw new BadRequestException(`${field} không được để trống`);
+    return text;
+  }
+
+  private optionalText(value: unknown) {
+    if (typeof value !== 'string') return undefined;
+    const text = value.trim();
+    return text.length ? text.slice(0, 5000) : undefined;
+  }
+
+  private normalizeTags(value: unknown) {
+    if (!Array.isArray(value)) return [];
+    return Array.from(
+      new Set(
+        value
+          .filter((tag): tag is string => typeof tag === 'string')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, 20);
+  }
+
+  private formatFileSize(bytes: number) {
+    if (bytes < 1024 * 1024)
+      return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  private storageKeyFromUrl(url: string) {
+    const path = url.startsWith('http') ? new URL(url).pathname : url;
+    return path
+      .replace(/^\/uploads\//, '')
+      .replace(/^uploads\//, '')
+      .replace(/^\//, '');
+  }
+
+  private extractConcepts(material: {
+    title: string;
+    subject: string;
+    description?: string | null;
+    aiSummary?: string | null;
+    tags: string[];
+  }) {
+    const source = [
+      material.aiSummary,
+      material.description,
+      material.tags.join('. '),
+      material.subject,
+    ]
+      .filter(Boolean)
+      .join('. ');
+
+    const sentences = source
+      .split(/[.!?\n]+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length >= 8 && !/^trạng thái xử lý/i.test(part));
+
+    return Array.from(new Set(sentences)).slice(0, 8);
   }
 }
