@@ -1,6 +1,8 @@
 node_modules
 dist
 .env
+.env.*
+!.env.example
 .next
 .turbo
 build
@@ -14,4 +16,6 @@ __pycache__/
 logs*
 *-audit.json
 .data/
-apps/*/uploads/
+
+# Runtime user uploads are external data, not source or test fixtures.
+apps/*/uploads/**

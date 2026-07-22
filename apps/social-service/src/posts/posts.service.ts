@@ -142,7 +142,11 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       ? { hides: { none: { userId: viewerId } } }
       : {};
     const candidates = await prisma.post.findMany({
-      where: { type: { not: PostType.STORY }, deletedAt: null, ...hiddenFilter },
+      where: {
+        type: { not: PostType.STORY },
+        deletedAt: null,
+        ...hiddenFilter,
+      },
       take: 200,
       orderBy: { createdAt: 'desc' },
       include: this.postInclude(viewerId),
@@ -178,7 +182,11 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       ? { hides: { none: { userId: viewerId } } }
       : {};
     return prisma.post.findMany({
-      where: { type: { not: PostType.STORY }, deletedAt: null, ...hiddenFilter },
+      where: {
+        type: { not: PostType.STORY },
+        deletedAt: null,
+        ...hiddenFilter,
+      },
       orderBy: { createdAt: 'desc' },
       skip,
       take: Math.min(limit, 50),
@@ -192,7 +200,12 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       ? { hides: { none: { userId: viewerId } } }
       : {};
     return prisma.post.findMany({
-      where: { userId, type: { not: PostType.STORY }, deletedAt: null, ...hiddenFilter },
+      where: {
+        userId,
+        type: { not: PostType.STORY },
+        deletedAt: null,
+        ...hiddenFilter,
+      },
       orderBy: { createdAt: 'desc' },
       skip,
       take: Math.min(limit, 50),
@@ -348,7 +361,9 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         select: { id: true },
       });
       if (!membership) {
-        throw new BadRequestException('Bạn cần tham gia CLB trước khi đăng bài');
+        throw new BadRequestException(
+          'Bạn cần tham gia CLB trước khi đăng bài',
+        );
       }
     }
 

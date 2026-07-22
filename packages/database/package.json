@@ -4,6 +4,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
+    "generate": "prisma generate --schema prisma/schema.prisma",
+    "prebuild": "npm run generate",
     "build": "tsc",
     "lint": "eslint \"**/*.ts*\""
   },

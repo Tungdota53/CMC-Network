@@ -129,7 +129,10 @@ export class ClubsController {
     @CurrentUser('sub') tokenUserId: string | undefined,
     @Query('userId') userId?: string,
   ) {
-    return this.clubsService.listJoinRequests(id, resolveUserId(tokenUserId, userId));
+    return this.clubsService.listJoinRequests(
+      id,
+      resolveUserId(tokenUserId, userId),
+    );
   }
 
   @Post(':id/requests/:requestId/approve')

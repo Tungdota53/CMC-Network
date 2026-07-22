@@ -570,12 +570,13 @@ export class AuthService {
   }
 
   public async generateTokens(user: any) {
-    const profileSlug = String(user.studentId || user.email?.split('@')[0] || user.id)
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9._-]+/g, '-')
-      .replace(/^-+|-+$/g, '') || user.id;
+    const profileSlug =
+      String(user.studentId || user.email?.split('@')[0] || user.id)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || user.id;
     const payload = { sub: user.id, email: user.email, role: user.role };
     const access_token = await this.jwtService.signAsync(payload, {
       expiresIn: '15m',

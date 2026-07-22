@@ -97,7 +97,16 @@ export class NotificationsService {
 
   async updatePreferences(userId: string, data: NotificationPreferencesInput) {
     const allowed: NotificationPreferencesInput = {};
-    for (const key of ['likes', 'comments', 'mentions', 'friendRequests', 'system', 'push', 'email', 'quietHours'] as const) {
+    for (const key of [
+      'likes',
+      'comments',
+      'mentions',
+      'friendRequests',
+      'system',
+      'push',
+      'email',
+      'quietHours',
+    ] as const) {
       if (typeof data[key] === 'boolean') allowed[key] = data[key];
     }
     return prisma.notificationPreference.upsert({
@@ -107,12 +116,16 @@ export class NotificationsService {
     });
   }
 
-  private isTypeEnabled(type: NotifType, preferences: Awaited<ReturnType<NotificationsService['getPreferences']>>) {
+  private isTypeEnabled(
+    type: NotifType,
+    preferences: Awaited<ReturnType<NotificationsService['getPreferences']>>,
+  ) {
     if (preferences.quietHours && type !== 'SYSTEM') return false;
     if (type === 'LIKE') return preferences.likes;
     if (type === 'COMMENT') return preferences.comments;
     if (type === 'MENTION') return preferences.mentions;
-    if (type === 'FRIEND_REQUEST' || type === 'FRIEND_ACCEPT') return preferences.friendRequests;
+    if (type === 'FRIEND_REQUEST' || type === 'FRIEND_ACCEPT')
+      return preferences.friendRequests;
     if (type === 'SYSTEM') return preferences.system;
     return true;
   }

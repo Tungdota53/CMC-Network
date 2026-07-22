@@ -71,9 +71,21 @@ export class ClubsService {
         name: this.required(data.name, 'Tên CLB'),
         description: this.optional(data.description),
         category: this.optional(data.category, 120),
-        type: this.enumString(data.type, ['OFFICIAL_CLUB', 'COMMUNITY'], 'COMMUNITY'),
-        visibility: this.enumString(data.visibility, ['PUBLIC', 'PRIVATE', 'UNLISTED'], 'PUBLIC'),
-        joinMode: this.enumString(data.joinMode, ['OPEN', 'APPROVAL', 'INVITE_ONLY'], 'OPEN'),
+        type: this.enumString(
+          data.type,
+          ['OFFICIAL_CLUB', 'COMMUNITY'],
+          'COMMUNITY',
+        ),
+        visibility: this.enumString(
+          data.visibility,
+          ['PUBLIC', 'PRIVATE', 'UNLISTED'],
+          'PUBLIC',
+        ),
+        joinMode: this.enumString(
+          data.joinMode,
+          ['OPEN', 'APPROVAL', 'INVITE_ONLY'],
+          'OPEN',
+        ),
         logoUrl: this.optional(data.logoUrl, 500),
         bannerUrl: this.optional(data.bannerUrl, 500),
         rules: this.optional(data.rules, 3000),
@@ -133,26 +145,51 @@ export class ClubsService {
             ? undefined
             : this.optional(data.description),
         category:
-          data.category === undefined ? undefined : this.optional(data.category, 120),
+          data.category === undefined
+            ? undefined
+            : this.optional(data.category, 120),
         type:
           data.type === undefined
             ? undefined
-            : this.enumString(data.type, ['OFFICIAL_CLUB', 'COMMUNITY'], 'COMMUNITY'),
+            : this.enumString(
+                data.type,
+                ['OFFICIAL_CLUB', 'COMMUNITY'],
+                'COMMUNITY',
+              ),
         visibility:
           data.visibility === undefined
             ? undefined
-            : this.enumString(data.visibility, ['PUBLIC', 'PRIVATE', 'UNLISTED'], 'PUBLIC'),
+            : this.enumString(
+                data.visibility,
+                ['PUBLIC', 'PRIVATE', 'UNLISTED'],
+                'PUBLIC',
+              ),
         joinMode:
           data.joinMode === undefined
             ? undefined
-            : this.enumString(data.joinMode, ['OPEN', 'APPROVAL', 'INVITE_ONLY'], 'OPEN'),
-        logoUrl: data.logoUrl === undefined ? undefined : this.optional(data.logoUrl, 500),
+            : this.enumString(
+                data.joinMode,
+                ['OPEN', 'APPROVAL', 'INVITE_ONLY'],
+                'OPEN',
+              ),
+        logoUrl:
+          data.logoUrl === undefined
+            ? undefined
+            : this.optional(data.logoUrl, 500),
         bannerUrl:
-          data.bannerUrl === undefined ? undefined : this.optional(data.bannerUrl, 500),
-        rules: data.rules === undefined ? undefined : this.optional(data.rules, 3000),
-        tags: data.tags === undefined ? undefined : this.stringArray(data.tags, 12),
+          data.bannerUrl === undefined
+            ? undefined
+            : this.optional(data.bannerUrl, 500),
+        rules:
+          data.rules === undefined
+            ? undefined
+            : this.optional(data.rules, 3000),
+        tags:
+          data.tags === undefined ? undefined : this.stringArray(data.tags, 12),
         location:
-          data.location === undefined ? undefined : this.optional(data.location, 255),
+          data.location === undefined
+            ? undefined
+            : this.optional(data.location, 255),
         contactEmail:
           data.contactEmail === undefined
             ? undefined
@@ -183,13 +220,10 @@ export class ClubsService {
     kind: 'logo' | 'banner',
   ) {
     await this.assertOwnerOrAdmin(clubId, userId);
-    validateUpload(
-      file,
-      {
-        maxSizeBytes: 10 * 1024 * 1024,
-        allowedMimeTypes: new Set(['image/jpeg', 'image/png', 'image/webp']),
-      },
-    );
+    validateUpload(file, {
+      maxSizeBytes: 10 * 1024 * 1024,
+      allowedMimeTypes: new Set(['image/jpeg', 'image/png', 'image/webp']),
+    });
 
     const stored = await this.storage.put({
       buffer: file.buffer,
@@ -201,7 +235,8 @@ export class ClubsService {
 
     const club = await prisma.club.update({
       where: { id: clubId },
-      data: kind === 'logo' ? { logoUrl: stored.url } : { bannerUrl: stored.url },
+      data:
+        kind === 'logo' ? { logoUrl: stored.url } : { bannerUrl: stored.url },
       include: {
         members: { select: { id: true, userId: true, role: true } },
         owner: { select: { id: true, fullName: true, avatarUrl: true } },
@@ -255,7 +290,15 @@ export class ClubsService {
     return prisma.clubJoinRequest.findMany({
       where: { clubId, status: 'PENDING' },
       include: {
-        user: { select: { id: true, fullName: true, avatarUrl: true, major: true, department: true } },
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarUrl: true,
+            major: true,
+            department: true,
+          },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -266,7 +309,8 @@ export class ClubsService {
     const request = await prisma.clubJoinRequest.findFirst({
       where: { id: requestId, clubId, status: 'PENDING' },
     });
-    if (!request) throw new NotFoundException('Không tìm thấy yêu cầu tham gia');
+    if (!request)
+      throw new NotFoundException('Không tìm thấy yêu cầu tham gia');
 
     await prisma.$transaction([
       prisma.clubMember.upsert({
@@ -287,7 +331,8 @@ export class ClubsService {
     const request = await prisma.clubJoinRequest.findFirst({
       where: { id: requestId, clubId, status: 'PENDING' },
     });
-    if (!request) throw new NotFoundException('Không tìm thấy yêu cầu tham gia');
+    if (!request)
+      throw new NotFoundException('Không tìm thấy yêu cầu tham gia');
     await prisma.clubJoinRequest.update({
       where: { id: request.id },
       data: { status: 'REJECTED' },
@@ -302,26 +347,42 @@ export class ClubsService {
     role: unknown,
   ) {
     const actor = await this.assertOwnerOrAdmin(clubId, userId);
-    const nextRole = this.enumString(role, ['ADMIN', 'MODERATOR', 'MEMBER'], 'MEMBER');
-    const member = await prisma.clubMember.findFirst({ where: { id: memberId, clubId } });
+    const nextRole = this.enumString(
+      role,
+      ['ADMIN', 'MODERATOR', 'MEMBER'],
+      'MEMBER',
+    );
+    const member = await prisma.clubMember.findFirst({
+      where: { id: memberId, clubId },
+    });
     if (!member) throw new NotFoundException('Không tìm thấy thành viên');
-    if (member.role === 'OWNER') throw new BadRequestException('Không thể đổi vai trò chủ CLB');
+    if (member.role === 'OWNER')
+      throw new BadRequestException('Không thể đổi vai trò chủ CLB');
     if (nextRole === 'ADMIN' && actor.role !== 'OWNER') {
-      throw new ForbiddenException('Chỉ chủ CLB mới được cấp quyền quản trị viên');
+      throw new ForbiddenException(
+        'Chỉ chủ CLB mới được cấp quyền quản trị viên',
+      );
     }
     const updated = await prisma.clubMember.update({
       where: { id: member.id },
       data: { role: nextRole },
-      include: { user: { select: { id: true, fullName: true, avatarUrl: true, major: true } } },
+      include: {
+        user: {
+          select: { id: true, fullName: true, avatarUrl: true, major: true },
+        },
+      },
     });
     return updated;
   }
 
   async removeMember(clubId: string, memberId: string, userId: string) {
     const actor = await this.assertOwnerOrAdmin(clubId, userId);
-    const member = await prisma.clubMember.findFirst({ where: { id: memberId, clubId } });
+    const member = await prisma.clubMember.findFirst({
+      where: { id: memberId, clubId },
+    });
     if (!member) throw new NotFoundException('Không tìm thấy thành viên');
-    if (member.role === 'OWNER') throw new BadRequestException('Không thể xoá chủ CLB khỏi CLB');
+    if (member.role === 'OWNER')
+      throw new BadRequestException('Không thể xoá chủ CLB khỏi CLB');
     if (member.role === 'ADMIN' && actor.role !== 'OWNER') {
       throw new ForbiddenException('Chỉ chủ CLB mới được xoá quản trị viên');
     }
@@ -332,13 +393,18 @@ export class ClubsService {
   async analytics(clubId: string, userId: string) {
     await this.assertOwnerOrAdmin(clubId, userId);
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const [members, pendingRequests, posts, newMembers7d, posts7d] = await Promise.all([
-      prisma.clubMember.count({ where: { clubId } }),
-      prisma.clubJoinRequest.count({ where: { clubId, status: 'PENDING' } }),
-      prisma.post.count({ where: { clubId, deletedAt: null } }),
-      prisma.clubMember.count({ where: { clubId, joinedAt: { gte: since } } }),
-      prisma.post.count({ where: { clubId, deletedAt: null, createdAt: { gte: since } } }),
-    ]);
+    const [members, pendingRequests, posts, newMembers7d, posts7d] =
+      await Promise.all([
+        prisma.clubMember.count({ where: { clubId } }),
+        prisma.clubJoinRequest.count({ where: { clubId, status: 'PENDING' } }),
+        prisma.post.count({ where: { clubId, deletedAt: null } }),
+        prisma.clubMember.count({
+          where: { clubId, joinedAt: { gte: since } },
+        }),
+        prisma.post.count({
+          where: { clubId, deletedAt: null, createdAt: { gte: since } },
+        }),
+      ]);
     return { members, pendingRequests, posts, newMembers7d, posts7d };
   }
 
@@ -426,12 +492,14 @@ export class ClubsService {
   }
 
   private jsonObject(value: unknown) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    if (!value || typeof value !== 'object' || Array.isArray(value))
+      return undefined;
     return value as Prisma.InputJsonObject;
   }
 
   private resolveOrderBy(sort?: string): Prisma.ClubOrderByWithRelationInput[] {
-    if (sort === 'featured') return [{ featured: 'desc' }, { createdAt: 'desc' }];
+    if (sort === 'featured')
+      return [{ featured: 'desc' }, { createdAt: 'desc' }];
     if (sort === 'name') return [{ name: 'asc' }];
     return [{ createdAt: 'desc' }];
   }

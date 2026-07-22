@@ -1,5 +1,6 @@
 import { AuthService } from './auth.service';
 import { prisma } from '@campus-connect/database';
+import { getRedisClient } from '@campus-connect/cache';
 import * as bcrypt from 'bcrypt';
 
 jest.mock('@campus-connect/database', () => {
@@ -61,14 +62,12 @@ describe('AuthService — register', () => {
     service = new AuthService(jwt as never, email as never);
   });
 
-  it('rejects registration when the email already exists', async () => {
-    jest
-      .mocked(prisma.user.findUnique)
-      .mockResolvedValue({
-        id: 'existing',
-        emailVerified: true,
-        lastLoginAt: new Date(),
-      } as never);
+  it('rejects registration when a verified account already exists', async () => {
+    jest.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'existing',
+      emailVerified: true,
+      lastLoginAt: new Date(),
+    } as never);
     await expect(
       service.register({
         email: 'a@st.cmc.edu.vn',
@@ -79,7 +78,27 @@ describe('AuthService — register', () => {
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
-  it('stores a pending OTP registration for a CMC email', async () => {
+  it('removes a stuck unverified account before creating a pending registration', async () => {
+    jest.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'stuck-user',
+      emailVerified: false,
+      lastLoginAt: null,
+    } as never);
+
+    await expect(
+      service.register({
+        email: 'stuck@st.cmc.edu.vn',
+        password: 'secret',
+        fullName: 'Stuck User',
+      }),
+    ).resolves.toMatchObject({ pendingEmail: 'stuck@st.cmc.edu.vn' });
+
+    expect(prisma.user.delete).toHaveBeenCalledWith({
+      where: { id: 'stuck-user' },
+    });
+  });
+
+  it('stores a hashed password and derived studentId in the pending registration', async () => {
     jest.mocked(prisma.user.findUnique).mockResolvedValue(null);
 
     const result = await service.register({
@@ -88,10 +107,19 @@ describe('AuthService — register', () => {
       fullName: 'Nguyen Van A',
     });
 
-    expect(result).toEqual(expect.objectContaining({
-      pendingEmail: 'bit220001@st.cmc.edu.vn',
-    }));
+    expect(result).toMatchObject({ pendingEmail: 'bit220001@st.cmc.edu.vn' });
     expect(prisma.user.create).not.toHaveBeenCalled();
+
+    const pendingRaw = await getRedisClient().get(
+      'pending_registration:email:bit220001@st.cmc.edu.vn',
+    );
+    expect(pendingRaw).not.toBeNull();
+    const pending = JSON.parse(pendingRaw as string) as {
+      passwordHash: string;
+      studentId: string;
+    };
+    expect(pending.passwordHash).not.toBe('secret');
+    expect(pending.studentId).toBe('BIT220001');
     expect(email.sendOtpEmail).toHaveBeenCalledWith(
       'bit220001@st.cmc.edu.vn',
       expect.stringMatching(/^\d{6}$/),

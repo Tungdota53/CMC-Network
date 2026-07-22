@@ -1,5 +1,10 @@
 # CampusConnect - RESTful API Design
 
+> Lưu ý: đây là tài liệu thiết kế lịch sử và có thể chứa endpoint chưa được
+> implement. Contract runtime hiện tại được chốt tại
+> [`docs/API_CONTRACT_MATRIX.md`](docs/API_CONTRACT_MATRIX.md); controller trong
+> source code là nguồn sự thật cuối cùng.
+
 ## Base URL
 - Development: `http://localhost:3001/api/v1`
 - Production: `https://api.campusconnect.vn/api/v1`

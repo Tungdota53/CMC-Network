@@ -1,28 +1,41 @@
-version: '3.8'
+name: cmc-network-dev
 
-# Credentials are env-driven so the SAME DATABASE_URL works whether you run
-# Postgres locally or via this compose file. Defaults match packages/database/.env.
-# Override via shell env or a root .env file (gitignored).
+# Local-only data services. Host ports are intentionally project-specific so
+# CampusConnect never attaches to another repository's Postgres or Redis.
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: campus_connect_db
+    container_name: cmc_network_postgres_dev
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-703050}
+      POSTGRES_USER: ${POSTGRES_USER:-campus_connect}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-campus_connect_dev}
       POSTGRES_DB: ${POSTGRES_DB:-campus_connect}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-25432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-campus_connect} -d ${POSTGRES_DB:-campus_connect}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    container_name: campus_connect_redis
+    container_name: cmc_network_redis_dev
+    command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-26379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
 volumes:
   pgdata:
+  redisdata:

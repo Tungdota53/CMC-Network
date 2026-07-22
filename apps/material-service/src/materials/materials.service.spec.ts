@@ -1,6 +1,17 @@
 import { MaterialsService } from './materials.service';
 import { prisma } from '@campus-connect/database';
 
+const mockStoragePut = jest.fn();
+const mockStorageDelete = jest.fn();
+
+jest.mock('@campus-connect/common', () => ({
+  ...jest.requireActual('@campus-connect/common'),
+  createStorageProvider: () => ({
+    put: mockStoragePut,
+    delete: mockStorageDelete,
+  }),
+}));
+
 jest.mock('@campus-connect/database', () => {
   const mockPrisma = {
     $transaction: jest
@@ -22,6 +33,12 @@ describe('MaterialsService — upload validation', () => {
   const mockQueue = { add: jest.fn().mockResolvedValue({}) };
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStoragePut.mockResolvedValue({
+      url: '/uploads/materials/test.pdf',
+      key: 'materials/test.pdf',
+      size: 8,
+      mimeType: 'application/pdf',
+    });
     service = new MaterialsService(mockQueue as any);
   });
 
@@ -67,6 +84,12 @@ describe('MaterialsService — upload validation', () => {
       fileName: 'notes.pdf',
       mimeType: 'application/pdf',
     });
+    expect(mockStoragePut).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalName: 'notes.pdf',
+        folder: 'materials',
+      }),
+    );
     expect(prisma.material.create).toHaveBeenCalled();
   });
 });

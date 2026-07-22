@@ -52,18 +52,26 @@ export class UsersService {
     }
   }
 
-  private buildProfileSlug(user: { id: string; studentId?: string | null; email?: string | null }) {
+  private buildProfileSlug(user: {
+    id: string;
+    studentId?: string | null;
+    email?: string | null;
+  }) {
     const source = user.studentId || user.email?.split('@')[0] || user.id;
-    return source
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9._-]+/g, '-')
-      .replace(/^-+|-+$/g, '') || user.id;
+    return (
+      source
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || user.id
+    );
   }
 
   private isUuid(value: string) {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    );
   }
 
   private async findUserByProfileIdentifier(identifier: string, select: any) {
@@ -111,7 +119,11 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('Không tìm thấy người dùng');
     }
-    return { ...user, profileSlug: this.buildProfileSlug(user as any), status: 'ACTIVE' };
+    return {
+      ...user,
+      profileSlug: this.buildProfileSlug(user as any),
+      status: 'ACTIVE',
+    };
   }
 
   /** Full public profile: core fields + counts + badges + skills. */

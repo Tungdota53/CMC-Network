@@ -265,13 +265,17 @@ Trước khi phát hành, thực hiện đầy đủ [`DEPLOYMENT_STABILITY_CHEC
 ## Tài liệu kỹ thuật
 
 - [`API_DESIGN.md`](API_DESIGN.md) — nguyên tắc và thiết kế API.
+- [`docs/API_CONTRACT_MATRIX.md`](docs/API_CONTRACT_MATRIX.md) — contract runtime đã đối chiếu theo controller.
+- [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md) — baseline môi trường local và bảng port cô lập.
+- [`docs/FIX_PROGRESS_AND_PLAN.md`](docs/FIX_PROGRESS_AND_PLAN.md) — tiến độ sửa lỗi và kế hoạch các giai đoạn tiếp theo.
+- [`docs/ADR-001-CANONICAL-ADMIN.md`](docs/ADR-001-CANONICAL-ADMIN.md) — quyết định ownership của dashboard quản trị.
 - [`ERD.md`](ERD.md) — mô hình dữ liệu và quan hệ chính.
 - [`DEPLOYMENT_STABILITY_CHECKLIST.md`](DEPLOYMENT_STABILITY_CHECKLIST.md) — checklist triển khai ổn định.
 - [`SECURITY_HARDENING_AUDIT.md`](SECURITY_HARDENING_AUDIT.md) — kết quả rà soát hardening và bảo mật.
 
 ## Đóng góp
 
-1. Tạo branch từ `master`.
+1. Tạo branch từ `main`.
 2. Thực hiện thay đổi nhỏ, có phạm vi rõ ràng.
 3. Bổ sung hoặc cập nhật test tương ứng.
 4. Chạy test, lint và build liên quan.
