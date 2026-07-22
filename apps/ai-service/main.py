@@ -40,6 +40,8 @@ AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
 WEB_TIMEOUT_SECONDS = float(os.getenv("AI_WEB_TIMEOUT_SECONDS", "6"))
 MAX_WEB_CHARS = int(os.getenv("AI_WEB_MAX_CHARS", "12000"))
 MAX_WEB_BYTES = int(os.getenv("AI_WEB_MAX_BYTES", "500000"))
+MAX_MATERIAL_CHARS = int(os.getenv("AI_MATERIAL_MAX_CHARS", "120000"))
+MATERIAL_CHUNK_CHARS = int(os.getenv("AI_MATERIAL_CHUNK_CHARS", "12000"))
 
 def call_chat_completion(messages, temperature=0.7, max_tokens=900):
     base_url = normalize_openai_base_url(os.getenv("OPENAI_BASE_URL") or os.getenv("AI_API_URL"))
@@ -408,6 +410,8 @@ def summarize_text(request: SummarizeRequest):
     return {"summary": summary}
 class ContentRequest(BaseModel):
     text: str
+    title: str | None = None
+    subject: str | None = None
 
 def parse_json_object(raw: str):
     cleaned = strip_reasoning(raw).strip()
@@ -418,6 +422,16 @@ def parse_json_object(raw: str):
         raise ValueError("Model response does not contain a JSON object")
     return json.loads(cleaned[start:end + 1])
 
+def repair_material_json(raw: str):
+    return call_chat_completion(
+        messages=[
+            {"role": "system", "content": "Sửa dữ liệu thành đúng một JSON hợp lệ. Giữ nguyên nội dung tiếng Việt, không Markdown, không giải thích."},
+            {"role": "user", "content": raw},
+        ],
+        temperature=0,
+        max_tokens=4000,
+    )
+
 def fallback_material_content(content: str):
     normalized = re.sub(r"\s+", " ", content).strip()
     sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", normalized) if len(part.strip()) >= 24]
@@ -427,15 +441,9 @@ def fallback_material_content(content: str):
         {"front": f"Ý chính {index + 1} của tài liệu là gì?", "back": concept}
         for index, concept in enumerate(concepts[:5])
     ]
-    questions = []
-    for index, concept in enumerate(concepts[:3]):
-        questions.append({
-            "question": f"Nội dung nào phản ánh đúng ý chính {index + 1} của tài liệu?",
-            "options": [concept, "Thông tin tài khoản người dùng", "Thiết lập giao diện hệ thống", "Nội dung không xuất hiện trong tài liệu"],
-            "answer": 0,
-            "explanation": "Đáp án được trích trực tiếp từ nội dung tài liệu.",
-        })
-    return {"summary": summary, "flashcards": flashcards, "questions": questions}
+    # A deterministic fallback cannot create plausible distractors safely.
+    # Returning no quiz is better than presenting metadata or invented answers.
+    return {"summary": summary, "flashcards": flashcards, "questions": []}
 
 def validate_material_content(data: dict):
     summary = str(data.get("summary", "")).strip()
@@ -460,24 +468,71 @@ def validate_material_content(data: dict):
         raise ValueError("Incomplete structured learning content")
     return {"summary": summary, "flashcards": flashcards, "questions": questions}
 
+def split_material_content(content: str):
+    chunks = []
+    remaining = content.strip()
+    while remaining:
+        if len(remaining) <= MATERIAL_CHUNK_CHARS:
+            chunks.append(remaining)
+            break
+        split_at = remaining.rfind("\n", 0, MATERIAL_CHUNK_CHARS)
+        if split_at < MATERIAL_CHUNK_CHARS // 2:
+            split_at = remaining.rfind(". ", 0, MATERIAL_CHUNK_CHARS)
+        if split_at < MATERIAL_CHUNK_CHARS // 2:
+            split_at = MATERIAL_CHUNK_CHARS
+        chunks.append(remaining[:split_at].strip())
+        remaining = remaining[split_at:].strip()
+    return chunks
+
+def extract_material_notes(content: str):
+    chunks = split_material_content(content)
+    notes = []
+    for index, chunk in enumerate(chunks):
+        note = call_chat_completion(
+            messages=[
+                {"role": "system", "content": "Rút trích kiến thức đúng nguyên văn nguồn. Không bịa và không bỏ các định nghĩa, điều kiện, bước, công thức, độ phức tạp hoặc ví dụ quan trọng."},
+                {"role": "user", "content": f"Phần {index + 1}/{len(chunks)} của tài liệu:\n{chunk}\n\nLiệt kê các dữ kiện học tập quan trọng trong phần này."},
+            ],
+            temperature=0.1,
+            max_tokens=900,
+        )
+        notes.append(f"[Kiến thức từ phần {index + 1}/{len(chunks)}]\n{note}")
+    return "\n\n".join(notes)
+
 @app.post("/api/v1/material-content")
 @app.post("/api/v1/ai/material-content")
 def generate_material_content(request: ContentRequest):
-    content = request.text[:30000]
+    content = request.text[:MAX_MATERIAL_CHARS]
     if not openai.api_key:
         return fallback_material_content(content)
+    try:
+        knowledge = extract_material_notes(content)
+    except Exception as exc:
+        print(f"Material knowledge extraction failed: {type(exc).__name__}: {exc}", flush=True)
+        return fallback_material_content(content)
     prompt = f"""
-Đọc kỹ nội dung tài liệu dưới đây và tạo bộ ôn tập bằng tiếng Việt.
+Đọc toàn bộ bản rút trích kiến thức theo thứ tự các phần dưới đây như một giảng viên và tạo bộ ôn tập bằng tiếng Việt.
 Chỉ trả về một JSON hợp lệ, không Markdown, theo đúng cấu trúc:
 {{
   "summary": "Tóm tắt có cấu trúc, nêu khái niệm và ý chính",
   "flashcards": [{{"front": "Câu hỏi", "back": "Đáp án dựa trên tài liệu"}}],
   "questions": [{{"question": "Câu hỏi trắc nghiệm", "options": ["A", "B", "C", "D"], "answer": 0, "explanation": "Giải thích"}}]
 }}
-Yêu cầu 5-8 flashcard và 3-6 câu trắc nghiệm. answer là chỉ số 0-3. Không bịa kiến thức ngoài tài liệu.
+Yêu cầu bắt buộc:
+- Tóm tắt theo 3 phần: mục tiêu, khái niệm/thuật toán trọng tâm, lưu ý hoặc độ phức tạp.
+- Tạo 5-8 flashcard kiểm tra định nghĩa, điều kiện áp dụng, các bước và độ phức tạp.
+- Tạo 3-6 câu trắc nghiệm về KIẾN THỨC trong tài liệu; mỗi đáp án nhiễu phải hợp lý.
+- Không hỏi tên tài liệu, mã môn, người đăng, định dạng file hoặc metadata.
+- Không dùng các đáp án vô nghĩa như "kỹ năng mềm", "ngoại khóa", "cài đặt hệ thống".
+- Mọi đáp án và giải thích phải được chứng minh trực tiếp bởi nội dung nguồn.
+- answer là chỉ số 0-3. Không bịa kiến thức ngoài tài liệu.
 
-NỘI DUNG TÀI LIỆU:
-{content}
+METADATA CHỈ ĐỂ HIỂU NGỮ CẢNH, KHÔNG DÙNG LÀM CÂU HỎI:
+Tên tài liệu: {request.title or 'Không có'}
+Môn học: {request.subject or 'Không có'}
+
+BẢN RÚT TRÍCH KIẾN THỨC TỪ TOÀN BỘ TÀI LIỆU:
+{knowledge}
 """.strip()
     try:
         raw = call_chat_completion(
@@ -486,10 +541,15 @@ NỘI DUNG TÀI LIỆU:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.2,
-            max_tokens=2200,
+            max_tokens=4000,
         )
-        return validate_material_content(parse_json_object(raw))
-    except Exception:
+        try:
+            parsed = parse_json_object(raw)
+        except (json.JSONDecodeError, ValueError):
+            parsed = parse_json_object(repair_material_json(raw))
+        return validate_material_content(parsed)
+    except Exception as exc:
+        print(f"Material learning-content generation failed: {type(exc).__name__}: {exc}", flush=True)
         return fallback_material_content(content)
 
 @app.post("/api/v1/generate-flashcards")

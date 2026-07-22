@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Sparkles, Loader2, FileCheck2 } from 'lucide-react';
+import { Sparkles, Loader2, FileCheck2, FileWarning } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 
@@ -25,7 +25,21 @@ export const AISummary = ({ materialId }: { materialId: string }) => {
   }
 
   if (!data?.summary) {
-    return null;
+    return (
+      <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-900/60 dark:bg-amber-950/20" aria-labelledby="ai-summary-unavailable-title">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white">
+            <FileWarning className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 id="ai-summary-unavailable-title" className="font-bold text-foreground">Chưa thể đọc nội dung PDF</h2>
+            <p className="mt-1 text-sm leading-6 text-foreground/65">
+              File có thể dùng font mã hóa hoặc chỉ chứa ảnh. AI sẽ không tạo tóm tắt, flashcard hay câu hỏi khi chưa trích xuất được văn bản đáng tin cậy.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   return (

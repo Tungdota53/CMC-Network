@@ -68,21 +68,28 @@ export const FlashcardViewer = ({ materialId }: { materialId: string }) => {
       </div>
       
       <div 
-        className="w-full max-w-lg aspect-[3/2] perspective-1000 mb-5 cursor-pointer mx-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
+        className="w-full max-w-lg aspect-[3/2] mb-5 cursor-pointer mx-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
+        style={{ perspective: '1000px' }}
         onClick={() => setIsFlipped(!isFlipped)}
         onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && setIsFlipped(!isFlipped)}
         role="button"
         tabIndex={0}
         aria-label={isFlipped ? 'Xem câu hỏi' : 'Xem đáp án'}
       >
-        <div className={`relative w-full h-full transition-transform duration-500 preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+        <div
+          className="relative w-full h-full transition-transform duration-500"
+          style={{
+            transformStyle: 'preserve-3d',
+            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+          }}
+        >
           {/* Front */}
-          <div className="absolute inset-0 backface-hidden bg-hover border border-border rounded-xl flex flex-col items-center justify-center p-8 text-center">
+          <div className="absolute inset-0 bg-hover border border-border rounded-xl flex flex-col items-center justify-center p-8 text-center" style={{ backfaceVisibility: 'hidden' }}>
             <p className="text-xl font-bold text-foreground">{card?.front || card?.question || 'Mặt trước'}</p>
             <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-medium text-foreground/50"><RotateCw className="h-3.5 w-3.5" /> Xem đáp án</span>
           </div>
           {/* Back */}
-          <div className="absolute inset-0 backface-hidden rotate-y-180 bg-primary/5 border border-primary rounded-xl flex items-center justify-center p-8 text-center">
+          <div className="absolute inset-0 bg-primary/5 border border-primary rounded-xl flex items-center justify-center p-8 text-center" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
             <p className="text-lg text-foreground font-medium">{card?.back || card?.answer || 'Mặt sau'}</p>
           </div>
         </div>

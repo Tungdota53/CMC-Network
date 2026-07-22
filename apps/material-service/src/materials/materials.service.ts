@@ -141,14 +141,14 @@ export class MaterialsService {
     return {
       ...materialWithCounts,
       bookmarkCount: materialWithCounts._count.bookmarks,
-      aiSummary: material.aiSummary ?? this.buildSummary(material),
-      aiFlashcards: Array.isArray(material.aiFlashcards)
+      aiSummary: material.aiGeneratedAt ? material.aiSummary : null,
+      aiFlashcards: material.aiGeneratedAt && Array.isArray(material.aiFlashcards)
         ? material.aiFlashcards
-        : this.buildFlashcards(material),
-      aiQuizQuestions: Array.isArray(material.aiQuizQuestions)
+        : [],
+      aiQuizQuestions: material.aiGeneratedAt && Array.isArray(material.aiQuizQuestions)
         ? material.aiQuizQuestions
-        : this.buildQuiz(material),
-      aiContentSource: material.aiGeneratedAt ? 'document' : 'fallback',
+        : [],
+      aiContentSource: material.aiGeneratedAt ? 'document' : 'unavailable',
     };
   }
 
@@ -222,6 +222,8 @@ export class MaterialsService {
       materialId: material.id,
       filePath: storedFile.key,
       mimeType: data.mimeType || 'application/pdf',
+      title,
+      subject,
     });
 
     return material;
@@ -408,109 +410,6 @@ export class MaterialsService {
     return rows.map((r) => r.material);
   }
 
-  private buildSummary(material: {
-    title: string;
-    subject: string;
-    description?: string | null;
-    aiSummary?: string | null;
-    tags: string[];
-    status: string;
-  }) {
-    const tags = material.tags.length
-      ? ` Chủ đề liên quan: ${material.tags.join(', ')}.`
-      : '';
-    const description = material.description?.trim()
-      ? ` Nội dung chính: ${material.description.trim()}`
-      : '';
-    return (
-      material.aiSummary?.trim() ||
-      `Tài liệu "${material.title}" thuộc môn ${material.subject}.${description}${tags} Trạng thái xử lý: ${material.status}. Dùng tài liệu này để ôn nhanh khái niệm chính, tự kiểm tra bằng flashcard và làm quiz củng cố kiến thức.`
-    );
-  }
-
-  private buildFlashcards(material: {
-    title: string;
-    subject: string;
-    description?: string | null;
-    aiSummary?: string | null;
-    tags: string[];
-    status: string;
-  }) {
-    const summary = this.buildSummary(material);
-    const concepts = this.extractConcepts(material);
-    const cards = concepts.slice(0, 6).map((concept, index) => ({
-      front:
-        index === 0
-          ? `Khái niệm trọng tâm của "${material.title}" là gì?`
-          : `Ý chính #${index + 1} cần nhớ là gì?`,
-      back: concept,
-    }));
-
-    return cards.length >= 3
-      ? cards
-      : [
-          {
-            front: `Tài liệu "${material.title}" phục vụ môn nào?`,
-            back: material.subject,
-          },
-          {
-            front: `Chủ đề trọng tâm cần ôn trong tài liệu này là gì?`,
-            back: concepts[0] || material.subject,
-          },
-          {
-            front: 'Tóm tắt ngắn của tài liệu này là gì?',
-            back: summary,
-          },
-        ];
-  }
-
-  private buildQuiz(material: {
-    title: string;
-    subject: string;
-    description?: string | null;
-    aiSummary?: string | null;
-    tags: string[];
-  }) {
-    const concepts = this.extractConcepts(material);
-    const correctTopic = concepts[0] || material.subject;
-    const secondTopic =
-      concepts[1] || 'Đọc kỹ mục tiêu và ví dụ trong tài liệu';
-    const thirdTopic = concepts[2] || 'Tự kiểm tra bằng flashcard và quiz';
-
-    return [
-      {
-        question: `Tài liệu "${material.title}" thuộc môn nào?`,
-        options: [
-          material.subject,
-          'Kỹ năng mềm',
-          'Giáo dục thể chất',
-          'Ngoại khóa',
-        ],
-        answer: 0,
-      },
-      {
-        question: `Ý chính nào phù hợp nhất với tài liệu "${material.title}"?`,
-        options: [
-          'Nội dung không liên quan đến môn học',
-          secondTopic,
-          'Thông tin tài khoản cá nhân',
-          'Cài đặt hệ thống',
-        ],
-        answer: 1,
-      },
-      {
-        question: `Chủ đề nào nên ưu tiên khi ôn tài liệu này?`,
-        options: [
-          correctTopic,
-          'Nội dung không liên quan',
-          thirdTopic,
-          'Cài đặt giao diện',
-        ],
-        answer: 0,
-      },
-    ];
-  }
-
   private assertValidMaterialId(materialId: string) {
     if (this.invalidMaterialIds.has(materialId)) {
       throw new BadRequestException('Mã tài liệu không hợp lệ');
@@ -555,27 +454,4 @@ export class MaterialsService {
       .replace(/^\//, '');
   }
 
-  private extractConcepts(material: {
-    title: string;
-    subject: string;
-    description?: string | null;
-    aiSummary?: string | null;
-    tags: string[];
-  }) {
-    const source = [
-      material.aiSummary,
-      material.description,
-      material.tags.join('. '),
-      material.subject,
-    ]
-      .filter(Boolean)
-      .join('. ');
-
-    const sentences = source
-      .split(/[.!?\n]+/)
-      .map((part) => part.trim())
-      .filter((part) => part.length >= 8 && !/^trạng thái xử lý/i.test(part));
-
-    return Array.from(new Set(sentences)).slice(0, 8);
-  }
 }

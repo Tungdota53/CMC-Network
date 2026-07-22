@@ -51,9 +51,9 @@ describe('MaterialProcessor', () => {
       where: { id: 'material-1' },
       data: {
         aiSummary: null,
-        aiFlashcards: undefined,
-        aiQuizQuestions: undefined,
-        aiGeneratedAt: undefined,
+        aiFlashcards: [],
+        aiQuizQuestions: [],
+        aiGeneratedAt: null,
         status: MaterialStatus.READY,
       },
     });
@@ -94,6 +94,58 @@ describe('MaterialProcessor', () => {
         aiSummary: 'Tóm tắt từ nội dung PDF',
         aiFlashcards: [{ front: 'Sắp xếp nổi bọt là gì?', back: 'Một thuật toán sắp xếp.' }],
         aiQuizQuestions: [expect.objectContaining({ answer: 1 })],
+        aiGeneratedAt: expect.any(Date),
+        status: MaterialStatus.READY,
+      }),
+    });
+    fetchSpy.mockRestore();
+  });
+
+  it('uses OCR for garbled PDF text before generating learning content', async () => {
+    const { PDFParse } = jest.requireMock('pdf-parse') as { PDFParse: jest.Mock };
+    PDFParse.mockImplementationOnce(() => ({
+      getText: jest.fn().mockResolvedValue({
+        text: 'T×m kiÕm nhÞ ph©n ¸p dông trªn m¶ng ®· s¾p xÕp. PhÇn tö gi÷a ®­îc so s¸nh víi khãa.',
+      }),
+      destroy: jest.fn().mockResolvedValue(undefined),
+    }));
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        summary: 'Tìm kiếm nhị phân chia đôi phạm vi tìm kiếm sau mỗi bước.',
+        flashcards: [{ front: 'Điều kiện áp dụng là gì?', back: 'Dữ liệu phải được sắp xếp.' }],
+        questions: [{
+          question: 'Sau mỗi lần so sánh, phạm vi tìm kiếm thay đổi thế nào?',
+          options: ['Giảm một nửa', 'Tăng gấp đôi', 'Giữ nguyên', 'Xóa toàn bộ'],
+          answer: 0,
+        }],
+      }),
+    } as never);
+    const processor = new MaterialProcessor();
+    jest.spyOn(processor as any, 'extractTextWithOcr').mockResolvedValue(
+      'Tìm kiếm nhị phân áp dụng trên mảng đã sắp xếp. Mỗi bước so sánh khóa với phần tử giữa và loại bỏ một nửa phạm vi tìm kiếm.',
+    );
+
+    await processor.process({
+      data: {
+        materialId: 'material-garbled',
+        filePath: 'materials/garbled.pdf',
+        mimeType: 'application/pdf',
+        title: 'Tìm kiếm nhị phân',
+        subject: 'INF02002',
+      },
+    } as never);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/material-content'),
+      expect.objectContaining({
+        body: expect.stringContaining('Mỗi bước so sánh khóa với phần tử giữa'),
+      }),
+    );
+    expect(updateMaterial).toHaveBeenCalledWith({
+      where: { id: 'material-garbled' },
+      data: expect.objectContaining({
+        aiSummary: 'Tìm kiếm nhị phân chia đôi phạm vi tìm kiếm sau mỗi bước.',
         aiGeneratedAt: expect.any(Date),
         status: MaterialStatus.READY,
       }),
