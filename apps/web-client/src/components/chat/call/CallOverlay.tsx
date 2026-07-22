@@ -60,6 +60,11 @@ export const CallOverlay = ({
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
+  const hasRemoteVideo = !!remoteStream?.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled);
+  const hasLocalVideo = !!localStream?.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled);
+  const showRemoteVideo = isVideo && hasRemoteVideo && status === 'connected';
+  const showLocalPreview = isVideo && !isVideoOff;
+
   useEffect(() => {
     const video = localVideoRef.current;
     if (!video) return;
@@ -76,15 +81,19 @@ export const CallOverlay = ({
   }, [localStream, isVideoOff]);
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-      void remoteVideoRef.current.play().catch(() => {});
+    const video = remoteVideoRef.current;
+    const audio = remoteAudioRef.current;
+
+    if (video) {
+      video.srcObject = remoteStream;
+      if (remoteStream) void video.play().catch(() => { });
     }
-    if (remoteAudioRef.current && remoteStream) {
-      remoteAudioRef.current.srcObject = remoteStream;
-      void remoteAudioRef.current.play().catch(() => {});
+
+    if (audio) {
+      audio.srcObject = remoteStream;
+      if (remoteStream) void audio.play().catch(() => { });
     }
-  }, [remoteStream]);
+  }, [remoteStream, showRemoteVideo]);
 
   useEffect(() => {
     if (!showControls) return;
@@ -92,10 +101,7 @@ export const CallOverlay = ({
     return () => clearTimeout(t);
   }, [showControls]);
 
-  const hasRemoteVideo = !!remoteStream?.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled);
-  const hasLocalVideo = !!localStream?.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled);
-  const showRemoteVideo = isVideo && hasRemoteVideo && status === 'connected';
-  const showLocalPreview = isVideo && !isVideoOff;
+
   const qualityLabel = {
     unknown: 'Đang đo mạng',
     good: 'Mạng tốt',

@@ -203,7 +203,7 @@ module.exports = {
       name: 'admin-dashboard',
       cwd: './apps/admin-dashboard',
       script: 'node_modules/vite/bin/vite.js',
-      args: 'preview --host 0.0.0.0 --port 5173',
+      args: 'preview --host 0.0.0.0 --port 25443',
       instances: 1,
       exec_mode: 'fork',
       max_memory_restart: '300M',

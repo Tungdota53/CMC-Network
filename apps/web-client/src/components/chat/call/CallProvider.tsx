@@ -4,8 +4,8 @@ import React, { createContext, useContext } from 'react';
 import { useChatSocket } from '@/hooks/useChatSocket';
 import { useWebRTCCall } from '@/hooks/useWebRTCCall';
 import { useAuthStore } from '@/store/authStore';
-import { CallOverlay } from './CallOverlay';
 import { IncomingCallModal } from './IncomingCallModal';
+import { LiveKitDirectCall } from './LiveKitDirectCall';
 
 type StartCall = (
   peerId: string,
@@ -36,7 +36,7 @@ export const useCall = () => useContext(CallContext);
  */
 export const CallProvider = ({ children }: { children: React.ReactNode }) => {
   const { socket } = useChatSocket();
-  const { user } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
   const call = useWebRTCCall(
     socket,
     user?.id,
@@ -45,7 +45,7 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   return (
-    <CallContext.Provider value={{ startCall: call.startCall, status: call.status, error: call.error }}>
+    <CallContext.Provider value={{ startCall: call.startLiveKitCall, status: call.status, error: call.error }}>
       {children}
 
       {call.error && (
@@ -59,33 +59,26 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
           callerName={call.incoming.callerName}
           callerAvatar={call.incoming.callerAvatar}
           isVideo={call.incoming.isVideo}
-          onAccept={call.answerCall}
+          onAccept={call.answerLiveKitCall}
           onReject={call.rejectCall}
         />
       )}
 
-      {(call.status === 'calling' || call.status === 'connected') && (
-        <CallOverlay
-          name={call.peerName || 'Cuộc gọi'}
+      {(call.status === 'calling' || call.status === 'connected') && call.peerId && !call.conversationId && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-gray-950 px-6 text-white">
+          <div className="rounded-3xl border border-white/10 bg-white/10 px-6 py-4 text-sm backdrop-blur-xl">
+            Đang tạo phòng LiveKit…
+          </div>
+        </div>
+      )}
+
+      {(call.status === 'calling' || call.status === 'connected') && call.peerId && call.conversationId && (
+        <LiveKitDirectCall
+          conversationId={call.conversationId}
+          title={call.peerName || 'Cuộc gọi'}
           avatarUrl={call.peerAvatar}
           isVideo={call.isVideo}
-          status={call.status}
-          localStream={call.localStream}
-          remoteStream={call.remoteStream}
-          isMuted={call.isMuted}
-          isVideoOff={call.isVideoOff}
-          isScreenSharing={call.isScreenSharing}
-          connectionQuality={call.connectionQuality}
-          devices={call.devices}
-          selectedAudioInputId={call.selectedAudioInputId}
-          selectedVideoInputId={call.selectedVideoInputId}
-          onToggleMute={call.toggleMute}
-          onToggleVideo={call.toggleVideo}
-          onToggleScreenShare={call.toggleScreenShare}
-          onRefreshDevices={call.refreshDevices}
-          onSwitchAudioInput={call.switchAudioInput}
-          onSwitchVideoInput={call.switchVideoInput}
-          onEndCall={call.endCall}
+          onClose={call.endCall}
         />
       )}
     </CallContext.Provider>

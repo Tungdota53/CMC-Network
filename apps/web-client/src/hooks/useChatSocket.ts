@@ -34,6 +34,17 @@ let sharedSocket: Socket | null = null;
 let sharedToken: string | null = null;
 let refCount = 0;
 let socketRefreshPromise: Promise<string | null> | null = null;
+let reconnectAfterTokenRefresh = false;
+
+function isTokenExpiring(token: string | null, skewMs = 30_000): boolean {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1] || ''));
+    return !!payload.exp && payload.exp * 1000 <= Date.now() + skewMs;
+  } catch {
+    return true;
+  }
+}
 
 async function refreshSocketToken(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
@@ -58,28 +69,33 @@ async function refreshSocketToken(): Promise<string | null> {
   return socketRefreshPromise;
 }
 
-function getOrCreateSocket(): Socket | null {
+async function ensureFreshSocketToken(): Promise<string | null> {
   const token =
     typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
 
-  if (!token) {
-    return null;
-  }
+  if (!isTokenExpiring(token)) return token;
+  return refreshSocketToken();
+}
 
-  // Token changed (login as another user) → recreate.
-  if (sharedSocket && sharedToken !== token) {
-    sharedSocket.disconnect();
-    sharedSocket = null;
-  }
+function reconnectWithFreshToken(socket: Socket) {
+  if (reconnectAfterTokenRefresh) return;
+  reconnectAfterTokenRefresh = true;
+  void refreshSocketToken().then((nextToken) => {
+    reconnectAfterTokenRefresh = false;
+    if (!nextToken || sharedSocket !== socket) return;
+    sharedToken = nextToken;
+    socket.auth = { token: nextToken };
+    socket.connect();
+  });
+}
 
-  if (sharedSocket) return sharedSocket;
-
+function createSocket(token: string): Socket {
   const origin = resolveSocketOrigin();
   const url = origin + '/chat';
   console.log('[ChatSocket] Connecting to', url);
 
   sharedToken = token;
-  sharedSocket = io(url, {
+  const socket = io(url, {
     path: resolveSocketPath(origin),
     auth: { token },
     transports: ['websocket', 'polling'],
@@ -88,33 +104,45 @@ function getOrCreateSocket(): Socket | null {
     reconnectionAttempts: 10,
   });
 
-  sharedSocket.on('connect', () => {
-    console.log('[ChatSocket] ✅ Connected:', sharedSocket?.id);
+  const refreshBeforeExpiry = () => {
+    if (isTokenExpiring(sharedToken, 60_000)) reconnectWithFreshToken(socket);
+  };
+  const refreshTimer = window.setInterval(refreshBeforeExpiry, 60_000);
+
+  socket.on('connect', () => {
+    console.log('[ChatSocket] ✅ Connected:', socket.id);
+    refreshBeforeExpiry();
   });
-  sharedSocket.on('disconnect', (reason) => {
+  socket.on('disconnect', (reason) => {
     console.log('[ChatSocket] ❌ Disconnected:', reason);
+    if (reason === 'io server disconnect') reconnectWithFreshToken(socket);
   });
-  sharedSocket.on('connect_error', (err) => {
+  socket.on('connect_error', (err) => {
     console.error('[ChatSocket] Error:', err.message);
     if (err.message.toLowerCase().includes('token') || err.message.toLowerCase().includes('unauthorized')) {
-      void refreshSocketToken().then((nextToken) => {
-        if (!nextToken || !sharedSocket) return;
-        sharedToken = nextToken;
-        sharedSocket.auth = { token: nextToken };
-        sharedSocket.connect();
-      });
+      reconnectWithFreshToken(socket);
     }
   });
 
-  sharedSocket.on('unauthorized', () => {
-    void refreshSocketToken().then((nextToken) => {
-      if (!nextToken || !sharedSocket) return;
-      sharedToken = nextToken;
-      sharedSocket.auth = { token: nextToken };
-      sharedSocket.connect();
-    });
-  });
+  socket.on('unauthorized', () => reconnectWithFreshToken(socket));
+  socket.on('destroy', () => window.clearInterval(refreshTimer));
 
+  return socket;
+}
+
+function getOrCreateSocket(token: string): Socket | null {
+  if (!token) return null;
+
+  // Token changed (login as another user) → recreate.
+  if (sharedSocket && sharedToken !== token) {
+    sharedSocket.disconnect();
+    sharedSocket.emit('destroy');
+    sharedSocket = null;
+  }
+
+  if (sharedSocket) return sharedSocket;
+
+  sharedSocket = createSocket(token);
   return sharedSocket;
 }
 
@@ -127,28 +155,41 @@ export function useChatSocket() {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const s = getOrCreateSocket();
-    if (!s) {
-      console.warn('[ChatSocket] No token, skip');
-      return;
-    }
+    let mounted = true;
+    let attachedSocket: Socket | null = null;
+    let onConnect: (() => void) | null = null;
+    let onDisconnect: (() => void) | null = null;
 
-    refCount += 1;
-    setSocket(s);
-    setIsConnected(s.connected);
+    void ensureFreshSocketToken().then((token) => {
+      if (!mounted) return;
+      const s = token ? getOrCreateSocket(token) : null;
+      if (!s) {
+        console.warn('[ChatSocket] No token, skip');
+        return;
+      }
 
-    const onConnect = () => setIsConnected(true);
-    const onDisconnect = () => setIsConnected(false);
-    s.on('connect', onConnect);
-    s.on('disconnect', onDisconnect);
+      refCount += 1;
+      attachedSocket = s;
+      setSocket(s);
+      setIsConnected(s.connected);
+
+      onConnect = () => setIsConnected(true);
+      onDisconnect = () => setIsConnected(false);
+      s.on('connect', onConnect);
+      s.on('disconnect', onDisconnect);
+    });
 
     return () => {
-      s.off('connect', onConnect);
-      s.off('disconnect', onDisconnect);
-      refCount -= 1;
+      mounted = false;
+      if (attachedSocket && onConnect && onDisconnect) {
+        attachedSocket.off('connect', onConnect);
+        attachedSocket.off('disconnect', onDisconnect);
+        refCount -= 1;
+      }
       // Only tear down the shared socket when nothing uses it anymore.
       if (refCount <= 0 && sharedSocket) {
         sharedSocket.disconnect();
+        sharedSocket.emit('destroy');
         sharedSocket = null;
         sharedToken = null;
         refCount = 0;

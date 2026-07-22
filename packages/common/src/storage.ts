@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { randomUUID } from 'crypto';
+import { join, resolve, sep } from 'path';
 
 export interface StoredFile {
   /** Public URL the client uses to fetch the asset (relative or absolute). */
@@ -105,30 +106,73 @@ export class LocalStorageProvider implements StorageProvider {
   ) {}
 
   async put(input: UploadInput): Promise<StoredFile> {
-    const folderDir = join(this.baseDir, input.folder);
+    const folder = normalizeStorageKey(input.folder);
+    const folderDir = resolveInside(this.baseDir, folder);
     await fs.mkdir(folderDir, { recursive: true });
 
-    const ext = input.originalName.split('.').pop() || 'bin';
-    const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const ext = extensionForMimeType(input.mimeType);
+    const safeName = `${randomUUID()}.${ext}`;
     const fullPath = join(folderDir, safeName);
     await fs.writeFile(fullPath, input.buffer);
 
+    const key = `${folder}/${safeName}`;
+    const prefix = this.urlPrefix.replace(/\/$/, '');
+
     return {
-      url: `${this.urlPrefix}/${input.folder}/${safeName}`,
-      key: `${input.folder}/${safeName}`,
+      url: `${prefix}/${key}`,
+      key,
       size: input.size,
       mimeType: input.mimeType,
     };
   }
 
   async delete(key: string): Promise<void> {
-    const fullPath = join(this.baseDir, key);
+    const fullPath = resolveInside(this.baseDir, normalizeStorageKey(key));
     try {
       await fs.unlink(fullPath);
     } catch {
       // ignore missing files
     }
   }
+}
+
+function normalizeStorageKey(key: string): string {
+  const normalized = key.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (!normalized || normalized.split('/').some((part) => !part || part === '.' || part === '..')) {
+    throw new BadRequestException('Đường dẫn lưu trữ không hợp lệ');
+  }
+  return normalized;
+}
+
+function resolveInside(baseDir: string, key: string): string {
+  const root = resolve(baseDir);
+  const target = resolve(root, key);
+  if (target !== root && !target.startsWith(`${root}${sep}`)) {
+    throw new BadRequestException('Đường dẫn lưu trữ không hợp lệ');
+  }
+  return target;
+}
+
+function extensionForMimeType(mimeType: string): string {
+  const extensions: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+    'video/quicktime': 'mov',
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.ms-excel': 'xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'text/plain': 'txt',
+    'application/zip': 'zip',
+  };
+  return extensions[mimeType] || 'bin';
 }
 
 /** ----- Factory ----------------------------------------------------------- */

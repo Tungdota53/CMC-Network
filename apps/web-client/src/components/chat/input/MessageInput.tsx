@@ -12,6 +12,30 @@ interface MessageInputProps {
   quickEmoji?: string;
 }
 
+const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
+const ALLOWED_UPLOAD_TYPES = [
+  'image/',
+  'video/',
+  'audio/',
+  'application/pdf',
+  'text/plain',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/zip',
+  'application/x-zip-compressed',
+];
+
+function isAllowedUploadType(file: File) {
+  if (!file.type) return true;
+  return ALLOWED_UPLOAD_TYPES.some((type) => (
+    type.endsWith('/') ? file.type.startsWith(type) : file.type === type
+  ));
+}
+
 function IconButton({
   children,
   onClick,
@@ -64,6 +88,7 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
   const [inputText, setInputText] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-focus input when reply starts
@@ -119,7 +144,18 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !onSendMedia) return;
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      clearPendingFile();
+      setFileError('Tệp quá lớn. Vui lòng chọn tệp tối đa 50MB.');
+      return;
+    }
+    if (!isAllowedUploadType(file)) {
+      clearPendingFile();
+      setFileError('Định dạng tệp chưa được hỗ trợ. Hãy gửi ảnh, video, âm thanh, PDF, tài liệu hoặc tệp ZIP.');
+      return;
+    }
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+    setFileError(null);
     setPendingFile(file);
     setPendingPreview(file.type.startsWith('image/') || file.type.startsWith('video/') ? URL.createObjectURL(file) : null);
   };
@@ -128,6 +164,7 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
     setPendingFile(null);
     setPendingPreview(null);
+    setFileError(null);
   };
 
   const handleSendPendingFile = () => {
@@ -193,6 +230,21 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {fileError && (
+        <div className="px-4 pt-2">
+          <div className="flex items-start justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <span>{fileError}</span>
+            <button
+              onClick={() => setFileError(null)}
+              className="rounded-full p-0.5 text-destructive/70 hover:bg-destructive/10 hover:text-destructive"
+              aria-label="Đóng lỗi tệp"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
       )}

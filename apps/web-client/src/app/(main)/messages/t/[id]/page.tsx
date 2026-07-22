@@ -17,7 +17,8 @@ export default function ChatConversationPage() {
   const router = useRouter();
   const id = params?.id as string;
   const { socket, isConnected } = useChatSocket();
-  const { user } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
+  const userId = user?.id;
   const call = useCall();
 
   const [messages, setMessages] = useState<any[]>([]);
@@ -153,10 +154,10 @@ export default function ChatConversationPage() {
       }
     };
     
-    if (id && user) {
+    if (id && userId) {
       fetchChatData();
     }
-  }, [id, user?.id]);
+  }, [id, userId]);
 
   // ============================================================
   // 2. SOCKET — Join room + listen for real-time events
@@ -257,7 +258,7 @@ export default function ChatConversationPage() {
       socket.off('message_reacted', handleMessageReacted);
       socket.off('reaction_removed', handleReactionRemoved);
     };
-  }, [socket, isConnected, id, user]);
+    }, [socket, isConnected, id, userId]);
 
   // ============================================================
   // 3. SEND — Optimistic update + socket emit with ACK callback

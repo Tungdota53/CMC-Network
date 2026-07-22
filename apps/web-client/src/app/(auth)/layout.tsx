@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { GraduationCap } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { CMCLogo } from '@/components/CMCLogo';
 import api from '@/lib/api';
 
@@ -42,28 +43,17 @@ export default function AuthLayout({
     fetchUserCount();
   }, []);
 
-  // Concurrent transition states
-  const [pages, setPages] = useState<Array<{ path: string; node: React.ReactNode; dir: 'left' | 'right' | 'none' }>>([
-    { path: pathname, node: children, dir: 'none' }
-  ]);
+  // Determine animation direction based on route
+  const currentOrder = pathname === '/login' ? 0 : pathname === '/register' ? 1 : 2;
+  const [prevOrder, setPrevOrder] = useState(currentOrder);
+  const [direction, setDirection] = useState(1);
 
   useEffect(() => {
-    setPages((prev) => {
-      // If the path hasn't changed, just update the node (for HMR or nested state changes)
-      if (prev[prev.length - 1].path === pathname) {
-        const updated = [...prev];
-        updated[updated.length - 1].node = children;
-        return updated;
-      }
-      
-      const currentPath = prev[prev.length - 1].path;
-      const currentOrder = currentPath === '/login' ? 0 : currentPath === '/register' ? 1 : 2;
-      const nextOrder = pathname === '/login' ? 0 : pathname === '/register' ? 1 : 2;
-      const dir: 'left' | 'right' = nextOrder < currentOrder ? 'right' : 'left'; // Right means old slides right, new slides in from left
-      
-      return [...prev, { path: pathname, node: children, dir }].slice(-2);
-    });
-  }, [pathname, children]);
+    if (currentOrder !== prevOrder) {
+      setDirection(currentOrder > prevOrder ? 1 : -1);
+      setPrevOrder(currentOrder);
+    }
+  }, [currentOrder, prevOrder]);
 
   // Handle height animation measurement
   useEffect(() => {
@@ -79,7 +69,7 @@ export default function AuthLayout({
 
     observer.observe(contentRef.current);
     return () => observer.disconnect();
-  }, [pages]); // Re-trigger when pages array changes
+  }, [pathname]); // Re-trigger when pathname changes
 
   return (
     <div className="text-slate-200 overflow-x-hidden overflow-y-auto relative flex min-h-dvh items-start justify-center font-sans px-4 py-6 sm:px-6 md:min-h-screen md:pt-[15vh]" style={{
@@ -103,9 +93,9 @@ export default function AuthLayout({
         
         {/* Branding Section (Left) */}
         <div className="hidden md:flex flex-col w-1/2 pr-8 animate-[float_6s_ease-in-out_infinite] mt-4">
-          <div className="bg-white/5 backdrop-blur-2xl border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)] p-8 rounded-3xl">
+          <div className="bg-white/5 backdrop-blur-[40px] border border-white/10 shadow-[0_24px_64px_rgba(0,0,0,0.2)] p-8 rounded-[32px] ring-1 ring-white/5">
             <div className="flex items-center gap-4 mb-6">
-              <img src="/new-logo-transparent.png" alt="CMC Network Logo" className="h-14 w-auto object-contain drop-shadow-xl" />
+              <img src="/new-logo-transparent.png" alt="CMC Network Logo" className="h-16 w-auto object-contain drop-shadow-2xl" />
               <h1 className="flex items-baseline gap-2 font-display select-none">
                 <span className="font-black text-5xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white to-blue-200">
                   CMC
@@ -159,7 +149,7 @@ export default function AuthLayout({
 
           {/* Form Card with Smooth Height Animation */}
           <div 
-            className="bg-white/5 backdrop-blur-[16px] border border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)] rounded-3xl relative overflow-hidden group transition-[height] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+            className="bg-white/5 backdrop-blur-[40px] border border-white/10 shadow-[0_24px_64px_rgba(0,0,0,0.3)] rounded-[32px] relative overflow-hidden transition-[height] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ring-1 ring-white/5"
             style={{ height: contentHeight === 'auto' ? 'auto' : `${contentHeight}px` }}
           >
             {/* Inner glow effect */}
@@ -167,40 +157,19 @@ export default function AuthLayout({
             
             {/* Concurrent Transition Wrapper */}
             <div ref={contentRef} className="relative z-10 w-full h-max">
-              {pages.map((page, index) => {
-                const isCurrent = index === pages.length - 1;
-                const isLeaving = index === pages.length - 2;
-                
-                let animationClass = '';
-                if (isCurrent && pages.length > 1) {
-                   // Entering page: premium spring ease, 500ms
-                   animationClass = page.dir === 'right' 
-                     ? 'animate-[slideInLeft_500ms_cubic-bezier(0.22,1,0.36,1)_forwards] relative z-20' 
-                     : 'animate-[slideInRight_500ms_cubic-bezier(0.22,1,0.36,1)_forwards] relative z-20';
-                } else if (isLeaving) {
-                   // Leaving page: slightly faster exit (300ms) with ease-in
-                   const newPageDir = pages[pages.length - 1].dir;
-                   animationClass = newPageDir === 'right'
-                     ? 'animate-[slideOutRight_300ms_cubic-bezier(0.32,0,0.67,0)_forwards] absolute top-0 left-0 w-full z-10'
-                     : 'animate-[slideOutLeft_300ms_cubic-bezier(0.32,0,0.67,0)_forwards] absolute top-0 left-0 w-full z-10';
-                } else if (isCurrent) {
-                   animationClass = 'relative z-20'; // First load, no animation
-                }
-
-                return (
-                  <div 
-                    key={page.path} 
-                    className={`flex h-max w-full flex-col p-5 sm:p-8 ${animationClass}`}
-                    onAnimationEnd={() => {
-                      if (isLeaving) {
-                        setPages(p => p.filter(x => x.path !== page.path));
-                      }
-                    }}
-                  >
-                    {page.node}
-                  </div>
-                );
-              })}
+              <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+                <motion.div
+                  key={pathname}
+                  custom={direction}
+                  initial={{ opacity: 0, x: direction > 0 ? 20 : -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: direction < 0 ? 20 : -20 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                  className="w-full flex flex-col p-5 sm:p-8"
+                >
+                  {children}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -216,22 +185,6 @@ export default function AuthLayout({
         @keyframes float {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-20px); }
-        }
-        @keyframes slideOutLeft {
-          from { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
-          to { opacity: 0; transform: translateX(-30px) scale(0.95); filter: blur(4px); }
-        }
-        @keyframes slideOutRight {
-          from { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
-          to { opacity: 0; transform: translateX(30px) scale(0.95); filter: blur(4px); }
-        }
-        @keyframes slideInLeft {
-          from { opacity: 0; transform: translateX(-30px) scale(0.95); filter: blur(4px); }
-          to { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
-        }
-        @keyframes slideInRight {
-          from { opacity: 0; transform: translateX(30px) scale(0.95); filter: blur(4px); }
-          to { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
         }
       `}} />
     </div>

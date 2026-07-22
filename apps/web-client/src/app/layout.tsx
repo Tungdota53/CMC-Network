@@ -40,8 +40,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className={`${googleSans.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="vi" className={`${googleSans.variable} h-full antialiased overflow-y-scroll`} suppressHydrationWarning>
       <head>
+        <meta name="color-scheme" content="light dark" />
         <meta name="darkreader-lock" content="true" />
       </head>
       <body className="min-h-full flex flex-col font-sans">

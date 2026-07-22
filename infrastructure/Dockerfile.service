@@ -35,7 +35,8 @@ COPY --from=build /app ./
 
 # Drop privileges.
 RUN addgroup -S nodejs && adduser -S nodejs -G nodejs \
-  && mkdir -p /app/${SERVICE_DIR}/uploads && chown -R nodejs:nodejs /app/${SERVICE_DIR}
+  && mkdir -p /var/lib/campus-connect/uploads \
+  && chown -R nodejs:nodejs /app/${SERVICE_DIR} /var/lib/campus-connect
 USER nodejs
 
 WORKDIR /app/apps/${SERVICE}

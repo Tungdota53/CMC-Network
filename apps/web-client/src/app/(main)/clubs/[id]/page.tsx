@@ -11,6 +11,13 @@ import { mapBackendPost } from '@/hooks/useFeed';
 import { PostCard } from '@/components/feed/PostCard';
 import toast from 'react-hot-toast';
 
+const withImageVersion = (url?: string | null, version?: string | null) => {
+  if (!url) return '';
+  if (!url.startsWith('/uploads/')) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}v=${encodeURIComponent(version || '')}`;
+};
+
 export default function ClubDetailPage() {
   const params = useParams();
   const clubId = params.id as string;
@@ -91,6 +98,8 @@ export default function ClubDetailPage() {
   });
 
   const canManage = c?.myRole === 'OWNER' || c?.myRole === 'ADMIN';
+  const logoUrl = withImageVersion(c?.logoUrl, c?.updatedAt);
+  const bannerUrl = withImageVersion(c?.bannerUrl, c?.updatedAt);
 
   if (isLoading) {
     return (
@@ -118,7 +127,7 @@ export default function ClubDetailPage() {
         </Link>
         
         <div className="h-48 md:h-64 bg-gradient-to-r from-primary/80 via-purple-500/80 to-pink-500/80 rounded-3xl overflow-hidden shadow-inner relative">
-           {c.bannerUrl && <Image src={c.bannerUrl} alt={c.name} fill sizes="100vw" className="object-cover" unoptimized />}
+           {bannerUrl && <Image src={bannerUrl} alt={c.name} fill sizes="100vw" className="object-cover" unoptimized />}
            {canManage && (
              <button
                type="button"
@@ -134,7 +143,7 @@ export default function ClubDetailPage() {
         {/* Logo overlapping banner */}
         <div className="absolute -bottom-12 left-8 flex items-end gap-5">
           <div className="relative w-24 h-24 rounded-2xl border-4 border-background bg-card shadow-md flex items-center justify-center text-4xl font-black text-primary bg-gradient-to-br from-primary/10 to-primary/5 overflow-hidden">
-            {c.logoUrl ? <Image src={c.logoUrl} alt={c.name} fill sizes="96px" className="object-cover" unoptimized /> : c.name?.charAt(0) || 'C'}
+            {logoUrl ? <Image src={logoUrl} alt={c.name} fill sizes="96px" className="object-cover" unoptimized /> : c.name?.charAt(0) || 'C'}
             {canManage && (
               <button
                 type="button"

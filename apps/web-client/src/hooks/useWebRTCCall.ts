@@ -19,6 +19,7 @@ export interface IncomingCall {
   callerAvatar?: string;
   isVideo: boolean;
   signal: RTCSessionDescriptionInit;
+  conversationId?: string;
 }
 
 const CALL_TIMEOUT_MS = 45_000;
@@ -30,6 +31,7 @@ interface CallState {
   peerId: string | null;
   peerName: string | null;
   peerAvatar?: string | null;
+  conversationId?: string | null;
   incoming: IncomingCall | null;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
@@ -122,6 +124,7 @@ export function useWebRTCCall(
     peerId: null,
     peerName: null,
     peerAvatar: null,
+    conversationId: null,
     incoming: null,
     localStream: null,
     remoteStream: null,
@@ -146,6 +149,7 @@ export function useWebRTCCall(
   const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBytesReceivedRef = useRef<number>(0);
   const lastStatsAtRef = useRef<number>(0);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -155,11 +159,11 @@ export function useWebRTCCall(
     pcRef.current?.getSenders().forEach((s) => {
       try {
         s.track?.stop();
-      } catch {}
+      } catch { }
     });
     try {
       pcRef.current?.close();
-    } catch {}
+    } catch { }
     pcRef.current = null;
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
@@ -168,6 +172,7 @@ export function useWebRTCCall(
     screenTrackRef.current = null;
     peerIdRef.current = null;
     pendingCandidates.current = [];
+    remoteStreamRef.current = null;
     if (qualityTimerRef.current) clearInterval(qualityTimerRef.current);
     qualityTimerRef.current = null;
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
@@ -184,6 +189,7 @@ export function useWebRTCCall(
       peerId: null,
       peerName: null,
       peerAvatar: null,
+      conversationId: null,
       incoming: null,
       localStream: null,
       remoteStream: null,
@@ -265,8 +271,14 @@ export function useWebRTCCall(
       };
 
       pc.ontrack = (e) => {
-        const [remoteStream] = e.streams;
-        setState((prev) => ({ ...prev, remoteStream, status: 'connected' }));
+        const remoteStream = e.streams[0] ?? remoteStreamRef.current ?? new MediaStream();
+        remoteStreamRef.current = remoteStream;
+
+        if (!remoteStream.getTracks().some((track) => track.id === e.track.id)) {
+          remoteStream.addTrack(e.track);
+        }
+
+        setState((prev) => ({ ...prev, remoteStream: new MediaStream(remoteStream.getTracks()), status: 'connected' }));
       };
 
       pc.onconnectionstatechange = () => {
@@ -297,8 +309,8 @@ export function useWebRTCCall(
         if (pc.iceConnectionState === 'failed') {
           try {
             pc.restartIce();
-              setState((prev) => ({ ...prev, error: 'Đang khôi phục đường truyền...' }));
-          } catch {}
+            setState((prev) => ({ ...prev, error: 'Đang khôi phục đường truyền...' }));
+          } catch { }
         }
       };
 
@@ -340,11 +352,11 @@ export function useWebRTCCall(
         },
         video: isVideo
           ? {
-              ...MEDIA_CONSTRAINTS.video,
-              ...(stateRef.current.selectedVideoInputId
-                ? { deviceId: { exact: stateRef.current.selectedVideoInputId } }
-                : {}),
-            }
+            ...MEDIA_CONSTRAINTS.video,
+            ...(stateRef.current.selectedVideoInputId
+              ? { deviceId: { exact: stateRef.current.selectedVideoInputId } }
+              : {}),
+          }
           : false,
       });
       localStreamRef.current = stream;
@@ -396,6 +408,7 @@ export function useWebRTCCall(
         peerId,
         peerName,
         peerAvatar: peerAvatar ?? null,
+        conversationId: conversationId ?? null,
       }));
 
       try {
@@ -447,10 +460,90 @@ export function useWebRTCCall(
     [socket, myId, myName, myAvatar, getMedia, loadIceConfig, createPeer, cleanup],
   );
 
+  const startLiveKitCall = useCallback(
+    async (
+      peerId: string,
+      peerName: string,
+      isVideo: boolean,
+      peerAvatar?: string | null,
+      conversationId?: string,
+    ) => {
+      if (!socket || !myId) return;
+      let resolvedConversationId = conversationId;
+      if (!resolvedConversationId) {
+        try {
+          const res = await api.post('/chat/conversations/direct', {
+            user1Id: myId,
+            user2Id: peerId,
+          });
+          const payload = res.data?.data ?? res.data;
+          resolvedConversationId = payload?.id;
+        } catch (err) {
+          console.error('[Call] create direct conversation failed', err);
+          setState((prev) => ({
+            ...prev,
+            status: 'idle',
+            error: 'Không tạo được cuộc trò chuyện để mở phòng LiveKit.',
+          }));
+          return;
+        }
+      }
+
+      if (!resolvedConversationId) {
+        setState((prev) => ({
+          ...prev,
+          status: 'idle',
+          error: 'Thiếu conversationId nên không thể mở phòng LiveKit.',
+        }));
+        return;
+      }
+
+      peerIdRef.current = peerId;
+      setState((prev) => ({
+        ...prev,
+        status: 'calling',
+        isVideo,
+        error: null,
+        peerId,
+        peerName,
+        peerAvatar: peerAvatar ?? null,
+        conversationId: resolvedConversationId,
+      }));
+
+      socket.emit('callUser', {
+        userToCall: peerId,
+        signalData: { type: 'livekit' },
+        from: myId,
+        isVideo,
+        callerName: myName || 'Người dùng',
+        callerAvatar: myAvatar ?? undefined,
+        conversationId: resolvedConversationId,
+      });
+
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = setTimeout(() => {
+        const current = stateRef.current;
+        if (current.status !== 'calling') return;
+        socket.emit('endCall', { to: peerId });
+        cleanup();
+        setState((prev) => ({
+          ...prev,
+          status: 'idle',
+          error: 'Không ai trả lời cuộc gọi.',
+          peerId: null,
+          peerName: null,
+          peerAvatar: null,
+          conversationId: null,
+        }));
+      }, CALL_TIMEOUT_MS);
+    },
+    [socket, myId, myName, myAvatar, cleanup],
+  );
+
   // ---- Answer incoming call ----
   const answerCall = useCallback(async () => {
     if (!socket || !state.incoming) return;
-    const { from, signal, isVideo, callerName, callerAvatar } = state.incoming;
+    const { from, signal, isVideo, callerName, callerAvatar, conversationId } = state.incoming;
     peerIdRef.current = from;
 
     setState((prev) => ({
@@ -461,6 +554,7 @@ export function useWebRTCCall(
       peerId: from,
       peerName: callerName,
       peerAvatar: callerAvatar ?? null,
+      conversationId: conversationId ?? null,
       incoming: null,
     }));
 
@@ -475,7 +569,7 @@ export function useWebRTCCall(
       for (const c of pendingCandidates.current) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(c));
-        } catch {}
+        } catch { }
       }
       pendingCandidates.current = [];
 
@@ -494,6 +588,26 @@ export function useWebRTCCall(
       cleanup();
     }
   }, [socket, state.incoming, getMedia, loadIceConfig, createPeer, cleanup]);
+
+  const answerLiveKitCall = useCallback(() => {
+    if (!socket || !state.incoming) return;
+    const { from, isVideo, callerName, callerAvatar, conversationId } = state.incoming;
+    peerIdRef.current = from;
+    setState((prev) => ({
+      ...prev,
+      status: 'connected',
+      isVideo,
+      error: null,
+      peerId: from,
+      peerName: callerName,
+      peerAvatar: callerAvatar ?? null,
+      conversationId: conversationId ?? null,
+      incoming: null,
+    }));
+    socket.emit('answerCall', { to: from, signal: { type: 'livekit-accepted' } });
+    if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+    callTimeoutRef.current = null;
+  }, [socket, state.incoming]);
 
   // ---- Reject / end call ----
   const endCall = useCallback(() => {
@@ -652,10 +766,17 @@ export function useWebRTCCall(
       callerName: string;
       callerAvatar?: string;
       isVideo: boolean;
+      conversationId?: string;
     }) => {
       if (!data?.from || data.from === myId) return;
       const current = stateRef.current;
       if (current.status === 'ringing' && current.incoming?.from === data.from) {
+        return;
+      }
+      if (current.status === 'connected' && current.peerId === data.from) {
+        // The same account may have more than one socket/tab. A duplicate
+        // signal for the current peer is not a separate competing call and
+        // must not make another tab tell the caller that this user is busy.
         return;
       }
       if (current.status === 'calling' && current.peerId === data.from) {
@@ -677,6 +798,7 @@ export function useWebRTCCall(
             callerAvatar: data.callerAvatar,
             isVideo: data.isVideo,
             signal: data.signal,
+            conversationId: data.conversationId,
           },
         };
       });
@@ -684,14 +806,21 @@ export function useWebRTCCall(
 
     const onCallAccepted = async (payload: RTCSessionDescriptionInit | { signal: RTCSessionDescriptionInit }) => {
       const pc = pcRef.current;
-      if (!pc) return;
       const signal = unwrapSessionDescription(payload);
+      if (!pc) {
+        if ((signal as { type?: string })?.type === 'livekit-accepted') {
+          if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+          callTimeoutRef.current = null;
+          setState((prev) => ({ ...prev, status: 'connected' }));
+        }
+        return;
+      }
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(signal));
         for (const c of pendingCandidates.current) {
           try {
             await pc.addIceCandidate(new RTCIceCandidate(c));
-          } catch {}
+          } catch { }
         }
         pendingCandidates.current = [];
         setState((prev) => ({ ...prev, status: 'connected' }));
@@ -760,7 +889,9 @@ export function useWebRTCCall(
   return {
     ...state,
     startCall,
+    startLiveKitCall,
     answerCall,
+    answerLiveKitCall,
     endCall,
     rejectCall,
     toggleMute,

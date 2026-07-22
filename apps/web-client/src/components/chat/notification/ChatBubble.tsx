@@ -8,7 +8,7 @@ import { useChatStore } from '@/store/chatStore';
 import { cn } from '@/lib/utils';
 
 export const ChatBubble = () => {
-  const { user } = useAuthStore();
+  const userId = useAuthStore((state) => state.user?.id);
   const { windows, openChat } = useChatStore();
   const [isOpen, setIsOpen] = useState(false);
   const [conversations, setConversations] = useState<any[]>([]);
@@ -18,7 +18,7 @@ export const ChatBubble = () => {
 
   useEffect(() => {
     setHasToken(typeof window !== 'undefined' && !!localStorage.getItem('auth_token'));
-  }, [user?.id]);
+  }, [userId]);
 
   useEffect(() => {
     if (!isOpen || !hasToken) return;
@@ -42,7 +42,7 @@ export const ChatBubble = () => {
 
     const timeout = window.setTimeout(fetchConversations, query.trim() ? 250 : 0);
     return () => window.clearTimeout(timeout);
-  }, [hasToken, isOpen, query, user?.id]);
+  }, [hasToken, isOpen, query, userId]);
 
   const mappedConversations = useMemo(() => {
     return conversations.map((conversation) => {
@@ -50,7 +50,7 @@ export const ChatBubble = () => {
       let avatarUrl = conversation.avatarUrl;
 
       if (conversation.type === 'DIRECT') {
-        const otherMember = conversation.members?.find((member: any) => member.userId !== user?.id) || conversation.otherMembers?.[0];
+        const otherMember = conversation.members?.find((member: any) => member.userId !== userId) || conversation.otherMembers?.[0];
         const otherUser = otherMember?.user || otherMember;
         name = otherUser?.fullName || name;
         avatarUrl = otherUser?.avatarUrl || avatarUrl;
@@ -71,7 +71,7 @@ export const ChatBubble = () => {
         unreadCount: conversation.unreadCount ?? 0,
       };
     });
-  }, [conversations, user?.id]);
+  }, [conversations, userId]);
 
   if (!hasToken || windows.length > 0) return null;
 

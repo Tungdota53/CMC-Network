@@ -30,8 +30,12 @@ export class MaterialsController {
   }
 
   @Get()
-  async getMaterials(@Query('subject') subject: string) {
-    return this.materialsService.getMaterials(subject);
+  async getMaterials(
+    @Query('subject') subject?: string,
+    @Query('search') search?: string,
+    @Query('fileType') fileType?: string,
+  ) {
+    return this.materialsService.getMaterials({ subject, search, fileType });
   }
 
   @Post('upload')

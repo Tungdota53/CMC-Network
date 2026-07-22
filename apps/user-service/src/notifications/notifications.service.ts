@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { prisma } from '@campus-connect/database';
+import { NotificationEmailService } from './notification-email.service';
 
 type NotifType =
   | 'LIKE'
@@ -22,6 +23,8 @@ type NotificationPreferencesInput = Partial<{
 
 @Injectable()
 export class NotificationsService {
+  constructor(private readonly emailService: NotificationEmailService) {}
+
   /** Persist a notification row. Realtime push is handled by the dispatcher. */
   async create(
     userId: string,
@@ -33,9 +36,55 @@ export class NotificationsService {
     if (!this.isTypeEnabled(type, preferences)) {
       return { skipped: true, reason: 'disabled_by_preferences' };
     }
-    return prisma.notification.create({
+    const notification = await prisma.notification.create({
       data: { userId, type: type as never, content, relatedId },
     });
+
+    if (preferences.email) {
+      void this.sendEmailCopy(userId, type, content, relatedId);
+    }
+
+    return notification;
+  }
+
+  private async sendEmailCopy(
+    userId: string,
+    type: NotifType,
+    content: string,
+    relatedId?: string,
+  ) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, fullName: true, emailVerified: true },
+    });
+    if (!user?.email || !user.emailVerified) return;
+
+    await this.emailService.sendNotificationEmail({
+      to: user.email,
+      subject: this.emailSubject(type),
+      message: content,
+      actionUrl: this.actionUrl(type, relatedId),
+    });
+  }
+
+  private emailSubject(type: NotifType) {
+    if (type === 'LIKE') return 'Bài viết của bạn có lượt thích mới';
+    if (type === 'COMMENT') return 'Bài viết của bạn có bình luận mới';
+    if (type === 'MENTION') return 'Bạn được nhắc đến trên CMC Network';
+    if (type === 'FRIEND_REQUEST') return 'Bạn có lời mời kết bạn mới';
+    if (type === 'FRIEND_ACCEPT') return 'Lời mời kết bạn đã được chấp nhận';
+    return 'Thông báo từ CMC Network';
+  }
+
+  private actionUrl(type: NotifType, relatedId?: string) {
+    if (!relatedId) return null;
+    if (type === 'LIKE' || type === 'COMMENT' || type === 'MENTION') {
+      return `/posts/${relatedId}`;
+    }
+    if (type === 'FRIEND_REQUEST' || type === 'FRIEND_ACCEPT') {
+      return '/friends';
+    }
+    return null;
   }
 
   async getPreferences(userId: string) {

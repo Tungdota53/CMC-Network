@@ -14,6 +14,7 @@ jest.mock('@campus-connect/database', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     },
   };
   return {
@@ -63,7 +64,11 @@ describe('AuthService — register', () => {
   it('rejects registration when the email already exists', async () => {
     jest
       .mocked(prisma.user.findUnique)
-      .mockResolvedValue({ id: 'existing' } as never);
+      .mockResolvedValue({
+        id: 'existing',
+        emailVerified: true,
+        lastLoginAt: new Date(),
+      } as never);
     await expect(
       service.register({
         email: 'a@st.cmc.edu.vn',
@@ -74,11 +79,8 @@ describe('AuthService — register', () => {
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
-  it('hashes the password and derives studentId from a CMC email', async () => {
+  it('stores a pending OTP registration for a CMC email', async () => {
     jest.mocked(prisma.user.findUnique).mockResolvedValue(null);
-    jest
-      .mocked(prisma.user.create)
-      .mockResolvedValue({ id: 'new-user' } as never);
 
     const result = await service.register({
       email: 'BIT220001@st.cmc.edu.vn',
@@ -86,14 +88,14 @@ describe('AuthService — register', () => {
       fullName: 'Nguyen Van A',
     });
 
-    expect(result.userId).toBe('new-user');
-    const data = (
-      jest.mocked(prisma.user.create).mock.calls[0][0] as {
-        data: { passwordHash: string; studentId: string };
-      }
-    ).data;
-    expect(data.passwordHash).not.toBe('secret'); // hashed
-    expect(data.studentId).toBe('BIT220001');
+    expect(result).toEqual(expect.objectContaining({
+      pendingEmail: 'bit220001@st.cmc.edu.vn',
+    }));
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(email.sendOtpEmail).toHaveBeenCalledWith(
+      'bit220001@st.cmc.edu.vn',
+      expect.stringMatching(/^\d{6}$/),
+    );
   });
 });
 

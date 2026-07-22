@@ -8,6 +8,7 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasHydrated: boolean;
 
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -17,6 +18,13 @@ interface AuthState {
 
 const ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24 * 7;
 const REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30;
+
+function decodeJwtPayload(token: string) {
+  const payload = token.split('.')[1] || '';
+  const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+  return JSON.parse(atob(padded));
+}
 
 function setAuthCookies(accessToken: string, refreshToken?: string | null) {
   document.cookie = `auth_token=${accessToken}; path=/; max-age=${ACCESS_TOKEN_MAX_AGE}; SameSite=Lax`;
@@ -38,6 +46,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      hasHydrated: false,
 
       login: async (email, password) => {
         set({ isLoading: true });
@@ -78,7 +87,7 @@ export const useAuthStore = create<AuthState>()(
 
           const shouldRefresh = !token || (() => {
             try {
-              const payload = JSON.parse(atob(token.split('.')[1] || ''));
+              const payload = decodeJwtPayload(token);
               return !!payload.exp && payload.exp * 1000 <= Date.now() + 30_000;
             } catch {
               return true;
@@ -112,6 +121,10 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'cc-auth',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        state?.setUser(state.user);
+        useAuthStore.setState({ hasHydrated: true });
+      },
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,

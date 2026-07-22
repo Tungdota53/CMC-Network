@@ -42,7 +42,11 @@ export class WebrtcService {
     } else if (urls.length && staticUsername && staticCredential) {
       // Provider fallback for managed TURN accounts that do not expose REST/HMAC.
       // Prefer TURN_REST_API_SECRET in production.
-      iceServers.push({ urls, username: staticUsername, credential: staticCredential });
+      iceServers.push({
+        urls,
+        username: staticUsername,
+        credential: staticCredential,
+      });
     }
 
     return {
@@ -70,6 +74,8 @@ export class WebrtcService {
 
   private hasTurnUrl(urls: string | string[]) {
     const values = Array.isArray(urls) ? urls : [urls];
-    return values.some((url) => url.startsWith('turn:') || url.startsWith('turns:'));
+    return values.some(
+      (url) => url.startsWith('turn:') || url.startsWith('turns:'),
+    );
   }
 }

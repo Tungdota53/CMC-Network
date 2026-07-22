@@ -23,15 +23,24 @@ export interface Club {
   myRole?: 'OWNER' | 'ADMIN' | 'MODERATOR' | 'MEMBER' | null;
   myJoinRequestStatus?: 'PENDING' | 'APPROVED' | 'REJECTED' | null;
   joinMode?: 'OPEN' | 'APPROVAL' | 'INVITE_ONLY';
+  visibility?: 'PUBLIC' | 'PRIVATE' | 'UNLISTED';
+  rules?: string | null;
+  tags?: string[];
+  location?: string | null;
+  contactEmail?: string | null;
+  socialLinks?: Record<string, string> | null;
   members?: Array<{
     id: string;
     userId: string;
     role: 'OWNER' | 'ADMIN' | 'MODERATOR' | 'MEMBER';
     joinedAt: string;
-    user?: { id: string; fullName: string; avatarUrl?: string | null; major?: string | null };
+    user?: { id: string; fullName: string; avatarUrl?: string | null; major?: string | null; department?: string | null };
   }>;
   createdAt: string;
+  updatedAt?: string;
 }
+
+export type UpdateClubPayload = Partial<Pick<Club, 'name' | 'description' | 'category' | 'type' | 'visibility' | 'joinMode' | 'rules' | 'tags' | 'location' | 'contactEmail' | 'socialLinks'>>;
 
 export function useClubs() {
   return useQuery<Club[]>({
@@ -77,6 +86,47 @@ export function useLeaveClub() {
     },
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.all });
+    },
+  });
+}
+
+export function useUpdateClub(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: UpdateClubPayload) => {
+      const res = await api.put(`/clubs/${id}`, payload);
+      return extractData<Club>(res);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.all });
+    },
+  });
+}
+
+export function useRemoveClubMember(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (memberId: string) => {
+      const res = await api.delete(`/clubs/${id}/members/${memberId}`);
+      return extractData(res);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.clubs.all });
+    },
+  });
+}
+
+export function useDeleteClub() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await api.delete(`/clubs/${id}`);
+      return extractData(res);
+    },
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.clubs.all });
     },
   });

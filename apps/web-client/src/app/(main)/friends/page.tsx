@@ -24,6 +24,8 @@ export default function FriendsPage() {
   const { data: outgoingReqs, isLoading: loadingOut } = useOutgoingRequests();
   const { data: blockedUsers, isLoading: loadingBlk } = useBlockedUsers();
 
+  const friends = friendsData?.friends || [];
+
   const getTitle = () => {
     switch (activeTab) {
       case 'HOME': return 'Trang chủ Bạn bè';
@@ -91,6 +93,23 @@ export default function FriendsPage() {
             <div className="border-b border-border/50 pb-8"></div>
           </section>
         )}
+
+        {/* Friends Section */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-foreground flex items-center gap-3">
+              Bạn bè của bạn
+              {friends.length > 0 && (
+                <span className="text-primary bg-primary/10 px-2.5 py-0.5 rounded-full text-[15px] font-bold shadow-sm">{friends.length}</span>
+              )}
+            </h2>
+            <button onClick={() => setActiveTab('ALL')} className="text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg font-medium transition-colors">
+              Xem tất cả
+            </button>
+          </div>
+          {renderGrid(friends.slice(0, 10), 'FRIEND', 'Bạn chưa có người bạn nào.', loadingAll)}
+          <div className="border-b border-border/50 pb-8"></div>
+        </section>
 
         {/* Suggestions Section */}
         <section>
@@ -232,7 +251,7 @@ export default function FriendsPage() {
               
               {activeTab === 'INCOMING' && renderGrid(incomingReqs || [], 'INCOMING', 'Không có lời mời kết bạn nào.', loadingInc)}
               {activeTab === 'SUGGESTIONS' && renderGrid(suggestions || [], 'SUGGESTION', 'Không có gợi ý kết bạn lúc này.', loadingSug)}
-              {activeTab === 'ALL' && renderGrid(friendsData?.friends || [], 'FRIEND', 'Bạn chưa có người bạn nào.', loadingAll)}
+              {activeTab === 'ALL' && renderGrid(friends, 'FRIEND', 'Bạn chưa có người bạn nào.', loadingAll)}
               {activeTab === 'OUTGOING' && renderGrid(outgoingReqs || [], 'OUTGOING', 'Bạn chưa gửi lời mời kết bạn nào.', loadingOut)}
               {activeTab === 'BLOCKED' && renderGrid(blockedUsers || [], 'BLOCKED', 'Danh sách chặn trống.', loadingBlk)}
             </div>

@@ -8,41 +8,61 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { FileType, prisma } from '@campus-connect/database';
 import { validateUpload, createStorageProvider } from '@campus-connect/common';
-import { promises as fs } from 'fs';
-import { join } from 'path';
+import { resolve } from 'path';
 
 @Injectable()
 export class MaterialsService {
   private readonly storageProvider = createStorageProvider(
-    join(process.cwd(), 'uploads'),
-    '/uploads',
+    resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+    process.env.UPLOAD_PUBLIC_BASE_URL || '/uploads',
   );
 
   private readonly invalidMaterialIds = new Set(['undefined', 'null', '']);
 
   constructor(
     @InjectQueue('material-processing') private materialQueue: Queue,
-  ) {
-    this.ensureUploadDir();
-  }
+  ) {}
 
-  private async ensureUploadDir() {
-    try {
-      await fs.mkdir(join(process.cwd(), 'uploads', 'materials'), {
-        recursive: true,
-      });
-    } catch {
-      // Directory already exists
-    }
-  }
-
-  async getMaterials(subject?: string) {
-    const where = subject
-      ? {
-          deletedAt: null,
-          subject: { contains: subject, mode: 'insensitive' as const },
-        }
-      : { deletedAt: null };
+  async getMaterials(filters: {
+    subject?: string;
+    search?: string;
+    fileType?: string;
+  } = {}) {
+    const subject = filters.subject?.trim();
+    const search = filters.search?.trim();
+    const supportedTypes = new Set([
+      'PDF',
+      'DOCX',
+      'PPTX',
+      'XLSX',
+      'ZIP',
+      'OTHER',
+    ]);
+    const fileType = filters.fileType?.toUpperCase();
+    const where = {
+      deletedAt: null,
+      status: 'READY' as const,
+      ...(subject
+        ? { subject: { contains: subject, mode: 'insensitive' as const } }
+        : {}),
+      ...(fileType && supportedTypes.has(fileType)
+        ? { fileType: fileType as any }
+        : {}),
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' as const } },
+              {
+                description: {
+                  contains: search,
+                  mode: 'insensitive' as const,
+                },
+              },
+              { tags: { has: search } },
+            ],
+          }
+        : {}),
+    };
     const materials = await prisma.material.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -122,8 +142,13 @@ export class MaterialsService {
       ...materialWithCounts,
       bookmarkCount: materialWithCounts._count.bookmarks,
       aiSummary: material.aiSummary ?? this.buildSummary(material),
-      aiFlashcards: this.buildFlashcards(material),
-      aiQuizQuestions: this.buildQuiz(material),
+      aiFlashcards: Array.isArray(material.aiFlashcards)
+        ? material.aiFlashcards
+        : this.buildFlashcards(material),
+      aiQuizQuestions: Array.isArray(material.aiQuizQuestions)
+        ? material.aiQuizQuestions
+        : this.buildQuiz(material),
+      aiContentSource: material.aiGeneratedAt ? 'document' : 'fallback',
     };
   }
 

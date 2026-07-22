@@ -72,6 +72,28 @@ export class NotificationsController {
     };
   }
 
+  @Post('read-all')
+  async markAllReadForCurrent(
+    @CurrentUser('sub') tokenUserId: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.notificationsService.markAllRead(
+      resolveUserId(tokenUserId, userId),
+    );
+  }
+
+  @Post(':notificationId/read')
+  async markReadForCurrent(
+    @CurrentUser('sub') tokenUserId: string,
+    @Param('notificationId') notificationId: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.notificationsService.markRead(
+      resolveUserId(tokenUserId, userId),
+      notificationId,
+    );
+  }
+
   @Get(':userId')
   async list(@Param('userId') userId: string, @Query('limit') limit?: string) {
     const rows = await this.notificationsService.list(

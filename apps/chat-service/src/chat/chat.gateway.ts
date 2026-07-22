@@ -6,6 +6,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   WebSocketServer,
+  WsException,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
@@ -18,6 +19,9 @@ type ActiveCall = {
   calleeId: string;
   createdAt: number;
 };
+
+const conversationRoom = (id: string) => `conversation:${id}`;
+const userRoom = (id: string) => `user:${id}`;
 
 function parseSocketOrigins(): string[] | boolean {
   const raw = process.env.ALLOWED_ORIGINS;
@@ -97,6 +101,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return [userA, userB].sort().join(':');
   }
 
+  private currentUserId(client: Socket): string {
+    const userId = client.data?.userId as string | undefined;
+    if (!userId) throw new WsException('UNAUTHORIZED');
+    return userId;
+  }
+
+  private async assertConversationAccess(
+    conversationId: string,
+    userId: string,
+  ) {
+    await this.chatService.assertConversationMemberAccess(
+      conversationId,
+      userId,
+    );
+  }
+
   private pruneStaleCalls() {
     const now = Date.now();
     for (const [key, call] of this.activeCalls) {
@@ -118,7 +138,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     const justCameOnline = await this.presence.add(userId, client.id);
     client.data.userId = userId;
-    await client.join(`user:${userId}`);
+    await client.join(userRoom(userId));
     // Send the current online list to the newcomer.
     const online = await this.presence.onlineUserIds();
     client.emit('onlineUsers', online);
@@ -157,6 +177,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!senderId) {
       return { status: 'error', message: 'Token không hợp lệ hoặc thiếu' };
     }
+    await this.assertConversationAccess(data.conversationId, senderId);
 
     const message = await this.chatService.saveMessage(
       data.conversationId,
@@ -168,18 +189,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     this.server
-      .to(`conversation:${data.conversationId}`)
+      .to(conversationRoom(data.conversationId))
       .emit(`conversation-${data.conversationId}`, message);
-    if (data.receiverId)
+    const conversation = await this.chatService.getConversationById(
+      data.conversationId,
+      senderId,
+    );
+    for (const member of conversation.members) {
+      if (member.userId === senderId) continue;
       this.server
-        .to(`user:${data.receiverId}`)
-        .emit(`receiveMessage-${data.receiverId}`, message);
+        .to(userRoom(member.userId))
+        .emit(`receiveMessage-${member.userId}`, message);
 
-    // Notify recipient even if they aren't viewing the conversation.
-    if (data.receiverId) {
+      // Notify authenticated conversation members even if they are not
+      // currently viewing this conversation. Never trust receiverId supplied
+      // by the client; it could target an unrelated user.
       this.server
-        .to(`user:${data.receiverId}`)
-        .emit(`notification-${data.receiverId}`, {
+        .to(userRoom(member.userId))
+        .emit(`notification-${member.userId}`, {
           type: 'MESSAGE',
           // Field name `message` mirrors GET /notifications + FE NotificationItem.
           message: `Tin nhắn mới từ ${message.sender?.fullName ?? 'ai đó'}`,
@@ -193,13 +220,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** FE `/messages` UI uses snake_case events. Keep old camelCase events too. */
   @SubscribeMessage('join_conversation')
-  handleJoinConversation(
+  async handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
   ) {
     if (!data?.conversationId)
       return { status: 'error', message: 'Thiếu conversationId' };
-    void client.join(`conversation:${data.conversationId}`);
+    const userId = this.currentUserId(client);
+    await this.assertConversationAccess(data.conversationId, userId);
+    await client.join(conversationRoom(data.conversationId));
     return { status: 'success' };
   }
 
@@ -220,7 +249,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { status: 'error', message: 'Gửi quá nhanh, vui lòng chậm lại' };
     }
 
-    const senderId = client.data?.userId as string;
+    const senderId = this.currentUserId(client);
+    await this.assertConversationAccess(data.conversationId, senderId);
     const message = await this.chatService.saveMessage(
       data.conversationId,
       senderId,
@@ -236,9 +266,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       tempId: data.tempId,
     };
     this.server
-      .to(`conversation:${data.conversationId}`)
+      .to(conversationRoom(data.conversationId))
       .emit('new_message', payload);
-    this.server.emit(`conversation-${data.conversationId}`, message);
+    this.server
+      .to(conversationRoom(data.conversationId))
+      .emit(`conversation-${data.conversationId}`, message);
 
     const conversation = await this.chatService.getConversationById(
       data.conversationId,
@@ -247,7 +279,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     for (const member of conversation.members) {
       if (member.userId === senderId) continue;
       this.server
-        .to(`user:${member.userId}`)
+        .to(userRoom(member.userId))
         .emit(`receiveMessage-${member.userId}`, message);
     }
 
@@ -261,13 +293,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     data: { conversationId: string; userId: string; isTyping: boolean },
   ) {
     if (!this.allow(client, 'typing', 30, 10_000)) return;
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
+    await this.assertConversationAccess(data.conversationId, userId);
     await this.presence.setTyping(data.conversationId, userId, data.isTyping);
     const typingUsers = await this.presence.typingUsers(data.conversationId);
-    this.server.emit(`typing-${data.conversationId}`, {
-      conversationId: data.conversationId,
-      typingUsers,
-    });
+    this.server
+      .to(conversationRoom(data.conversationId))
+      .emit(`typing-${data.conversationId}`, {
+        conversationId: data.conversationId,
+        typingUsers,
+      });
   }
 
   @SubscribeMessage('messageDelivered')
@@ -275,11 +310,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { messageId: string; conversationId: string },
   ) {
-    const userId = client.data?.userId as string;
-    await this.chatService.markDelivered(data.messageId, userId);
+    const userId = this.currentUserId(client);
+    const message = await this.chatService.markDelivered(
+      data.messageId,
+      userId,
+    );
     this.server
-      .to(`conversation:${data.conversationId}`)
-      .emit(`messageStatus-${data.conversationId}`, {
+      .to(conversationRoom(message.conversationId))
+      .emit(`messageStatus-${message.conversationId}`, {
         messageId: data.messageId,
         status: 'DELIVERED',
       });
@@ -290,13 +328,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string; userId: string },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     const result = await this.chatService.markConversationRead(
       data.conversationId,
       userId,
     );
     this.server
-      .to(`conversation:${data.conversationId}`)
+      .to(conversationRoom(data.conversationId))
       .emit(`messageStatus-${data.conversationId}`, {
         status: 'READ',
         readerId: userId,
@@ -316,7 +354,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       receiverId?: string;
     },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     const message = await this.chatService.recallMessage(
       data.messageId,
       userId,
@@ -324,11 +362,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!message)
       return { status: 'error', message: 'Unauthorized or not found' };
 
-    this.server.emit(`messageRecalled`, {
-      conversationId: data.conversationId,
-      messageId: data.messageId,
-      message,
-    });
+    this.server
+      .to(conversationRoom(message.conversationId))
+      .emit(`messageRecalled`, {
+        conversationId: message.conversationId,
+        messageId: data.messageId,
+        message,
+      });
     return { status: 'success', data: message };
   }
 
@@ -337,7 +377,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { messageId: string; conversationId?: string },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     const message = await this.chatService.recallMessage(
       data.messageId,
       userId,
@@ -346,14 +386,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { status: 'error', message: 'Unauthorized or not found' };
 
     const payload = {
-      conversationId: data.conversationId ?? message.conversationId,
+      conversationId: message.conversationId,
       messageId: data.messageId,
       message,
     };
     this.server
-      .to(`conversation:${payload.conversationId}`)
+      .to(conversationRoom(payload.conversationId))
       .emit('message_unsent', payload);
-    this.server.emit('messageRecalled', payload);
+    this.server
+      .to(conversationRoom(payload.conversationId))
+      .emit('messageRecalled', payload);
     return { status: 'success', data: message };
   }
 
@@ -363,7 +405,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     data: { messageId: string; conversationId: string; content: string },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     const message = await this.chatService.editMessage(
       data.messageId,
       userId,
@@ -373,13 +415,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { status: 'error', message: 'Unauthorized or not found' };
 
     const payload = {
-      conversationId: data.conversationId ?? message.conversationId,
+      conversationId: message.conversationId,
       messageId: data.messageId,
       changes: { content: message.content, updatedAt: message.updatedAt },
       message,
     };
     this.server
-      .to(`conversation:${payload.conversationId}`)
+      .to(conversationRoom(payload.conversationId))
       .emit('message_updated', payload);
     return { status: 'success', data: message };
   }
@@ -390,7 +432,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     data: { messageId: string; targetConversationId: string; tempId?: string },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     const message = await this.chatService.forwardMessage(
       data.messageId,
       userId,
@@ -405,7 +447,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       tempId: data.tempId,
     };
     this.server
-      .to(`conversation:${data.targetConversationId}`)
+      .to(conversationRoom(message.conversationId))
       .emit('new_message', payload);
     return { status: 'success', data: { message, tempId: data.tempId } };
   }
@@ -415,7 +457,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { messageId: string },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     await this.chatService.deleteMessageForMe(data.messageId, userId);
     client.emit('message_deleted_for_me', {
       messageId: data.messageId,
@@ -435,15 +477,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       conversationId: string;
     },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     const reaction = await this.chatService.addReaction(
       data.messageId,
       userId,
       data.emoji,
     );
+    const message = await this.chatService.getMessageForMember(
+      data.messageId,
+      userId,
+    );
     this.server
-      .to(`conversation:${data.conversationId}`)
-      .emit(`reactionAdded-${data.conversationId}`, {
+      .to(conversationRoom(message.conversationId))
+      .emit(`reactionAdded-${message.conversationId}`, {
         messageId: data.messageId,
         reaction,
       });
@@ -456,14 +502,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     data: { messageId: string; reactionType: string; conversationId?: string },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     const reaction = await this.chatService.addReaction(
       data.messageId,
       userId,
       data.reactionType,
     );
+    const message = await this.chatService.getMessageForMember(
+      data.messageId,
+      userId,
+    );
     const payload = {
-      conversationId: data.conversationId,
+      conversationId: message.conversationId,
       messageId: data.messageId,
       reaction: {
         ...reaction,
@@ -471,12 +521,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         type: data.reactionType,
       },
     };
-    if (data.conversationId) {
-      this.server
-        .to(`conversation:${data.conversationId}`)
-        .emit('message_reacted', payload);
-      this.server.emit(`reactionAdded-${data.conversationId}`, payload);
-    }
+    this.server
+      .to(conversationRoom(message.conversationId))
+      .emit('message_reacted', payload);
+    this.server
+      .to(conversationRoom(message.conversationId))
+      .emit(`reactionAdded-${message.conversationId}`, payload);
     return { status: 'success', data: reaction };
   }
 
@@ -491,11 +541,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       conversationId: string;
     },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     await this.chatService.removeReaction(data.messageId, userId, data.emoji);
+    const message = await this.chatService.getMessageForMember(
+      data.messageId,
+      userId,
+    );
     this.server
-      .to(`conversation:${data.conversationId}`)
-      .emit(`reactionRemoved-${data.conversationId}`, {
+      .to(conversationRoom(message.conversationId))
+      .emit(`reactionRemoved-${message.conversationId}`, {
         messageId: data.messageId,
         userId,
         emoji: data.emoji,
@@ -509,29 +563,38 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     data: { messageId: string; reactionType?: string; conversationId?: string },
   ) {
-    const userId = client.data?.userId as string;
+    const userId = this.currentUserId(client);
     await this.chatService.removeReaction(
       data.messageId,
       userId,
       data.reactionType ?? '',
     );
+    const message = await this.chatService.getMessageForMember(
+      data.messageId,
+      userId,
+    );
     const payload = {
-      conversationId: data.conversationId,
+      conversationId: message.conversationId,
       messageId: data.messageId,
       userId,
     };
-    if (data.conversationId) {
-      this.server
-        .to(`conversation:${data.conversationId}`)
-        .emit('reaction_removed', payload);
-      this.server.emit(`reactionRemoved-${data.conversationId}`, payload);
-    }
+    this.server
+      .to(conversationRoom(message.conversationId))
+      .emit('reaction_removed', payload);
+    this.server
+      .to(conversationRoom(message.conversationId))
+      .emit(`reactionRemoved-${message.conversationId}`, payload);
     return { status: 'success' };
   }
 
   /** Allow other services to push a realtime notification to a user. */
   pushNotification(userId: string, payload: unknown) {
-    this.server.to(`user:${userId}`).emit(`notification-${userId}`, payload);
+    this.server.to(userRoom(userId)).emit(`notification-${userId}`, payload);
+  }
+
+  async revokeConversationRoom(userId: string, conversationId: string) {
+    const sockets = await this.server.in(userRoom(userId)).fetchSockets();
+    sockets.forEach((socket) => socket.leave(conversationRoom(conversationId)));
   }
 
   // --- WebRTC Signaling Events for Video/Voice Calls ---
@@ -551,18 +614,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     },
   ) {
     if (!this.allow(client, 'callUser', 10, 10_000)) return;
-    const from = client.data?.userId as string;
+    const from = this.currentUserId(client);
     if (!data?.userToCall || !data.signalData) {
       return { status: 'error', message: 'Thiếu dữ liệu cuộc gọi' };
+    }
+    let conversationId = data.conversationId;
+    if (conversationId) {
+      await this.assertConversationAccess(conversationId, from);
+      await this.assertConversationAccess(conversationId, data.userToCall);
+    } else {
+      const conversation = await this.chatService.getOrCreateDirectConversation(
+        from,
+        data.userToCall,
+      );
+      conversationId = conversation.id;
     }
 
     this.pruneStaleCalls();
     const activeCallKey = this.callKey(from, data.userToCall);
-    const existingCall = this.activeCalls.get(activeCallKey);
-    if (existingCall && existingCall.callerId !== from) {
-      client.emit(`callBusy-${from}`, { from: data.userToCall, glare: true });
-      return { status: 'error', message: 'Đang có cuộc gọi chờ giữa hai người' };
-    }
+    // Do not reject a reverse call between the same users here. Both clients
+    // can start at nearly the same time (WebRTC glare); the client-side
+    // deterministic user-id tie-breaker selects one caller. Rejecting the
+    // second signal prevented that resolver from running and incorrectly
+    // displayed "Người nhận đang bận" to one participant.
     this.activeCalls.set(activeCallKey, {
       callerId: from,
       calleeId: data.userToCall,
@@ -582,27 +656,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       callerName: data.callerName,
       callerAvatar: data.callerAvatar,
       isVideo: data.isVideo,
+      conversationId,
     };
     this.server
-      .to(`user:${data.userToCall}`)
+      .to(userRoom(data.userToCall))
       .emit(`receiveCall-${data.userToCall}`, payload);
     const callMessage = await this.chatService.createCallMessage(
-      data.conversationId,
+      conversationId,
       from,
       data.isVideo,
     );
-    if (data.conversationId) {
+    if (conversationId) {
       await this.chatService.startCallSession(
-        data.conversationId,
+        conversationId,
         from,
         data.isVideo,
       );
     }
-    if (callMessage && data.conversationId) {
+    if (callMessage && conversationId) {
       this.server
-        .to(`conversation:${data.conversationId}`)
+        .to(conversationRoom(conversationId))
         .emit('new_message', {
-          conversationId: data.conversationId,
+          conversationId,
           message: callMessage,
         });
     }
@@ -614,9 +689,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { to: string; signal: any },
   ) {
-    const from = client.data?.userId as string;
+    const from = this.currentUserId(client);
     if (from && data.to) this.activeCalls.delete(this.callKey(from, data.to));
-    this.server.to(`user:${data.to}`).emit(`callAccepted-${data.to}`, {
+    this.server.to(userRoom(data.to)).emit(`callAccepted-${data.to}`, {
       signal: data.signal,
       from,
     });
@@ -627,8 +702,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { to: string; candidate: any },
   ) {
-    const from = client.data?.userId as string;
-    this.server.to(`user:${data.to}`).emit(`iceCandidate-${data.to}`, {
+    const from = this.currentUserId(client);
+    this.server.to(userRoom(data.to)).emit(`iceCandidate-${data.to}`, {
       candidate: data.candidate,
       from,
     });
@@ -639,9 +714,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { to: string },
   ) {
-    const from = client.data?.userId as string;
+    const from = this.currentUserId(client);
     if (from && data.to) this.activeCalls.delete(this.callKey(from, data.to));
-    this.server.to(`user:${data.to}`).emit(`callEnded-${data.to}`, { from });
+    this.server.to(userRoom(data.to)).emit(`callEnded-${data.to}`, { from });
   }
 
   @SubscribeMessage('rejectCall')
@@ -649,9 +724,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { to: string },
   ) {
-    const from = client.data?.userId as string;
+    const from = this.currentUserId(client);
     if (from && data.to) this.activeCalls.delete(this.callKey(from, data.to));
-    this.server.to(`user:${data.to}`).emit(`callRejected-${data.to}`, { from });
+    this.server.to(userRoom(data.to)).emit(`callRejected-${data.to}`, { from });
   }
 
   @SubscribeMessage('callBusy')
@@ -659,8 +734,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { to: string },
   ) {
-    const from = client.data?.userId as string;
-    if (from && data.to) this.activeCalls.delete(this.callKey(from, data.to));
-    this.server.to(`user:${data.to}`).emit(`callBusy-${data.to}`, { from });
+    this.currentUserId(client);
+    if (!data?.to) return { status: 'error', message: 'Thiếu người gọi' };
+
+    // A user room can contain several browser tabs/devices. One stale or busy
+    // socket must not reject a call on behalf of every other socket that may
+    // still accept it. Keep the pending call alive; an available socket can
+    // answer, while a truly unanswered call is closed by the caller timeout.
+    return { status: 'ignored', message: 'Busy is resolved per user timeout' };
   }
 }

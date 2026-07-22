@@ -253,6 +253,8 @@ describe('UsersService friendship', () => {
     expect(mockedPrisma.user.findMany).toHaveBeenCalledWith({
       where: {
         id: { notIn: ['user-1'] },
+        emailVerified: true,
+        isSuspended: false,
         OR: [
           { fullName: { contains: 'nguyen', mode: 'insensitive' } },
           { email: { contains: 'nguyen', mode: 'insensitive' } },

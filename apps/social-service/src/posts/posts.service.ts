@@ -15,7 +15,7 @@ import {
   CacheService,
   type StorageProvider,
 } from '@campus-connect/common';
-import { join } from 'path';
+import { resolve } from 'path';
 
 type UploadFile = {
   buffer: Buffer;
@@ -28,8 +28,8 @@ type UploadFile = {
 export class PostsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger('PostsService');
   private readonly storage: StorageProvider = createStorageProvider(
-    join(process.cwd(), 'uploads'),
-    '/uploads',
+    resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+    process.env.UPLOAD_PUBLIC_BASE_URL || '/uploads',
   );
   /** Handle for the background story-purge timer. */
   private purgeTimer: NodeJS.Timeout | null = null;

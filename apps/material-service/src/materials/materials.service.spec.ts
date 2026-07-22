@@ -70,3 +70,47 @@ describe('MaterialsService — upload validation', () => {
     expect(prisma.material.create).toHaveBeenCalled();
   });
 });
+
+describe('MaterialsService — real catalog filters', () => {
+  let service: MaterialsService;
+  const mockQueue = { add: jest.fn().mockResolvedValue({}) };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new MaterialsService(mockQueue as any);
+    jest.mocked(prisma.material.findMany).mockResolvedValue([]);
+  });
+
+  it('only lists ready materials and applies search, subject and file type', async () => {
+    await service.getMaterials({
+      search: 'mạng máy tính',
+      subject: 'INFO3006',
+      fileType: 'PDF',
+    });
+
+    expect(prisma.material.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          deletedAt: null,
+          status: 'READY',
+          subject: { contains: 'INFO3006', mode: 'insensitive' },
+          fileType: 'PDF',
+          OR: [
+            { title: { contains: 'mạng máy tính', mode: 'insensitive' } },
+            { description: { contains: 'mạng máy tính', mode: 'insensitive' } },
+            { tags: { has: 'mạng máy tính' } },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('ignores unsupported file types instead of producing an invalid query', async () => {
+    await service.getMaterials({ fileType: 'Đề cương' });
+
+    const call = jest.mocked(prisma.material.findMany).mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    };
+    expect(call.where).not.toHaveProperty('fileType');
+  });
+});

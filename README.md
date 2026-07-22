@@ -1,202 +1,220 @@
-# CampusConnect - Student Social Network Platform
+# CMC Network
 
-Hệ sinh thái số kết nối sinh viên trường Đại học CMC.
+Nền tảng số dành cho sinh viên Đại học CMC, kết hợp mạng xã hội, học tập, kho tài liệu, trò chuyện thời gian thực, marketplace và trợ lý AI trong một hệ thống microservice.
 
-## 📋 Tính năng chính
+Website production: [cmcnetwork.io.vn](https://cmcnetwork.io.vn)
 
-| Module | Mô tả |
+## Tính năng
+
+- **Tài khoản và hồ sơ:** đăng ký, xác minh email/OTP, JWT, Microsoft SSO, hồ sơ học tập và thành tích.
+- **Mạng xã hội:** bảng tin, bài viết đa phương tiện, bình luận, cảm xúc, chia sẻ, lưu bài và story.
+- **Học tập:** nhóm học, sự kiện, lịch học, điểm, giảng viên và kết nối mentor.
+- **Kho tài liệu:** tải lên, xem, tải xuống, đánh giá và bookmark tài liệu.
+- **AI cho tài liệu:** đọc nội dung PDF, tạo tóm tắt, flashcard và câu hỏi trắc nghiệm có đáp án, giải thích.
+- **Chat thời gian thực:** tin nhắn cá nhân/nhóm, trạng thái hiện diện, cuộc gọi và LiveKit/WebRTC.
+- **Marketplace:** đăng và tìm sản phẩm dành cho sinh viên.
+- **Quản trị:** dashboard, thống kê, quản lý người dùng và báo cáo.
+
+## Công nghệ
+
+| Lớp | Công nghệ |
 |---|---|
-| 🔐 Authentication | Đăng ký email trường, OTP, Google/Microsoft login, 2FA |
-| 👤 Student Profile | Hồ sơ sinh viên, MSSV, khoa, ngành, khóa, kỹ năng, chứng chỉ |
-| 📱 Social Network | Feed, post (text/image/video/poll), like, comment, share, save |
-| 📚 Study Matching | Tạo nhóm học, tìm partner, auto-match theo môn/khoa |
-| 📖 Material Hub | Upload/download tài liệu, đánh giá, AI tóm tắt |
-| 🎓 Mentor Connect | Kết nối khóa trên-khóa dưới, đặt lịch, rating |
-| 🛒 Marketplace | Mua bán đồ cũ: giáo trình, laptop, xe đạp |
-| 📅 Event Management | Tạo sự kiện CLB, QR check-in, export Excel |
-| 💬 Realtime Chat | Chat cá nhân/nhóm, typing indicator, read receipt |
-| 🤖 AI Assistant | Tóm tắt tài liệu, sinh đề cương, flashcard, gợi ý khóa học |
-| ⭐ Reputation | Điểm uy tín, huy hiệu, ranking |
-| 🛡️ Admin Dashboard | Thống kê DAU/MAU, quản lý user, báo cáo |
+| Web | Next.js 16, React 19, Tailwind CSS 4, TanStack Query, Zustand |
+| Admin | Vite, React |
+| Backend | NestJS 11, Socket.IO, BullMQ |
+| AI | FastAPI, Python, OpenAI-compatible API |
+| Dữ liệu | PostgreSQL 15, Prisma 5, Redis 7 |
+| Monorepo | npm workspaces, Turborepo |
+| Vận hành | Docker Compose, PM2, Nginx |
 
-## 🏗️ Kiến trúc hệ thống
+## Kiến trúc
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Client Layer                       │
-│  ┌──────────────┐  ┌──────────────┐                 │
-│  │  Web Client  │  │ Admin Panel  │                 │
-│  │  Next.js 16  │  │ Vite + React │                 │
-│  └──────┬───────┘  └──────┬───────┘                 │
-│         │                 │                          │
-│         └────────┬────────┘                          │
-│                  ▼                                   │
-│  ┌───────────────────────────────┐                   │
-│  │       API Gateway (NestJS)    │                   │
-│  │  PORT: 3001                   │                   │
-│  │  • CORS + Validation          │                   │
-│  │  • Reverse Proxy              │                   │
-│  │  • Rate Limiting              │                   │
-│  └───────┬───┬───┬───┬───┬───┬───┘                   │
-│          │   │   │   │   │   │   │                   │
-│  ┌───────▼───▼───▼───▼───▼───▼───┐                   │
-│  │       Service Layer            │                   │
-│  │                                │                   │
-│  │  auth-service     :3002        │                   │
-│  │  user-service     :3003        │                   │
-│  │  social-service   :3004        │                   │
-│  │  chat-service     :3005 (WS)   │                   │
-│  │  study-service    :3006        │                   │
-│  │  material-service :3007        │                   │
-│  │  marketplace-svc  :3008        │                   │
-│  └──────────┬─────────────────────┘                   │
-│             │                                          │
-│  ┌──────────▼─────────────────────┐                   │
-│  │       Data Layer                │                   │
-│  │                                 │                   │
-│  │  PostgreSQL  ← Prisma ORM       │                   │
-│  │  Redis     ← Session/Cache      │                   │
-│  │  S3        ← File Storage       │                   │
-│  └─────────────────────────────────┘                   │
-└─────────────────────────────────────────────────────┘
+```text
+Web Client / Admin Dashboard
+             │
+        API Gateway
+             │
+ ┌───────────┼───────────┬───────────┐
+ │           │           │           │
+Auth       User        Social       Chat
+Study      Material    Marketplace  AI
+ │           │                       │
+ └──── PostgreSQL / Redis / Upload Storage
 ```
 
-## 🚀 Cài đặt & Chạy
+| Thành phần | Chức năng | Cổng production |
+|---|---|---:|
+| `web-client` | Giao diện sinh viên | 3000 |
+| `admin-dashboard` | Giao diện quản trị | 25443 |
+| `api-gateway` | Cổng API và reverse proxy | 3001 |
+| `auth-service` | Xác thực và phiên đăng nhập | 3002 |
+| `user-service` | Hồ sơ, học vụ, mentor, thông báo | 3003 |
+| `social-service` | Feed, bài viết và tương tác | 3004 |
+| `chat-service` | Chat, presence và cuộc gọi | 3005 |
+| `study-service` | Nhóm học và sự kiện | 3006 |
+| `material-service` | Tài liệu và xử lý PDF | 3007 |
+| `marketplace-service` | Sản phẩm marketplace | 3008 |
+| `ai-service` | Hỏi đáp và sinh nội dung học tập | 8000 |
 
-### Yêu cầu
-- Node.js 18+
+> Cổng development được cấu hình trong `.env`; không nên ghi cứng cổng service trong mã nguồn.
+
+## Cấu trúc repository
+
+```text
+CMC-Network/
+├── apps/
+│   ├── web-client/
+│   ├── admin-dashboard/
+│   ├── api-gateway/
+│   ├── auth-service/
+│   ├── user-service/
+│   ├── social-service/
+│   ├── chat-service/
+│   ├── study-service/
+│   ├── material-service/
+│   ├── marketplace-service/
+│   └── ai-service/
+├── packages/
+│   ├── database/
+│   ├── common/
+│   ├── cache/
+│   ├── logger/
+│   └── ui-kit/
+├── infrastructure/
+├── scripts/
+├── ecosystem.config.js
+└── turbo.json
+```
+
+## Yêu cầu
+
+- Node.js 20+
 - npm 10+
-- Docker + Docker Compose
+- Python 3.10+
+- Docker và Docker Compose
+- PM2 nếu triển khai trực tiếp trên máy chủ
 
-### Bước 1: Cài đặt dependencies
+## Chạy local
+
+### 1. Cài dependencies
+
 ```bash
 npm install
 ```
 
-### Bước 2: Khởi động Database
+### 2. Cấu hình môi trường
+
 ```bash
-cd infrastructure
-docker-compose up -d
+cp .env.example .env
 ```
 
-### Bước 3: Cấu hình database
+Cập nhật tối thiểu kết nối PostgreSQL, Redis, JWT, email và AI trong `.env`. Không commit `.env`, API key hoặc mật khẩu lên Git.
+
+### 3. Khởi động hạ tầng
+
 ```bash
-cd packages/database
-npx prisma generate
-npx prisma db push
+docker compose -f infrastructure/docker-compose.yml up -d
 ```
 
-### Bước 4: Chạy development
+### 4. Chuẩn bị database
+
+```bash
+npx --workspace=@campus-connect/database prisma generate
+npx --workspace=@campus-connect/database prisma migrate deploy
+npm run build --workspace=packages/database
+```
+
+Khi phát triển migration mới, dùng `prisma migrate dev` trong môi trường local. Không dùng `prisma db push` làm quy trình deployment production.
+
+### 5. Khởi động ứng dụng
+
 ```bash
 npm run dev
 ```
 
-Các services sẽ chạy tại:
-- Web Client: `http://localhost:3000`
-- Admin Dashboard: `http://localhost:5173`
-- API Gateway: `http://localhost:3001`
-- Auth Service: `http://localhost:3002`
-- User Service: `http://localhost:3003`
-- Social Service: `http://localhost:3004`
-- Chat Service: `http://localhost:3005` (WebSocket)
-- Study Service: `http://localhost:3006`
-- Material Service: `http://localhost:3007`
-- Marketplace Service: `http://localhost:3008`
-
-## 📁 Cấu trúc thư mục
-
-```
-campus-connect/
-├── apps/
-│   ├── web-client/          # Next.js 16 - Student frontend
-│   ├── admin-dashboard/     # Vite + React - Admin panel
-│   ├── api-gateway/         # NestJS - API Gateway + Proxy
-│   ├── auth-service/        # NestJS - Authentication
-│   ├── user-service/        # NestJS - User profiles
-│   ├── social-service/      # NestJS - Posts, comments, likes
-│   ├── chat-service/        # NestJS + Socket.IO - Realtime chat
-│   ├── study-service/       # NestJS - Study groups
-│   ├── material-service/    # NestJS - Study materials
-│   └── marketplace-service/ # NestJS - Student marketplace
-├── packages/
-│   ├── database/            # Prisma ORM + shared schema
-│   ├── logger/              # Winston shared logger
-│   ├── ui-kit/              # Shared React components
-│   └── eslint-config/       # Shared ESLint config
-├── infrastructure/
-│   └── docker-compose.yml   # PostgreSQL + Redis
-├── turbo.json               # Turborepo config
-└── API_DESIGN.md            # RESTful API documentation
-```
-
-## 🗄️ Database Schema
-
-Xem chi tiết tại: `packages/database/prisma/schema.prisma`
-
-Bao gồm 25+ models:
-- User, Friendship, FriendRequest
-- Post, Comment, PostLike, PostSave, CommentLike
-- StudyGroup, StudyGroupMember, JoinRequest
-- Material, MaterialBookmark, MaterialReview
-- MentorProfile, MentorBooking, MentorReview
-- Product
-- Event, EventAttendee
-- Conversation, ConversationMember, Message
-- UserSkill, UserAchievement, UserCertificate, UserProject
-- UserBadge, ReputationHistory
-
-## 🛡️ Security
-
-- JWT Access Token (15 min expiry)
-- Refresh Token (7 days)
-- 2FA (TOTP)
-- RBAC (Student, Teacher, Admin, Club Leader)
-- Rate Limiting per endpoint
-- XSS Protection
-- CSRF Protection
-- SQL Injection Protection (Prisma ORM)
-- File Upload Validation (type, size)
-- Email verification (OTP)
-
-## 🚢 Deployment
-
-PM2/deploy/cache checklist: `DEPLOYMENT_STABILITY_CHECKLIST.md`.
-
-Healthcheck sau deploy:
+Có thể chạy từng nhóm:
 
 ```bash
+npm run dev:frontend
+npm run dev:backend
+npm run dev:admin
+npm run dev:web
+```
+
+AI service cần môi trường Python riêng và dependencies trong `apps/ai-service/requirements.txt`.
+
+## Các lệnh chính
+
+| Lệnh | Mô tả |
+|---|---|
+| `npm run dev` | Chạy môi trường development |
+| `npm run build` | Build toàn bộ workspace |
+| `npm run lint` | Kiểm tra lint |
+| `npm test` | Chạy test tự động |
+| `npm run deploy:healthcheck` | Kiểm tra health sau deployment |
+
+Ví dụ kiểm thử riêng material service:
+
+```bash
+npm test --workspace=apps/material-service
+npm run build --workspace=apps/material-service
+```
+
+## AI đọc tài liệu
+
+Luồng xử lý PDF:
+
+1. `material-service` lưu file vào upload storage và tạo BullMQ job.
+2. Worker trích xuất văn bản từ PDF.
+3. `ai-service` tạo JSON có cấu trúc gồm tóm tắt, flashcard và quiz.
+4. Kết quả được kiểm tra định dạng rồi lưu vào PostgreSQL.
+5. Nếu AI tạm thời không hoạt động, tài liệu vẫn sẵn sàng và giao diện sử dụng nội dung fallback an toàn.
+
+Biến môi trường liên quan:
+
+- `AI_SERVICE_BASE_URL`: địa chỉ nội bộ của AI service.
+- `AI_MATERIAL_TIMEOUT_MS`: timeout sinh nội dung tài liệu, mặc định 60 giây.
+- `OPENAI_API_KEY` hoặc `AI_API_KEY`: khóa nhà cung cấp AI.
+- `OPENAI_BASE_URL` hoặc `AI_API_URL`: OpenAI-compatible endpoint tùy chọn.
+
+## Lưu trữ file
+
+Upload không được lưu trong thư mục source của từng service.
+
+- Local mặc định: `.data/uploads`
+- Production khuyến nghị: `/var/lib/campus-connect/uploads`
+- Docker Compose sử dụng persistent volume cho upload.
+
+Các thư mục upload, log, cache, build output và `.env` đã được loại khỏi Git. Khi đổi máy chủ phải sao lưu cả PostgreSQL và upload storage.
+
+## Triển khai PM2
+
+```bash
+npm ci
+npx --workspace=@campus-connect/database prisma generate
+npm run build
+pm2 startOrReload ecosystem.config.js --update-env
+pm2 save
 npm run deploy:healthcheck
 ```
 
-## 📊 Ước tính chi phí hạ tầng (10,000 users)
+Xem thêm [`DEPLOYMENT_STABILITY_CHECKLIST.md`](DEPLOYMENT_STABILITY_CHECKLIST.md) trước khi triển khai production.
 
-| Service | Plan | Cost/month |
-|---|---|---|
-| AWS EC2 (t3.medium) | 2 instances | $60 |
-| RDS PostgreSQL (db.t3.small) | 20GB | $25 |
-| ElastiCache Redis (cache.t3.micro) | - | $12 |
-| S3 Storage | 50GB | $1.15 |
-| CloudFront CDN | - | $5 |
-| **Total** | | **~$103/month** |
+## Tài liệu kỹ thuật
 
-## 🗺️ Roadmap 6 tháng
+- [`API_DESIGN.md`](API_DESIGN.md): thiết kế API.
+- [`ERD.md`](ERD.md): mô hình dữ liệu.
+- [`DEPLOYMENT_STABILITY_CHECKLIST.md`](DEPLOYMENT_STABILITY_CHECKLIST.md): checklist deployment.
+- [`SECURITY_HARDENING_AUDIT.md`](SECURITY_HARDENING_AUDIT.md): ghi chú hardening và bảo mật.
 
-| Tháng | Milestone |
-|---|---|
-| Tháng 1 | Auth + Profile + Basic Feed |
-| Tháng 2 | Social (comment, like, share) + Chat |
-| Tháng 3 | Study Groups + Material Hub |
-| Tháng 4 | Marketplace + Events |
-| Tháng 5 | Mentor Connect + AI Assistant |
-| Tháng 6 | Reputation System + Admin Dashboard + Production Deploy |
+## Quy tắc repository
 
-## 📈 Scale lên 100,000 users
+- Không commit file upload, log, cache, build output hoặc secret.
+- Không thêm script reset mật khẩu/tài khoản có dữ liệu viết cứng.
+- Giữ các file `*.spec.ts` và e2e test vì đây là kiểm thử hồi quy của sản phẩm.
+- Thay đổi schema phải có Prisma migration.
+- Chạy test và build liên quan trước khi tạo commit.
 
-- Horizontal scaling: Auto-scaling groups cho mỗi service
-- Database: Read replicas + Connection pooling (PgBouncer)
-- Cache: Redis Cluster cho session + feed cache
-- Queue: RabbitMQ cho async tasks (email, notifications, AI processing)
-- CDN: CloudFront cho static files + images
-- Load Balancer: ALB trước API Gateway
-- Monitoring: Prometheus + Grafana
-- Logging: ELK Stack (Elasticsearch, Logstash, Kibana)
+## License
+
+Dự án nội bộ phục vụ hệ sinh thái sinh viên Đại học CMC. Việc sử dụng và phân phối tuân theo chính sách của chủ sở hữu repository.

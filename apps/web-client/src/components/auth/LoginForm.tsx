@@ -248,7 +248,7 @@ export function LoginForm() {
 
       <Button
         type="submit"
-        className="sticky bottom-[calc(env(safe-area-inset-bottom)+8px)] z-10 mt-4 h-12 w-full overflow-hidden rounded-xl border border-white/10 bg-gradient-to-r from-blue-600 to-indigo-600 text-[15px] font-bold text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] transition-all hover:from-blue-500 hover:to-indigo-500 sm:static"
+        className="group sticky bottom-[calc(env(safe-area-inset-bottom)+8px)] z-10 mt-4 h-12 w-full overflow-hidden rounded-xl border border-white/10 bg-gradient-to-r from-blue-600 to-indigo-600 text-[15px] font-bold text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] transition-all hover:from-blue-500 hover:to-indigo-500 sm:relative"
         isLoading={isSubmitting}
       >
         <span className="relative z-10 flex items-center gap-2">

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { NotificationItem } from './NotificationItem';
-import { Check, Settings, MoreHorizontal } from 'lucide-react';
+import { Bell, MoreHorizontal } from 'lucide-react';
 import Link from 'next/link';
 import { useNotificationStore } from '@/stores/useNotificationStore';
 
@@ -11,9 +11,13 @@ export const NotificationDropdown = ({ onClose }: { onClose: () => void }) => {
   const { notifications, markAsRead, markAllAsRead } = useNotificationStore();
 
   const filteredNotifs = activeTab === 'ALL' ? notifications : notifications.filter(n => !n.isRead);
+  const emptyTitle = activeTab === 'UNREAD' ? 'Không có thông báo chưa đọc' : 'Chưa có thông báo';
+  const emptyDescription = activeTab === 'UNREAD'
+    ? 'Thông báo mới hoặc chưa đọc sẽ xuất hiện tại đây.'
+    : 'Khi có hoạt động mới, thông báo sẽ xuất hiện tại đây.';
 
   return (
-    <div className="absolute right-0 top-12 w-[360px] rounded-2xl z-50 flex flex-col max-h-[85vh] isolate">
+    <div className="fixed inset-x-3 top-16 max-h-[calc(100vh-5rem)] rounded-2xl z-50 flex flex-col isolate sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[360px] sm:max-h-[85vh]">
       {/* Bulletproof Glass Background Layer */}
       <div 
         className="absolute inset-0 rounded-2xl pointer-events-none -z-10"
@@ -51,15 +55,31 @@ export const NotificationDropdown = ({ onClose }: { onClose: () => void }) => {
         </button>
       </div>
 
-      <div className="flex flex-col flex-1 overflow-y-auto px-2 pb-2">
+      <div className="flex flex-col flex-1 overflow-y-auto px-2 pb-2 min-h-[240px]">
         <div className="flex items-center justify-between px-2 py-2">
           <span className="text-[15px] font-semibold text-foreground">Mới nhất</span>
-          <button onClick={markAllAsRead} className="text-[14px] text-primary hover:underline">Đánh dấu tất cả đã đọc</button>
+          <button
+            onClick={markAllAsRead}
+            disabled={!notifications.some((notif) => !notif.isRead)}
+            className="text-[14px] text-primary hover:underline disabled:cursor-not-allowed disabled:text-foreground/40 disabled:no-underline"
+          >
+            Đánh dấu tất cả đã đọc
+          </button>
         </div>
         
-        {filteredNotifs.map(notif => (
-          <NotificationItem key={notif.id} {...notif} onRead={markAsRead} />
-        ))}
+        {filteredNotifs.length > 0 ? (
+          filteredNotifs.map(notif => (
+            <NotificationItem key={notif.id} {...notif} onRead={markAsRead} />
+          ))
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center text-foreground/60">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Bell className="h-8 w-8" />
+            </div>
+            <p className="text-[16px] font-semibold text-foreground/80">{emptyTitle}</p>
+            <p className="mt-1 text-[14px] leading-5">{emptyDescription}</p>
+          </div>
+        )}
       </div>
       
       <div className="p-2 border-t border-border/50">

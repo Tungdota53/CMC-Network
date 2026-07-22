@@ -8,7 +8,13 @@ import { WebrtcService } from './webrtc.service';
 
 @Module({
   controllers: [ChatController],
-  providers: [ChatGateway, ChatService, PresenceService, LiveKitService, WebrtcService],
+  providers: [
+    ChatGateway,
+    ChatService,
+    PresenceService,
+    LiveKitService,
+    WebrtcService,
+  ],
   exports: [PresenceService],
 })
 export class ChatModule {}

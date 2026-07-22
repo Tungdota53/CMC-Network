@@ -9,6 +9,7 @@ export const SUBJECTS = [
   { id: 'INFO2013', name: 'Nhập môn công nghệ thông tin' },
   { id: 'PROG2008', name: 'Phát triển ứng dụng web' },
   { id: 'INFO2002', name: 'Cấu trúc dữ liệu và giải thuật' },
+  { id: 'INFO2004', name: 'Cơ sở dữ liệu' },
   { id: 'INFO3001', name: 'Pháp lý và Đạo đức nghề nghiệp' },
   { id: 'MATH2005', name: 'Toán rời rạc' },
   { id: 'INFO2008', name: 'Dự án công nghệ mới' },
@@ -38,6 +39,7 @@ export const SUBJECTS = [
   { id: 'MATH2002', name: 'Đại số tuyến tính' },
   { id: 'GENE1006', name: 'Pháp luật đại cương' },
   { id: 'GENE1001', name: 'Triết học Mác - Lênin' },
+  { id: 'GENE1003', name: 'Chủ nghĩa xã hội khoa học' },
   { id: 'GENE1005', name: 'Tư tưởng Hồ Chí Minh' },
 ];
 

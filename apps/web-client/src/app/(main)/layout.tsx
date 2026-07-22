@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { Home, User, Bell, MessageCircle, Settings, Search, Users, BookOpen, Library, Bot, GraduationCap, Calendar, Star, LineChart, ShoppingBag, Ticket, Flag, Shield, UserCircle, Bookmark } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { RightSidebar } from '@/components/sidebar-right/RightSidebar';
@@ -42,7 +43,7 @@ export default function MainLayout({
         <div className="absolute inset-0 bg-card/70 backdrop-blur-md border-b border-border/60 shadow-sm z-[-1]"></div>
         
         {/* Left: Logo & Search */}
-        <div className="flex items-center gap-2 flex-1 lg:flex-none">
+        <div className="flex items-center gap-2 flex-1 lg:flex-none xl:w-[360px]">
           <Link href="/feed" className="flex items-center shrink-0 group mr-2">
             <img src="/new-logo-transparent.png" alt="CMC Network Logo" className="h-10 w-auto object-contain drop-shadow-md transition-transform group-hover:scale-105" />
           </Link>
@@ -52,34 +53,34 @@ export default function MainLayout({
         </div>
 
         {/* Center: Navigation (Desktop) */}
-        <div className="hidden md:flex items-center justify-center h-full flex-1 max-w-[650px] gap-2 px-4">
-          <Link href="/feed" className="group flex flex-1 items-center justify-center h-full relative px-2">
-            {pathname.startsWith('/feed') && (
-              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+        <div className="hidden md:grid grid-cols-5 items-center justify-items-center h-full flex-1 max-w-[650px] gap-2 px-4">
+          <Link href="/feed" className="group flex w-full min-w-0 items-center justify-center h-full relative px-2">
+            {isFeedPage && (
+              <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
             )}
-            <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/feed') ? "" : "hover:bg-white/5")}>
-              <Home 
-                className={cn("w-[28px] h-[28px] transition-all duration-300 ease-out group-hover:scale-110", pathname.startsWith('/feed') ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] scale-110" : "text-slate-400 group-hover:text-slate-200")} 
-                fill={pathname.startsWith('/feed') ? "currentColor" : "none"} 
-                strokeWidth={pathname.startsWith('/feed') ? 2.5 : 2}
+            <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", isFeedPage ? "" : "hover:bg-white/5")}>
+              <Home
+                className={cn("w-[28px] h-[28px] transition-all duration-300 ease-out group-hover:scale-110", isFeedPage ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] scale-110" : "text-slate-400 group-hover:text-slate-200")}
+                fill={isFeedPage ? "currentColor" : "none"}
+                strokeWidth={isFeedPage ? 2.5 : 2}
               />
             </div>
           </Link>
-          <Link href="/friends" className="group flex flex-1 items-center justify-center h-full relative px-2">
-            {pathname.startsWith('/friends') && (
-              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+          <Link href="/friends" className="group flex w-full min-w-0 items-center justify-center h-full relative px-2">
+            {isFriendsPage && (
+              <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
             )}
-            <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/friends') ? "" : "hover:bg-white/5")}>
-              <Users 
-                className={cn("w-[28px] h-[28px] transition-all duration-300 ease-out group-hover:scale-110", pathname.startsWith('/friends') ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] scale-110" : "text-slate-400 group-hover:text-slate-200")} 
-                fill={pathname.startsWith('/friends') ? "currentColor" : "none"}
-                strokeWidth={pathname.startsWith('/friends') ? 2.5 : 2}
+            <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", isFriendsPage ? "" : "hover:bg-white/5")}>
+              <Users
+                className={cn("w-[28px] h-[28px] transition-all duration-300 ease-out group-hover:scale-110", isFriendsPage ? "text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)] scale-110" : "text-slate-400 group-hover:text-slate-200")}
+                fill={isFriendsPage ? "currentColor" : "none"}
+                strokeWidth={isFriendsPage ? 2.5 : 2}
               />
             </div>
           </Link>
-          <Link href="/study" className="group flex flex-1 items-center justify-center h-full relative px-2">
+          <Link href="/study" className="group flex w-full min-w-0 items-center justify-center h-full relative px-2">
             {pathname.startsWith('/study') && (
-              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+              <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
             )}
             <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/study') ? "" : "hover:bg-white/5")}>
               <BookOpen 
@@ -89,9 +90,9 @@ export default function MainLayout({
               />
             </div>
           </Link>
-          <Link href="/groups" className="group flex flex-1 items-center justify-center h-full relative px-2">
+          <Link href="/groups" className="group flex w-full min-w-0 items-center justify-center h-full relative px-2">
             {pathname.startsWith('/groups') && (
-              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+              <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
             )}
             <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/groups') ? "" : "hover:bg-white/5")}>
               <svg 
@@ -111,9 +112,9 @@ export default function MainLayout({
               </svg>
             </div>
           </Link>
-          <Link href="/marketplace" className="group flex flex-1 items-center justify-center h-full relative px-2">
+          <Link href="/marketplace" className="group flex w-full min-w-0 items-center justify-center h-full relative px-2">
             {pathname.startsWith('/marketplace') && (
-              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
+              <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-cyan-400 to-blue-600 rounded-t-full shadow-[0_-2px_12px_rgba(14,165,233,0.6)]" />
             )}
             <div className={cn("w-full h-[46px] rounded-xl flex items-center justify-center transition-all duration-300 ease-out", pathname.startsWith('/marketplace') ? "" : "hover:bg-white/5")}>
               <ShoppingBag 
@@ -126,7 +127,7 @@ export default function MainLayout({
         </div>
 
         {/* Right: Actions & Profile */}
-        <div className="flex items-center justify-end gap-2 lg:w-[320px]">
+        <div className="flex items-center justify-end gap-2 lg:w-[320px] xl:w-[360px]">
           {/* Menu Icon (Optional - like Facebook grid menu) */}
           <button className="hidden sm:flex w-10 h-10 rounded-full bg-hover hover:bg-foreground/10 transition-colors items-center justify-center text-foreground shrink-0">
             <svg viewBox="0 0 44 44" width="20" height="20" fill="currentColor">

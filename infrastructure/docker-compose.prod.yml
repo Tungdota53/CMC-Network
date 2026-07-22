@@ -140,6 +140,10 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: user-service
+    environment:
+      UPLOAD_ROOT: /var/lib/campus-connect/uploads
+    volumes:
+      - uploads:/var/lib/campus-connect/uploads
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3003/health || exit 1"]
       interval: 15s
@@ -155,6 +159,10 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: social-service
+    environment:
+      UPLOAD_ROOT: /var/lib/campus-connect/uploads
+    volumes:
+      - uploads:/var/lib/campus-connect/uploads
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3004/health || exit 1"]
       interval: 15s
@@ -170,6 +178,10 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: chat-service
+    environment:
+      UPLOAD_ROOT: /var/lib/campus-connect/uploads
+    volumes:
+      - uploads:/var/lib/campus-connect/uploads
     ports:
       - "3005:3005"
     healthcheck:
@@ -202,6 +214,10 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: material-service
+    environment:
+      UPLOAD_ROOT: /var/lib/campus-connect/uploads
+    volumes:
+      - uploads:/var/lib/campus-connect/uploads
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3007/health || exit 1"]
       interval: 15s
@@ -217,6 +233,10 @@ services:
       dockerfile: infrastructure/Dockerfile.service
       args:
         SERVICE: marketplace-service
+    environment:
+      UPLOAD_ROOT: /var/lib/campus-connect/uploads
+    volumes:
+      - uploads:/var/lib/campus-connect/uploads
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3008/health || exit 1"]
       interval: 15s
@@ -227,3 +247,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  uploads:

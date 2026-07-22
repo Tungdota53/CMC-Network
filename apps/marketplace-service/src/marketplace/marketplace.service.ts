@@ -11,15 +11,15 @@ import {
   validateUpload,
   type StorageProvider,
 } from '@campus-connect/common';
-import { join } from 'path';
+import { resolve } from 'path';
 
 @Injectable()
 export class MarketplaceService {
   private readonly maxImagesPerProduct = 8;
 
   private readonly storage: StorageProvider = createStorageProvider(
-    join(process.cwd(), 'uploads'),
-    '/uploads',
+    resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+    process.env.UPLOAD_PUBLIC_BASE_URL || '/uploads',
   );
 
   async getProducts(status?: string) {

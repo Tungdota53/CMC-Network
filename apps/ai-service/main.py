@@ -409,6 +409,89 @@ def summarize_text(request: SummarizeRequest):
 class ContentRequest(BaseModel):
     text: str
 
+def parse_json_object(raw: str):
+    cleaned = strip_reasoning(raw).strip()
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", cleaned, flags=re.IGNORECASE)
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("Model response does not contain a JSON object")
+    return json.loads(cleaned[start:end + 1])
+
+def fallback_material_content(content: str):
+    normalized = re.sub(r"\s+", " ", content).strip()
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", normalized) if len(part.strip()) >= 24]
+    concepts = sentences[:6] or [normalized[:500] or "Không trích xuất được nội dung văn bản."]
+    summary = " ".join(concepts[:3])
+    flashcards = [
+        {"front": f"Ý chính {index + 1} của tài liệu là gì?", "back": concept}
+        for index, concept in enumerate(concepts[:5])
+    ]
+    questions = []
+    for index, concept in enumerate(concepts[:3]):
+        questions.append({
+            "question": f"Nội dung nào phản ánh đúng ý chính {index + 1} của tài liệu?",
+            "options": [concept, "Thông tin tài khoản người dùng", "Thiết lập giao diện hệ thống", "Nội dung không xuất hiện trong tài liệu"],
+            "answer": 0,
+            "explanation": "Đáp án được trích trực tiếp từ nội dung tài liệu.",
+        })
+    return {"summary": summary, "flashcards": flashcards, "questions": questions}
+
+def validate_material_content(data: dict):
+    summary = str(data.get("summary", "")).strip()
+    flashcards = []
+    for card in data.get("flashcards", [])[:8]:
+        front = str(card.get("front", "")).strip()
+        back = str(card.get("back", "")).strip()
+        if front and back:
+            flashcards.append({"front": front, "back": back})
+    questions = []
+    for item in data.get("questions", [])[:6]:
+        options = [str(option).strip() for option in item.get("options", [])]
+        answer = item.get("answer")
+        if str(item.get("question", "")).strip() and len(options) == 4 and isinstance(answer, int) and 0 <= answer < 4:
+            questions.append({
+                "question": str(item["question"]).strip(),
+                "options": options,
+                "answer": answer,
+                "explanation": str(item.get("explanation", "")).strip(),
+            })
+    if not summary or not flashcards or not questions:
+        raise ValueError("Incomplete structured learning content")
+    return {"summary": summary, "flashcards": flashcards, "questions": questions}
+
+@app.post("/api/v1/material-content")
+@app.post("/api/v1/ai/material-content")
+def generate_material_content(request: ContentRequest):
+    content = request.text[:30000]
+    if not openai.api_key:
+        return fallback_material_content(content)
+    prompt = f"""
+Đọc kỹ nội dung tài liệu dưới đây và tạo bộ ôn tập bằng tiếng Việt.
+Chỉ trả về một JSON hợp lệ, không Markdown, theo đúng cấu trúc:
+{{
+  "summary": "Tóm tắt có cấu trúc, nêu khái niệm và ý chính",
+  "flashcards": [{{"front": "Câu hỏi", "back": "Đáp án dựa trên tài liệu"}}],
+  "questions": [{{"question": "Câu hỏi trắc nghiệm", "options": ["A", "B", "C", "D"], "answer": 0, "explanation": "Giải thích"}}]
+}}
+Yêu cầu 5-8 flashcard và 3-6 câu trắc nghiệm. answer là chỉ số 0-3. Không bịa kiến thức ngoài tài liệu.
+
+NỘI DUNG TÀI LIỆU:
+{content}
+""".strip()
+    try:
+        raw = call_chat_completion(
+            messages=[
+                {"role": "system", "content": "Bạn là trợ lý học tập. Chỉ xuất JSON hợp lệ dựa trên tài liệu được cung cấp."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=2200,
+        )
+        return validate_material_content(parse_json_object(raw))
+    except Exception:
+        return fallback_material_content(content)
+
 @app.post("/api/v1/generate-flashcards")
 @app.post("/api/v1/ai/generate-flashcards")
 def generate_flashcards(request: ContentRequest):

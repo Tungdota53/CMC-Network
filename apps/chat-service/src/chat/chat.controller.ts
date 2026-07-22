@@ -9,6 +9,8 @@ import {
   UploadedFile,
   UseInterceptors,
   UseGuards,
+  Headers,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -21,6 +23,13 @@ import { ChatService } from './chat.service';
 import { ChatGateway } from './chat.gateway';
 import { LiveKitService } from './livekit.service';
 import { WebrtcService } from './webrtc.service';
+import { createHash, timingSafeEqual } from 'crypto';
+
+function safeSecretEquals(actual: string, expected: string): boolean {
+  const actualHash = createHash('sha256').update(actual).digest();
+  const expectedHash = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(actualHash, expectedHash);
+}
 
 @Controller('chat')
 export class ChatController {
@@ -49,6 +58,7 @@ export class ChatController {
   /** Internal hook: other services push realtime notifications through here. */
   @Post('internal/notify')
   internalNotify(
+    @Headers('x-internal-secret') internalSecret: string | undefined,
     @Body()
     body: {
       userId: string;
@@ -58,6 +68,21 @@ export class ChatController {
       relatedId?: string;
     } = { userId: '', type: '' },
   ) {
+    const configuredSecrets = (process.env.INTERNAL_NOTIFY_SECRETS || '')
+      .split(',')
+      .map((secret) => secret.trim())
+      .filter(Boolean);
+
+    if (
+      configuredSecrets.length === 0 ||
+      !internalSecret ||
+      !configuredSecrets.some((secret) =>
+        safeSecretEquals(internalSecret, secret),
+      )
+    ) {
+      throw new UnauthorizedException('Internal notification auth required');
+    }
+
     this.chatGateway.pushNotification(body.userId, {
       type: body.type,
       // Emit as `message` to match GET /notifications + FE NotificationItem.
@@ -95,20 +120,33 @@ export class ChatController {
   }
 
   @Get('conversations/:userId/search')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
   async searchConversations(
     @Param('userId') userId: string,
+    @CurrentUser('sub') tokenUserId: string,
     @Query('q') q = '',
   ) {
+    this.chatService.assertSameUser(userId, tokenUserId);
     return this.chatService.searchConversations(userId, q);
   }
 
   @Get('conversations/:userId')
-  async getConversations(@Param('userId') userId: string) {
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
+  async getConversations(
+    @Param('userId') userId: string,
+    @CurrentUser('sub') tokenUserId: string,
+  ) {
+    this.chatService.assertSameUser(userId, tokenUserId);
     return this.chatService.getConversations(userId);
   }
 
   @Get('unread/:userId')
-  async getUnread(@Param('userId') userId: string) {
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
+  async getUnread(
+    @Param('userId') userId: string,
+    @CurrentUser('sub') tokenUserId: string,
+  ) {
+    this.chatService.assertSameUser(userId, tokenUserId);
     return this.chatService.getUnreadCounts(userId);
   }
 
@@ -317,11 +355,13 @@ export class ChatController {
     @Param('userId') userId: string,
     @CurrentUser('sub') tokenUserId: string,
   ) {
-    return this.chatService.removeGroupMember(
+    const result = await this.chatService.removeGroupMember(
       conversationId,
       tokenUserId,
       userId,
     );
+    await this.chatGateway.revokeConversationRoom(userId, conversationId);
+    return result;
   }
 
   @Post('conversations/:conversationId/background')

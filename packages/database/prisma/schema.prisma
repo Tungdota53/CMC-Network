@@ -452,6 +452,9 @@ model Material {
   rating        Float              @default(0)
   reviewCount   Int                @default(0)
   aiSummary     String?
+  aiFlashcards  Json?
+  aiQuizQuestions Json?
+  aiGeneratedAt DateTime?
   tags          String[]
   createdAt     DateTime           @default(now())
   deletedAt     DateTime?

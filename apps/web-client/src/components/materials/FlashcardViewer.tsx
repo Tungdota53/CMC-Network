@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, RotateCw, Layers3 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 
@@ -58,36 +58,47 @@ export const FlashcardViewer = ({ materialId }: { materialId: string }) => {
   };
 
   return (
-    <div className="bg-card rounded-2xl border border-border p-6 flex flex-col items-center">
-      <h3 className="text-lg font-bold text-foreground mb-6">Flashcard Ôn Tập (AI Generated)</h3>
+    <section className="rounded-xl border border-border bg-card p-5 shadow-sm" aria-labelledby="flashcard-title">
+      <div className="mb-5 flex w-full items-center justify-between gap-3">
+        <div>
+          <h2 id="flashcard-title" className="flex items-center gap-2 text-lg font-bold text-foreground"><Layers3 className="h-5 w-5 text-primary" /> Flashcard từ tài liệu</h2>
+          <p className="mt-1 text-sm text-foreground/60">Chạm vào thẻ để xem đáp án</p>
+        </div>
+        <span className="text-sm font-semibold text-primary">{currentIndex + 1}/{flashcards.length}</span>
+      </div>
       
       <div 
-        className="w-full max-w-lg aspect-[3/2] perspective-1000 mb-6 cursor-pointer"
+        className="w-full max-w-lg aspect-[3/2] perspective-1000 mb-5 cursor-pointer mx-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl"
         onClick={() => setIsFlipped(!isFlipped)}
+        onKeyDown={(event) => (event.key === 'Enter' || event.key === ' ') && setIsFlipped(!isFlipped)}
+        role="button"
+        tabIndex={0}
+        aria-label={isFlipped ? 'Xem câu hỏi' : 'Xem đáp án'}
       >
         <div className={`relative w-full h-full transition-transform duration-500 preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
           {/* Front */}
-          <div className="absolute inset-0 backface-hidden bg-hover border-2 border-border rounded-2xl flex items-center justify-center p-8 text-center shadow-sm">
+          <div className="absolute inset-0 backface-hidden bg-hover border border-border rounded-xl flex flex-col items-center justify-center p-8 text-center">
             <p className="text-xl font-bold text-foreground">{card?.front || card?.question || 'Mặt trước'}</p>
+            <span className="mt-5 inline-flex items-center gap-1.5 text-xs font-medium text-foreground/50"><RotateCw className="h-3.5 w-3.5" /> Xem đáp án</span>
           </div>
           {/* Back */}
-          <div className="absolute inset-0 backface-hidden rotate-y-180 bg-card border-2 border-primary rounded-2xl flex items-center justify-center p-8 text-center shadow-md">
+          <div className="absolute inset-0 backface-hidden rotate-y-180 bg-primary/5 border border-primary rounded-xl flex items-center justify-center p-8 text-center">
             <p className="text-lg text-foreground font-medium">{card?.back || card?.answer || 'Mặt sau'}</p>
           </div>
         </div>
       </div>
 
       <div className="flex items-center gap-6">
-        <button onClick={handlePrev} className="p-3 bg-hover text-foreground/80 rounded-full hover:bg-border transition-colors">
+        <button aria-label="Flashcard trước" onClick={handlePrev} className="p-3 bg-hover text-foreground/80 rounded-full hover:bg-border transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <span className="font-semibold text-foreground/60">
           {currentIndex + 1} / {flashcards.length}
         </span>
-        <button onClick={handleNext} className="p-3 bg-hover text-foreground/80 rounded-full hover:bg-border transition-colors">
+        <button aria-label="Flashcard tiếp theo" onClick={handleNext} className="p-3 bg-hover text-foreground/80 rounded-full hover:bg-border transition-colors">
           <ArrowRight className="w-5 h-5" />
         </button>
       </div>
-    </div>
+    </section>
   );
 };

@@ -13,3 +13,5 @@ __pycache__/
 .ua/
 logs*
 *-audit.json
+.data/
+apps/*/uploads/

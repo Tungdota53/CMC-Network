@@ -1,6 +1,6 @@
 import { bootstrapService } from '@campus-connect/common';
 import { AppModule } from './app.module';
-import { join } from 'path';
+import { resolve } from 'path';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient } from 'redis';
@@ -43,7 +43,10 @@ async function bootstrap() {
   await bootstrapService(AppModule, {
     serviceName: 'chat-service',
     port: 38080,
-    staticAssets: { root: join(process.cwd(), 'uploads'), prefix: '/uploads/' },
+    staticAssets: {
+      root: resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+      prefix: '/uploads/',
+    },
     beforeListen: async (app) => {
       // Must run before app.listen(), otherwise Nest initializes gateways with
       // the default in-memory adapter and cluster workers cannot fanout calls.

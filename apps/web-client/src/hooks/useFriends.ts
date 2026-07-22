@@ -2,8 +2,28 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 
+function decodeJwtUserId(token: string | null): string | null {
+  if (!token || typeof window === 'undefined') return null;
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+    const decoded = JSON.parse(atob(padded));
+    return decoded.sub || decoded.id || null;
+  } catch {
+    return null;
+  }
+}
+
 function useCurrentUserId(): string | null {
-  return useAuthStore((state) => state.user?.id ?? null);
+  const userId = useAuthStore((state) => state.user?.id ?? null);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  if (typeof window === 'undefined') return null;
+  const tokenUserId = decodeJwtUserId(localStorage.getItem('auth_token'));
+  if (tokenUserId) return tokenUserId;
+  if (!hasHydrated) return null;
+  return tokenUserId || userId;
 }
 
 // ==========================================
@@ -53,10 +73,10 @@ export function useFriends(take = 20) {
   const userId = useCurrentUserId();
   // TODO: Tạm dùng useQuery thường, sẽ nâng cấp lên useInfiniteQuery nếu cần
   return useQuery<GetFriendsResponse>({
-    queryKey: ['friends', 'list'],
+    queryKey: ['friends', 'list', userId, take],
     enabled: !!userId,
     queryFn: async () => {
-      const res = await api.get(`/friends?take=${take}`);
+      const res = await api.get(`/users/${userId}/friends?take=${take}`);
       return { friends: normalizeList(res.data.data), nextCursor: res.data.data?.nextCursor ?? null };
     },
   });
@@ -65,10 +85,10 @@ export function useFriends(take = 20) {
 export function useIncomingRequests() {
   const userId = useCurrentUserId();
   return useQuery<FriendUser[]>({
-    queryKey: ['friends', 'incoming'],
+    queryKey: ['friends', 'incoming', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const res = await api.get('/friends/requests/incoming');
+      const res = await api.get(`/users/${userId}/friends/requests/incoming`);
       return normalizeList(res.data.data);
     },
   });
@@ -77,10 +97,10 @@ export function useIncomingRequests() {
 export function useOutgoingRequests() {
   const userId = useCurrentUserId();
   return useQuery<FriendUser[]>({
-    queryKey: ['friends', 'outgoing'],
+    queryKey: ['friends', 'outgoing', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const res = await api.get('/friends/requests/outgoing');
+      const res = await api.get(`/users/${userId}/friends/requests/outgoing`);
       return normalizeList(res.data.data);
     },
   });
@@ -89,10 +109,10 @@ export function useOutgoingRequests() {
 export function useFriendSuggestions() {
   const userId = useCurrentUserId();
   return useQuery<FriendUser[]>({
-    queryKey: ['friends', 'suggestions'],
+    queryKey: ['friends', 'suggestions', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const res = await api.get('/friends/suggestions');
+      const res = await api.get(`/users/${userId}/friends/suggestions`);
       return normalizeList(res.data.data);
     },
   });
@@ -101,23 +121,24 @@ export function useFriendSuggestions() {
 export function useBlockedUsers() {
   const userId = useCurrentUserId();
   return useQuery<FriendUser[]>({
-    queryKey: ['friends', 'blocked'],
+    queryKey: ['friends', 'blocked', userId],
     enabled: !!userId,
     queryFn: async () => {
-      const res = await api.get('/friends/blocked');
+      const res = await api.get(`/users/${userId}/friends/blocked`);
       return normalizeList(res.data.data);
     },
   });
 }
 
 export function useMutualFriends(targetId: string) {
+  const userId = useCurrentUserId();
   return useQuery<FriendUser[]>({
-    queryKey: ['friends', 'mutual', targetId],
+    queryKey: ['friends', 'mutual', userId, targetId],
     queryFn: async () => {
-      const res = await api.get(`/friends/mutual/${targetId}`);
+      const res = await api.get(`/users/${userId}/friends/mutual/${targetId}`);
       return normalizeList(res.data.data);
     },
-    enabled: !!targetId,
+    enabled: !!userId && !!targetId,
   });
 }
 
@@ -126,43 +147,44 @@ export function useMutualFriends(targetId: string) {
 // ==========================================
 export function useFriendMutations() {
   const qc = useQueryClient();
+  const userId = useCurrentUserId();
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['friends'] });
   };
 
   const sendRequest = useMutation({
-    mutationFn: async (targetId: string) => api.post(`/friends/request/${targetId}`),
+    mutationFn: async (targetId: string) => api.post(`/users/${userId}/friends/request/${targetId}`),
     onSuccess: invalidateAll,
   });
 
   const acceptRequest = useMutation({
-    mutationFn: async (targetId: string) => api.post(`/friends/accept/${targetId}`),
+    mutationFn: async (targetId: string) => api.post(`/users/${userId}/friends/accept/${targetId}`),
     onSuccess: invalidateAll,
   });
 
   const rejectRequest = useMutation({
-    mutationFn: async (targetId: string) => api.post(`/friends/reject/${targetId}`),
+    mutationFn: async (targetId: string) => api.post(`/users/${userId}/friends/reject/${targetId}`),
     onSuccess: invalidateAll,
   });
 
   const cancelRequest = useMutation({
-    mutationFn: async (targetId: string) => api.delete(`/friends/cancel/${targetId}`),
+    mutationFn: async (targetId: string) => api.delete(`/users/${userId}/friends/cancel/${targetId}`),
     onSuccess: invalidateAll,
   });
 
   const removeFriend = useMutation({
-    mutationFn: async (targetId: string) => api.delete(`/friends/${targetId}`),
+    mutationFn: async (targetId: string) => api.delete(`/users/${userId}/friends/${targetId}`),
     onSuccess: invalidateAll,
   });
 
   const blockUser = useMutation({
-    mutationFn: async (targetId: string) => api.post(`/friends/block/${targetId}`),
+    mutationFn: async (targetId: string) => api.post(`/users/${userId}/friends/block/${targetId}`),
     onSuccess: invalidateAll,
   });
 
   const unblockUser = useMutation({
-    mutationFn: async (targetId: string) => api.delete(`/friends/block/${targetId}`),
+    mutationFn: async (targetId: string) => api.delete(`/users/${userId}/friends/block/${targetId}`),
     onSuccess: invalidateAll,
   });
 

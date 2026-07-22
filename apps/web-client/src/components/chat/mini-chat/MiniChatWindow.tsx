@@ -21,7 +21,8 @@ interface Props {
 }
 
 export const MiniChatWindow = ({ conversationId, name, avatarUrl, isOnline, isMinimized, onClose, onToggleMinimize }: Props) => {
-  const { user } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
+  const userId = user?.id;
   const { socket, isConnected } = useChatSocket();
   const call = useCall();
   const router = useRouter();
@@ -70,10 +71,10 @@ export const MiniChatWindow = ({ conversationId, name, avatarUrl, isOnline, isMi
       }
     };
     
-    if (conversationId && user) {
+    if (conversationId && userId) {
       fetchChatData();
     }
-  }, [conversationId, user?.id]);
+  }, [conversationId, userId]);
 
   // 2. Socket Listeners
   useEffect(() => {
@@ -154,7 +155,7 @@ export const MiniChatWindow = ({ conversationId, name, avatarUrl, isOnline, isMi
       socket.off('message_reacted', handleMessageReacted);
       socket.off('reaction_removed', handleReactionRemoved);
     };
-  }, [socket, isConnected, conversationId, user]);
+  }, [socket, isConnected, conversationId, userId]);
 
   // 3. Handlers
   const handleSendMessage = async (text: string, replyToId?: string) => {
@@ -302,21 +303,22 @@ export const MiniChatWindow = ({ conversationId, name, avatarUrl, isOnline, isMi
     const avatarFallback = displayName.charAt(0).toUpperCase();
 
     return (
-      <div className="relative group animate-in fade-in zoom-in-95 duration-300 spring-gentle">
+      <div className="relative group animate-in fade-in zoom-in-95 duration-500 mb-2">
         <button 
           onClick={onToggleMinimize}
-          className="w-14 h-14 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.15)] border border-white/20 transition-all active:scale-90 relative flex items-center justify-center bg-background/50 backdrop-blur-xl overflow-hidden"
+          className="w-14 h-14 rounded-full shadow-[0_12px_40px_rgba(0,0,0,0.25)] border-[1.5px] border-white/20 transition-all hover:scale-105 hover:shadow-[0_12px_40px_rgba(var(--primary-rgb),0.3)] active:scale-95 relative flex items-center justify-center bg-background/40 backdrop-blur-2xl backdrop-saturate-200 overflow-hidden"
         >
-          <Avatar src={conversation.avatarUrl || avatarUrl} fallback={avatarFallback} size="lg" className="w-full h-full object-cover scale-105" />
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent pointer-events-none" />
+          <Avatar src={conversation.avatarUrl || avatarUrl} fallback={avatarFallback} size="lg" className="w-full h-full object-cover p-0.5 rounded-full" />
           {isOnline && (
-            <div className="absolute bottom-[2px] right-[2px] w-3.5 h-3.5 bg-green-500 border-[2.5px] border-background/80 rounded-full shadow-sm z-10"></div>
+            <div className="absolute bottom-[2px] right-[2px] w-3.5 h-3.5 bg-green-500 border-2 border-background/90 rounded-full shadow-sm z-10"></div>
           )}
         </button>
         <button 
           onClick={(e) => { e.stopPropagation(); onClose(); }}
-          className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-white/10 backdrop-blur-md border border-white/20 shadow-lg rounded-full text-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white hover:border-red-500 hover:scale-110 z-20"
+          className="absolute -top-1.5 -right-1.5 w-[22px] h-[22px] bg-background/60 backdrop-blur-xl border border-white/20 shadow-lg rounded-full text-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white hover:border-red-500 hover:scale-110 z-20"
         >
-          <span className="text-[11px] font-bold">✕</span>
+          <span className="text-[10px] font-bold">✕</span>
         </button>
       </div>
     );
@@ -331,19 +333,9 @@ export const MiniChatWindow = ({ conversationId, name, avatarUrl, isOnline, isMi
         onClose={() => setIsGroupCallOpen(false)}
       />
     )}
-    <div className="w-[380px] max-w-[calc(100vw-16px)] h-[520px] max-h-[calc(100vh-72px)] rounded-t-2xl flex flex-col animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto isolate relative shadow-2xl">
-      {/* Background Layer */}
-      <div 
-        className="absolute inset-0 rounded-t-2xl pointer-events-none -z-10"
-        style={{
-          backgroundColor: 'color-mix(in srgb, var(--card) 60%, transparent)',
-          backdropFilter: 'blur(32px) saturate(200%)',
-          WebkitBackdropFilter: 'blur(32px) saturate(200%)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-        }}
-      />
+    <div className="w-[360px] max-w-[calc(100vw-32px)] h-[540px] max-h-[calc(100vh-100px)] rounded-3xl flex flex-col animate-in slide-in-from-bottom-5 fade-in duration-500 pointer-events-auto isolate relative shadow-[0_16px_60px_rgba(0,0,0,0.4)] border border-white/15 mb-4 mr-2 sm:mr-4 bg-background/50 backdrop-blur-[40px] backdrop-saturate-[200%] overflow-hidden before:absolute before:inset-0 before:bg-gradient-to-br before:from-primary/10 before:via-transparent before:to-primary/5 before:pointer-events-none before:-z-10 after:absolute after:top-0 after:inset-x-0 after:h-[1px] after:bg-gradient-to-r after:from-transparent after:via-white/30 after:to-transparent after:pointer-events-none">
       
-      <div className="relative z-10 flex flex-col h-full overflow-hidden rounded-t-2xl">
+      <div className="relative z-10 flex flex-col h-full overflow-hidden">
         <MiniChatHeader 
           name={conversation.name || name}
           avatarUrl={conversation.avatarUrl || avatarUrl}
@@ -356,7 +348,7 @@ export const MiniChatWindow = ({ conversationId, name, avatarUrl, isOnline, isMi
         />
         
         {/* Messages Area - using global component */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col bg-black/5 dark:bg-white/5">
           <MessageArea 
             messages={messages} 
             conversationName={conversation.name || name} 
@@ -370,7 +362,7 @@ export const MiniChatWindow = ({ conversationId, name, avatarUrl, isOnline, isMi
           />
         </div>
 
-        <div className="shrink-0 border-t border-black/5 bg-transparent px-1 pb-2 pt-1 dark:border-white/5">
+        <div className="shrink-0 border-t border-white/10 bg-background/30 backdrop-blur-xl px-2 pb-3 pt-2">
           <MessageInput 
             onSendMessage={handleSendMessage}
             onSendMedia={handleSendMedia}

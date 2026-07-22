@@ -21,11 +21,31 @@ export class NotificationDispatcher {
   private readonly logger = new Logger(NotificationDispatcher.name);
   private readonly hubUrl = process.env.CHAT_SERVICE_URL || 'http://localhost:38080';
 
+  private getInternalSecret(): string | null {
+    const single = process.env.INTERNAL_NOTIFY_SECRET?.trim();
+    if (single) return single;
+
+    const firstRotated = (process.env.INTERNAL_NOTIFY_SECRETS || '')
+      .split(',')
+      .map((secret) => secret.trim())
+      .find(Boolean);
+    return firstRotated || null;
+  }
+
   async push(payload: NotificationPayload): Promise<void> {
     try {
+      const internalSecret = this.getInternalSecret();
+      if (!internalSecret) {
+        this.logger.warn('Realtime notification push skipped: INTERNAL_NOTIFY_SECRET not configured');
+        return;
+      }
+
       await fetch(`${this.hubUrl}/chat/internal/notify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': internalSecret,
+        },
         body: JSON.stringify(payload),
       });
     } catch (err) {

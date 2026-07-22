@@ -96,7 +96,7 @@ export function MessageDropdown() {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 rounded-2xl z-50 flex flex-col max-h-[80vh] animate-in slide-in-from-top-2 fade-in duration-200 isolate">
+        <div className="fixed inset-x-3 top-16 max-h-[calc(100vh-5rem)] rounded-2xl z-50 flex flex-col animate-in slide-in-from-top-2 fade-in duration-200 isolate sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96 sm:max-h-[80vh]">
           {/* Bulletproof Glass Background Layer */}
           <div 
             className="absolute inset-0 rounded-2xl pointer-events-none -z-10"
@@ -130,7 +130,7 @@ export function MessageDropdown() {
             {/* Search */}
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 h-4 text-foreground/50" />
+                <Search className="h-4 w-4 text-foreground/50" />
               </div>
               <input 
                 type="text" 

@@ -9,7 +9,7 @@ import {
   validateUpload,
   type StorageProvider,
 } from '@campus-connect/common';
-import { join } from 'path';
+import { resolve } from 'path';
 
 type UploadFile = {
   buffer: Buffer;
@@ -27,8 +27,8 @@ export class ChatService {
   }
 
   private readonly storage: StorageProvider = createStorageProvider(
-    join(process.cwd(), 'uploads'),
-    '/uploads',
+    resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+    process.env.UPLOAD_PUBLIC_BASE_URL || '/uploads',
   );
 
   private async assertConversationMember(
@@ -55,6 +55,20 @@ export class ChatService {
     });
     if (!message) throw new ForbiddenException('Bạn không thuộc đoạn chat này');
     return message;
+  }
+
+  assertSameUser(requestedUserId: string, tokenUserId: string) {
+    if (requestedUserId !== tokenUserId) {
+      throw new ForbiddenException('Không có quyền truy cập tài nguyên này');
+    }
+  }
+
+  async assertConversationMemberAccess(conversationId: string, userId: string) {
+    return this.assertConversationMember(conversationId, userId);
+  }
+
+  async getMessageForMember(messageId: string, userId: string) {
+    return this.assertMessageConversationMember(messageId, userId);
   }
 
   async uploadFile(file: UploadFile) {
@@ -261,6 +275,18 @@ export class ChatService {
     // Ensure sender belongs to the conversation.
     await this.assertConversationMember(conversationId, senderId);
 
+    if (replyToId) {
+      const replyTarget = await prisma.message.findFirst({
+        where: { id: replyToId, conversationId },
+        select: { id: true },
+      });
+      if (!replyTarget) {
+        throw new NotFoundException(
+          'Tin nhắn trả lời không thuộc đoạn chat này',
+        );
+      }
+    }
+
     const message = await prisma.message.create({
       data: {
         conversationId,
@@ -293,50 +319,68 @@ export class ChatService {
   }
 
   async recallMessage(messageId: string, userId: string) {
+    const scopedMessage = await this.assertMessageConversationMember(
+      messageId,
+      userId,
+    );
     const message = await prisma.message.findUnique({
       where: { id: messageId },
     });
     if (!message || message.senderId !== userId) return null;
 
-    return prisma.message.update({
-      where: { id: messageId },
-      data: { content: 'Tin nhắn đã bị thu hồi', messageType: 'recalled' },
-      include: {
-        sender: { select: { id: true, fullName: true, avatarUrl: true } },
-        replyTo: {
-          select: {
-            id: true,
-            content: true,
-            sender: { select: { id: true, fullName: true, avatarUrl: true } },
+    return prisma.message
+      .update({
+        where: { id: messageId },
+        data: { content: 'Tin nhắn đã bị thu hồi', messageType: 'recalled' },
+        include: {
+          sender: { select: { id: true, fullName: true, avatarUrl: true } },
+          replyTo: {
+            select: {
+              id: true,
+              content: true,
+              sender: { select: { id: true, fullName: true, avatarUrl: true } },
+            },
           },
+          reactions: true,
         },
-        reactions: true,
-      },
-    });
+      })
+      .then((updated) => ({
+        ...updated,
+        conversationId: scopedMessage.conversationId,
+      }));
   }
 
   async editMessage(messageId: string, userId: string, content: string) {
+    const scopedMessage = await this.assertMessageConversationMember(
+      messageId,
+      userId,
+    );
     const message = await prisma.message.findUnique({
       where: { id: messageId },
     });
     if (!message || message.senderId !== userId) return null;
     if (message.messageType === 'recalled') return null;
 
-    return prisma.message.update({
-      where: { id: messageId },
-      data: { content },
-      include: {
-        sender: { select: { id: true, fullName: true, avatarUrl: true } },
-        replyTo: {
-          select: {
-            id: true,
-            content: true,
-            sender: { select: { id: true, fullName: true, avatarUrl: true } },
+    return prisma.message
+      .update({
+        where: { id: messageId },
+        data: { content },
+        include: {
+          sender: { select: { id: true, fullName: true, avatarUrl: true } },
+          replyTo: {
+            select: {
+              id: true,
+              content: true,
+              sender: { select: { id: true, fullName: true, avatarUrl: true } },
+            },
           },
+          reactions: true,
         },
-        reactions: true,
-      },
-    });
+      })
+      .then((updated) => ({
+        ...updated,
+        conversationId: scopedMessage.conversationId,
+      }));
   }
 
   async forwardMessage(
@@ -344,6 +388,7 @@ export class ChatService {
     senderId: string,
     conversationId: string,
   ) {
+    await this.assertMessageConversationMember(messageId, senderId);
     const source = await prisma.message.findUnique({
       where: { id: messageId },
     });

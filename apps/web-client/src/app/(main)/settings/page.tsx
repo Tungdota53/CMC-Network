@@ -10,6 +10,19 @@ import api from '@/lib/api';
 import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/hooks/useNotifications';
 import { useUiStore } from '@/store/uiStore';
 
+const notificationPreferenceItems = [
+  { key: 'push', label: 'Thông báo PUSH', desc: 'Bật/tắt thông báo trong ứng dụng' },
+  { key: 'email', label: 'Thông báo Email', desc: 'Gửi tóm tắt hoạt động qua email' },
+  { key: 'likes', label: 'Lượt thích', desc: 'Báo khi có người thả cảm xúc bài viết' },
+  { key: 'comments', label: 'Bình luận', desc: 'Báo khi có bình luận mới' },
+  { key: 'mentions', label: 'Nhắc tên', desc: 'Báo khi có người nhắc đến bạn' },
+  { key: 'friendRequests', label: 'Bạn bè', desc: 'Báo lời mời và chấp nhận kết bạn' },
+  { key: 'system', label: 'Hệ thống', desc: 'Thông báo quan trọng từ CMC Network' },
+  { key: 'quietHours', label: 'Chế độ yên lặng', desc: 'Tạm dừng thông báo thường, vẫn nhận hệ thống' },
+] as const;
+
+type NotificationPreferenceKey = (typeof notificationPreferenceItems)[number]['key'];
+
 export default function SettingsPage() {
   const { logout, user } = useAuthStore();
   const router = useRouter();
@@ -22,6 +35,8 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [savingPreference, setSavingPreference] = useState<NotificationPreferenceKey | null>(null);
+  const [preferenceMessage, setPreferenceMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const { data: notif } = useNotificationPreferences();
   const updateNotif = useUpdateNotificationPreferences();
 
@@ -87,6 +102,27 @@ export default function SettingsPage() {
       return;
     }
     emailMutation.mutate();
+  };
+
+  const handleNotificationToggle = (key: NotificationPreferenceKey) => {
+    if (!notif || updateNotif.isPending) return;
+
+    setSavingPreference(key);
+    setPreferenceMessage(null);
+    updateNotif.mutate(
+      { [key]: !notif[key] },
+      {
+        onSuccess: () => {
+          setPreferenceMessage({ type: 'success', text: 'Đã lưu cài đặt thông báo.' });
+        },
+        onError: () => {
+          setPreferenceMessage({ type: 'error', text: 'Không thể lưu cài đặt. Vui lòng thử lại.' });
+        },
+        onSettled: () => {
+          setSavingPreference(null);
+        },
+      },
+    );
   };
 
   return (
@@ -160,36 +196,43 @@ export default function SettingsPage() {
         {/* Thông báo */}
         <section className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
           <div className="p-5 border-b border-border">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" />
-              Thông báo & Quyền riêng tư
-            </h2>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Shield className="w-5 h-5 text-primary" />
+                Thông báo & Quyền riêng tư
+              </h2>
+              {preferenceMessage && (
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${preferenceMessage.type === 'success' ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'}`}>
+                  {preferenceMessage.text}
+                </span>
+              )}
+            </div>
           </div>
           <div className="p-0 divide-y divide-border">
-            {[
-              { key: 'push', label: 'Thông báo PUSH', desc: 'Bật/tắt thông báo trong ứng dụng' },
-              { key: 'email', label: 'Thông báo Email', desc: 'Gửi tóm tắt hoạt động qua email' },
-              { key: 'likes', label: 'Lượt thích', desc: 'Báo khi có người thả cảm xúc bài viết' },
-              { key: 'comments', label: 'Bình luận', desc: 'Báo khi có bình luận mới' },
-              { key: 'mentions', label: 'Nhắc tên', desc: 'Báo khi có người nhắc đến bạn' },
-              { key: 'friendRequests', label: 'Bạn bè', desc: 'Báo lời mời và chấp nhận kết bạn' },
-              { key: 'system', label: 'Hệ thống', desc: 'Thông báo quan trọng từ CMC Network' },
-              { key: 'quietHours', label: 'Chế độ yên lặng', desc: 'Tạm dừng thông báo thường, vẫn nhận hệ thống' },
-            ].map(item => (
+            {notificationPreferenceItems.map(item => {
+              const value = notif?.[item.key] ?? false;
+              const isSavingThis = savingPreference === item.key && updateNotif.isPending;
+
+              return (
               <div key={item.key} className="p-5 flex items-center justify-between">
                 <div>
                   <p className="font-medium text-[15px]">{item.label}</p>
                   <p className="text-sm text-foreground/60 mt-1">{item.desc}</p>
                 </div>
                 <button
-                  onClick={() => updateNotif.mutate({ [item.key]: !notif?.[item.key as keyof typeof notif] })}
+                  onClick={() => handleNotificationToggle(item.key)}
                   disabled={!notif || updateNotif.isPending}
-                  className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors disabled:opacity-50 ${notif?.[item.key as keyof typeof notif] ? 'bg-primary' : 'bg-gray-300'}`}
+                  aria-pressed={value}
+                  aria-label={`${value ? 'Tắt' : 'Bật'} ${item.label}`}
+                  className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${value ? 'bg-primary' : 'bg-gray-300'}`}
                 >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${notif?.[item.key as keyof typeof notif] ? 'right-1' : 'left-1'}`} />
+                  <div className={`absolute top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white transition-transform ${value ? 'right-1' : 'left-1'}`}>
+                    {isSavingThis && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                  </div>
                 </button>
               </div>
-            ))}
+            );
+            })}
           </div>
         </section>
 

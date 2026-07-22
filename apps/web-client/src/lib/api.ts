@@ -32,11 +32,21 @@ function getUserIdFromToken(token: string | null): string | null {
   if (!token) return null;
   try {
     const payload = token.split('.')[1];
-    const decoded = JSON.parse(atob(payload));
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+    const decoded = JSON.parse(atob(padded));
     return decoded.sub || decoded.id || null;
   } catch (e) {
     return null;
   }
+}
+
+function userIdRequired(endpoint: string) {
+  return new axios.AxiosError(
+    `USER_ID_REQUIRED: ${endpoint}`,
+    'USER_ID_REQUIRED',
+  );
 }
 
 api.interceptors.request.use(
@@ -77,9 +87,8 @@ api.interceptors.request.use(
       } else if (config.url.startsWith('/comments')) {
         config.url = config.url.replace('/comments', '/posts/comments');
       } else if (config.url.startsWith('/friends')) {
-        if (userId) {
-          config.url = config.url.replace('/friends', `/users/${userId}/friends`);
-        }
+        if (!userId) return Promise.reject(userIdRequired(config.url));
+        config.url = config.url.replace('/friends', `/users/${userId}/friends`);
       } else if (config.url.startsWith('/conversations')) {
         if (config.url === '/conversations') {
           if (method === 'post') {
@@ -106,9 +115,11 @@ api.interceptors.request.use(
         config.url = config.url.replace('/professors/search', '/professors');
       } else if (config.url.startsWith('/notifications')) {
         if (config.url.includes('read-all')) {
+          if (!userId) return Promise.reject(userIdRequired(config.url));
           config.url = `/notifications/${userId}/read-all`;
           config.method = 'post';
         } else if (config.url.match(/^\/notifications\/([^\/]+)\/read/)) {
+          if (!userId) return Promise.reject(userIdRequired(config.url));
           const notifId = config.url.split('/')[2];
           config.url = `/notifications/${userId}/${notifId}/read`;
           config.method = 'post';

@@ -12,20 +12,19 @@ import {
   validateUpload,
   createStorageProvider,
 } from '@campus-connect/common';
-import { promises as fs } from 'fs';
-import { join } from 'path';
+import { resolve } from 'path';
 
 @Injectable()
 export class UsersService {
-  private readonly uploadDir = join(process.cwd(), 'uploads', 'avatars');
+  private readonly uploadRoot = resolve(
+    process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+  );
   private readonly storageProvider = createStorageProvider(
-    join(process.cwd(), 'uploads'),
-    '',
+    this.uploadRoot,
+    process.env.UPLOAD_PUBLIC_BASE_URL || '',
   );
 
-  constructor(private readonly notifier: NotificationDispatcher) {
-    this.ensureUploadDir();
-  }
+  constructor(private readonly notifier: NotificationDispatcher) {}
 
   /** Persist + push a realtime notification; never throws into the caller. */
   private async notify(
@@ -50,14 +49,6 @@ export class UsersService {
       });
     } catch (err) {
       console.error('Lỗi khi push notification:', err);
-    }
-  }
-
-  private async ensureUploadDir() {
-    try {
-      await fs.mkdir(this.uploadDir, { recursive: true });
-    } catch {
-      // Directory already exists
     }
   }
 
@@ -318,13 +309,16 @@ export class UsersService {
     });
 
     const avatarUrl = storedFile.url;
-    await this.updateProfile(userId, { avatarUrl });
+    try {
+      await this.updateProfile(userId, { avatarUrl });
+    } catch (error) {
+      await this.storageProvider.delete(storedFile.key);
+      throw error;
+    }
 
     if (user?.avatarUrl) {
-      const oldKey = user.avatarUrl.startsWith('/')
-        ? user.avatarUrl.substring(1)
-        : user.avatarUrl;
-      await this.storageProvider.delete(oldKey);
+      const oldKey = this.localProfileAssetKey(user.avatarUrl);
+      if (oldKey) await this.storageProvider.delete(oldKey);
     }
 
     return { message: 'Upload ảnh đại diện thành công', avatarUrl };
@@ -362,16 +356,25 @@ export class UsersService {
     });
 
     const coverPhotoUrl = storedFile.url;
-    await this.updateProfile(userId, { coverPhotoUrl });
+    try {
+      await this.updateProfile(userId, { coverPhotoUrl });
+    } catch (error) {
+      await this.storageProvider.delete(storedFile.key);
+      throw error;
+    }
 
     if (user?.coverPhotoUrl) {
-      const oldKey = user.coverPhotoUrl.startsWith('/')
-        ? user.coverPhotoUrl.substring(1)
-        : user.coverPhotoUrl;
-      await this.storageProvider.delete(oldKey);
+      const oldKey = this.localProfileAssetKey(user.coverPhotoUrl);
+      if (oldKey) await this.storageProvider.delete(oldKey);
     }
 
     return { message: 'Upload ảnh bìa thành công', coverPhotoUrl };
+  }
+
+  private localProfileAssetKey(url: string): string | null {
+    if (!url.startsWith('/')) return null;
+    const key = url.replace(/^\/+/, '');
+    return /^(avatars|covers)\/[^/]+$/.test(key) ? key : null;
   }
 
   async sendFriendRequest(senderId: string, receiverId: string) {

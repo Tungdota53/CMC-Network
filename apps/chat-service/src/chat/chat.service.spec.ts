@@ -15,6 +15,7 @@ jest.mock('@campus-connect/database', () => {
     },
     message: {
       create: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       updateMany: jest.fn(),
       groupBy: jest.fn(),
@@ -105,6 +106,35 @@ describe('ChatService — message safety', () => {
       data: { messageType: string };
     };
     expect(call.data.messageType).toBe('text');
+  });
+
+  it('rejects a reply target from another conversation', async () => {
+    jest
+      .mocked(prisma.conversationMember.findUnique)
+      .mockResolvedValue({ id: 'membership-1' } as never);
+    jest.mocked(prisma.message.findFirst).mockResolvedValue(null);
+
+    await expect(
+      service.saveMessage('conv-1', 'user-1', 'reply', 'text', undefined, 'message-from-conv-2'),
+    ).rejects.toThrow(/tin nhắn trả lời không thuộc đoạn chat/i);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('allows a reply target from the same conversation', async () => {
+    jest
+      .mocked(prisma.conversationMember.findUnique)
+      .mockResolvedValue({ id: 'membership-1' } as never);
+    jest
+      .mocked(prisma.message.findFirst)
+      .mockResolvedValue({ id: 'message-1' } as never);
+    jest
+      .mocked(prisma.message.create)
+      .mockResolvedValue({ id: 'message-2' } as never);
+    jest.mocked(prisma.conversation.update).mockResolvedValue({} as never);
+
+    await expect(
+      service.saveMessage('conv-1', 'user-1', 'reply', 'text', undefined, 'message-1'),
+    ).resolves.toEqual({ id: 'message-2' });
   });
 });
 
