@@ -13,7 +13,10 @@ import { resolve } from 'path';
 @Injectable()
 export class MaterialsService {
   private readonly storageProvider = createStorageProvider(
-    resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+    resolve(
+      process.env.UPLOAD_ROOT ||
+        resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+    ),
     process.env.UPLOAD_PUBLIC_BASE_URL || '/uploads',
   );
 
@@ -23,11 +26,13 @@ export class MaterialsService {
     @InjectQueue('material-processing') private materialQueue: Queue,
   ) {}
 
-  async getMaterials(filters: {
-    subject?: string;
-    search?: string;
-    fileType?: string;
-  } = {}) {
+  async getMaterials(
+    filters: {
+      subject?: string;
+      search?: string;
+      fileType?: string;
+    } = {},
+  ) {
     const subject = filters.subject?.trim();
     const search = filters.search?.trim();
     const supportedTypes = new Set([
@@ -142,12 +147,14 @@ export class MaterialsService {
       ...materialWithCounts,
       bookmarkCount: materialWithCounts._count.bookmarks,
       aiSummary: material.aiGeneratedAt ? material.aiSummary : null,
-      aiFlashcards: material.aiGeneratedAt && Array.isArray(material.aiFlashcards)
-        ? material.aiFlashcards
-        : [],
-      aiQuizQuestions: material.aiGeneratedAt && Array.isArray(material.aiQuizQuestions)
-        ? material.aiQuizQuestions
-        : [],
+      aiFlashcards:
+        material.aiGeneratedAt && Array.isArray(material.aiFlashcards)
+          ? material.aiFlashcards
+          : [],
+      aiQuizQuestions:
+        material.aiGeneratedAt && Array.isArray(material.aiQuizQuestions)
+          ? material.aiQuizQuestions
+          : [],
       aiContentSource: material.aiGeneratedAt ? 'document' : 'unavailable',
     };
   }
@@ -200,31 +207,43 @@ export class MaterialsService {
       : FileType.OTHER;
 
     // Create material with PROCESSING status
-    const material = await prisma.material.create({
-      data: {
-        uploaderId: data.uploaderId,
-        title,
-        s3Url: fileUrl,
-        subject,
-        description: this.optionalText(
-          (data as { description?: unknown }).description,
-        ),
-        semester: this.optionalText((data as { semester?: unknown }).semester),
-        tags: this.normalizeTags((data as { tags?: unknown }).tags),
-        fileSize: this.formatFileSize(data.fileBuffer.length),
-        fileType,
-        status: 'PROCESSING',
-      },
-    });
+    let material;
+    try {
+      material = await prisma.material.create({
+        data: {
+          uploaderId: data.uploaderId,
+          title,
+          s3Url: fileUrl,
+          subject,
+          description: this.optionalText(
+            (data as { description?: unknown }).description,
+          ),
+          semester: this.optionalText(
+            (data as { semester?: unknown }).semester,
+          ),
+          tags: this.normalizeTags((data as { tags?: unknown }).tags),
+          fileSize: this.formatFileSize(data.fileBuffer.length),
+          fileType,
+          status: 'PROCESSING',
+        },
+      });
 
-    // Add job to queue
-    await this.materialQueue.add('process', {
-      materialId: material.id,
-      filePath: storedFile.key,
-      mimeType: data.mimeType || 'application/pdf',
-      title,
-      subject,
-    });
+      await this.materialQueue.add('process', {
+        materialId: material.id,
+        filePath: storedFile.key,
+        mimeType: data.mimeType || 'application/pdf',
+        title,
+        subject,
+      });
+    } catch (error) {
+      if (material?.id) {
+        await prisma.material
+          .delete({ where: { id: material.id } })
+          .catch(() => undefined);
+      }
+      await this.storageProvider.delete(storedFile.key).catch(() => undefined);
+      throw error;
+    }
 
     return material;
   }
@@ -272,10 +291,14 @@ export class MaterialsService {
   /** Delete a material. Only the uploader may delete. */
   async deleteMaterial(materialId: string, userId: string) {
     const material = await this.assertUploader(materialId, userId);
-    await prisma.material.delete({ where: { id: materialId } });
+    await prisma.material.update({
+      where: { id: materialId },
+      data: { deletedAt: new Date() },
+    });
 
     if (material.s3Url) {
       const key = this.storageKeyFromUrl(material.s3Url);
+      // Keep soft-deleted metadata for retry/audit when storage cleanup fails.
       await this.storageProvider.delete(key);
     }
 
@@ -453,5 +476,4 @@ export class MaterialsService {
       .replace(/^uploads\//, '')
       .replace(/^\//, '');
   }
-
 }

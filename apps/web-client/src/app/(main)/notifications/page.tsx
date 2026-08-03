@@ -6,6 +6,7 @@ import { MoreHorizontal, Loader2, CheckCheck } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { getNotificationActionUrl } from '@/components/notifications/notification-links';
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -110,6 +111,10 @@ export default function NotificationsPage() {
               type={notif.type}
               isRead={notif.isRead}
               timeAgo={timeAgo(notif.createdAt)}
+              avatarUrl={notif.sender?.avatarUrl || notif.sender?.avatar || notif.senderAvatar || notif.avatarUrl}
+              senderName={notif.sender?.fullName}
+              actionUrl={getNotificationActionUrl(notif.type, notif.relatedId)}
+              content={notif.message || notif.content}
               onRead={handleMarkRead}
             />
           ))}

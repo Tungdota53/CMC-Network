@@ -11,6 +11,8 @@ import {
   UseGuards,
   Headers,
   UnauthorizedException,
+  ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -24,6 +26,7 @@ import { ChatGateway } from './chat.gateway';
 import { LiveKitService } from './livekit.service';
 import { WebrtcService } from './webrtc.service';
 import { createHash, timingSafeEqual } from 'crypto';
+import { LiveStreamStatus, prisma } from '@campus-connect/database';
 
 function safeSecretEquals(actual: string, expected: string): boolean {
   const actualHash = createHash('sha256').update(actual).digest();
@@ -311,6 +314,30 @@ export class ChatController {
       identity: userId,
       name: body.displayName || userId,
       metadata: JSON.stringify({ conversationId: body.conversationId }),
+    });
+  }
+
+  /** Role-scoped LiveKit token for a persisted livestream. */
+  @Post('live-streams/:id/token')
+  @UseGuards(JwtAuthGuard, VerifiedUserGuard)
+  async createLiveStreamToken(
+    @Param('id') streamId: string,
+    @CurrentUser('sub') userId: string,
+  ) {
+    const stream = await prisma.liveStream.findUnique({
+      where: { id: streamId },
+      select: { id: true, hostId: true, roomName: true, status: true },
+    });
+    if (!stream) throw new NotFoundException('Không tìm thấy livestream');
+    if (stream.status !== LiveStreamStatus.LIVE) {
+      throw new ForbiddenException('Livestream đã kết thúc');
+    }
+    const role = stream.hostId === userId ? 'HOST' : 'VIEWER';
+    return this.liveKitService.createRoomToken({
+      roomName: stream.roomName,
+      identity: userId,
+      metadata: JSON.stringify({ streamId: stream.id, role }),
+      role,
     });
   }
 

@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Loader2, Send, X } from 'lucide-react';
+import { Loader2, Send, Sparkles, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { Avatar } from '@/components/ui/Avatar';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { ActionSheet } from '@/components/mobile';
 import { Post } from '@/hooks/useFeed';
 import { getAbsoluteUrl } from '@/lib/browser-actions';
 import { formatRelativeTime } from '@/lib/time';
+import api from '@/lib/api';
 
 interface ShareComposerProps {
   open: boolean;
@@ -58,7 +61,9 @@ function SharePreview({ post }: { post: Post }) {
 }
 
 export function ShareComposer({ open, post, isPending = false, onClose, onSubmit }: ShareComposerProps) {
+  const queryClient = useQueryClient();
   const [caption, setCaption] = useState('');
+  const [isSharingToStory, setIsSharingToStory] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const textareaId = useId();
   const draftKey = useMemo(() => `cmc:share-draft:${post.id}`, [post.id]);
@@ -86,6 +91,35 @@ export function ShareComposer({ open, post, isPending = false, onClose, onSubmit
     await onSubmit(caption.trim());
     if (typeof window !== 'undefined') window.localStorage.removeItem(draftKey);
     setCaption('');
+  };
+
+  const handleShareToStory = async () => {
+    if (isSharingToStory) return;
+    const previewPost = post.type === 'SHARE' && post.sharedFrom ? post.sharedFrom : post;
+    const firstImage = previewPost.media?.find((item) => item.mediaType !== 'VIDEO');
+    const storyMeta = {
+      id: previewPost.id,
+      authorName: previewPost.author?.fullName || 'Người dùng',
+      authorAvatarUrl: previewPost.author?.avatarUrl || undefined,
+      hasBlueBadge: Boolean(previewPost.author?.hasBlueBadge),
+      content: previewPost.content?.slice(0, 1200) || undefined,
+      mediaUrl: firstImage?.mediaUrl,
+    };
+
+    try {
+      setIsSharingToStory(true);
+      const mediaUrl = `shared-post-story:${encodeURIComponent(JSON.stringify(storyMeta))}`;
+      await api.post('/stories', { mediaUrl, content: caption.trim() || 'Đã chia sẻ một bài viết' });
+      await queryClient.invalidateQueries({ queryKey: ['stories'] });
+      if (typeof window !== 'undefined') window.localStorage.removeItem(draftKey);
+      setCaption('');
+      onClose();
+      toast.success('Đã chia sẻ bài viết lên tin');
+    } catch {
+      toast.error('Không thể chia sẻ bài viết lên tin lúc này');
+    } finally {
+      setIsSharingToStory(false);
+    }
   };
 
   return (
@@ -140,6 +174,16 @@ export function ShareComposer({ open, post, isPending = false, onClose, onSubmit
             {isPending ? 'Đang chia sẻ...' : 'Chia sẻ ngay'}
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={handleShareToStory}
+          disabled={isPending || isSharingToStory}
+          className="mobile-touch-target flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/20 transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSharingToStory ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
+          {isSharingToStory ? 'Đang đăng lên tin...' : 'Chia sẻ lên tin'}
+        </button>
 
         {showCloseConfirm && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">

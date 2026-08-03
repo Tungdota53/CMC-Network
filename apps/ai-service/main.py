@@ -6,10 +6,12 @@ import textwrap
 import urllib.error
 import urllib.parse
 import urllib.request
+import time
+from collections import defaultdict
 from html.parser import HTMLParser
 
 import openai
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 try:
@@ -23,6 +25,11 @@ if load_dotenv:
     load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"), override=True)
 
 app = FastAPI(title="CampusConnect AI Assistant", version="1.0")
+
+try:
+    import jwt
+except ImportError:
+    jwt = None
 
 openai.api_key = os.getenv("OPENAI_API_KEY") or os.getenv("AI_API_KEY")
 
@@ -42,6 +49,47 @@ MAX_WEB_CHARS = int(os.getenv("AI_WEB_MAX_CHARS", "12000"))
 MAX_WEB_BYTES = int(os.getenv("AI_WEB_MAX_BYTES", "500000"))
 MAX_MATERIAL_CHARS = int(os.getenv("AI_MATERIAL_MAX_CHARS", "120000"))
 MATERIAL_CHUNK_CHARS = int(os.getenv("AI_MATERIAL_CHUNK_CHARS", "12000"))
+AI_MAX_QUESTION_CHARS = int(os.getenv("AI_MAX_QUESTION_CHARS", "4000"))
+AI_RATE_LIMIT = int(os.getenv("AI_RATE_LIMIT", "20"))
+AI_RATE_WINDOW_SECONDS = int(os.getenv("AI_RATE_WINDOW_SECONDS", "60"))
+_rate_buckets: dict[str, list[float]] = defaultdict(list)
+
+def authenticate_ai_user(authorization: str | None = Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Bạn cần đăng nhập để dùng trợ lý AI.")
+    if jwt is None:
+        raise HTTPException(status_code=503, detail="Dịch vụ xác thực AI chưa sẵn sàng.")
+
+    token = authorization.removeprefix("Bearer ").strip()
+    secret = os.getenv("JWT_SECRET")
+    if not secret:
+        raise HTTPException(status_code=503, detail="Dịch vụ xác thực AI chưa được cấu hình.")
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Phiên đăng nhập không hợp lệ.")
+    user_id = payload.get("sub") or payload.get("id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token thiếu danh tính người dùng.")
+    return str(user_id)
+
+def enforce_ai_quota(user_id: str, request: Request):
+    key = f"{user_id}:{request.client.host if request.client else 'unknown'}"
+    now = time.monotonic()
+    bucket = [stamp for stamp in _rate_buckets[key] if now - stamp < AI_RATE_WINDOW_SECONDS]
+    if len(bucket) >= AI_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Bạn đã dùng AI quá nhanh. Vui lòng thử lại sau.")
+    bucket.append(now)
+    _rate_buckets[key] = bucket
+
+def validate_request(request: "AskRequest"):
+    question = request.question.strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="Câu hỏi không được để trống.")
+    if len(question) > AI_MAX_QUESTION_CHARS:
+        raise HTTPException(status_code=413, detail=f"Câu hỏi không được vượt quá {AI_MAX_QUESTION_CHARS} ký tự.")
+    request.question = question
+    return request
 
 def call_chat_completion(messages, temperature=0.7, max_tokens=900):
     base_url = normalize_openai_base_url(os.getenv("OPENAI_BASE_URL") or os.getenv("AI_API_URL"))
@@ -280,8 +328,8 @@ def build_web_context(question: str):
 
 class AskRequest(BaseModel):
     question: str
-    user_id: str = "anonymous"
     use_web: bool = True
+    authenticated_user_id: str = ""
 
 @app.get("/")
 def read_root():
@@ -289,7 +337,14 @@ def read_root():
 
 @app.post("/api/v1/ask")
 @app.post("/api/v1/ai/ask")
-def ask_ai(request: AskRequest):
+def ask_ai(
+    request: AskRequest,
+    http_request: Request,
+    user_id: str = Depends(authenticate_ai_user),
+):
+    request.authenticated_user_id = user_id
+    enforce_ai_quota(user_id, http_request)
+    validate_request(request)
     web_context, sources = build_web_context(request.question) if request.use_web else ("", [])
     user_prompt = f"""
 Câu hỏi người dùng:
@@ -314,7 +369,7 @@ Ngữ cảnh website CMC đã đọc được:
             ))
             return {
                 "answer": answer,
-                "user_id": request.user_id,
+                "user_id": user_id,
                 "model": AI_MODEL,
                 "sources": sources,
                 "actions": suggest_actions(request.question, sources),
@@ -322,7 +377,7 @@ Ngữ cảnh website CMC đã đọc được:
         except Exception as exc:
             return {
                 "answer": build_local_cmc_answer(request.question, sources),
-                "user_id": request.user_id,
+                "user_id": user_id,
                 "model": AI_MODEL,
                 "provider_status": "unavailable",
                 "provider_error": type(exc).__name__,
@@ -333,14 +388,21 @@ Ngữ cảnh website CMC đã đọc được:
     web_note = f"\n\nNguồn đã đọc: {', '.join(sources)}" if sources else "\n\nChưa đọc được nguồn web phù hợp."
     return {
         "answer": f"AI chưa có OPENAI_API_KEY. Đã nhận câu hỏi: {request.question}\n\nTóm tắt ngữ cảnh hiện có: {CMC_KNOWLEDGE_BASE}{web_note}",
-        "user_id": request.user_id,
+        "user_id": user_id,
         "sources": sources,
         "actions": suggest_actions(request.question, sources),
     }
 
 @app.post("/api/v1/ask/stream")
 @app.post("/api/v1/ai/ask/stream")
-def ask_ai_stream(request: AskRequest):
+def ask_ai_stream(
+    request: AskRequest,
+    http_request: Request,
+    user_id: str = Depends(authenticate_ai_user),
+):
+    request.authenticated_user_id = user_id
+    enforce_ai_quota(user_id, http_request)
+    validate_request(request)
     web_context, sources = build_web_context(request.question) if request.use_web else ("", [])
     user_prompt = f"""
 Câu hỏi người dùng:

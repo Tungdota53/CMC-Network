@@ -1,12 +1,28 @@
-import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
-import { CurrentUser, resolveUserId } from '@campus-connect/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  CurrentUser,
+  JwtAuthGuard,
+  Public,
+  resolveUserId,
+} from '@campus-connect/common';
 import { MentorsService } from './mentors.service';
 
 @Controller('mentors')
+@UseGuards(JwtAuthGuard)
 export class MentorsController {
   constructor(private readonly mentorsService: MentorsService) {}
 
   @Get()
+  @Public()
   async getMentors(@Query('expertise') expertise?: string) {
     return this.mentorsService.getMentors(expertise);
   }
@@ -14,9 +30,10 @@ export class MentorsController {
   @Get('bookings/:userId')
   async getBookings(
     @Param('userId') userId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
     @Query('role') role: 'mentor' | 'mentee' = 'mentee',
   ) {
-    return this.mentorsService.getBookings(userId, role);
+    return this.mentorsService.getBookings(resolveUserId(tokenUserId), role);
   }
 
   @Get('me')
@@ -121,6 +138,7 @@ export class MentorsController {
   }
 
   @Get(':userId')
+  @Public()
   async getMentorProfile(@Param('userId') userId: string) {
     return this.mentorsService.getMentorProfile(userId);
   }
@@ -128,6 +146,7 @@ export class MentorsController {
   @Post('register/:userId')
   async registerMentor(
     @Param('userId') userId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
     @Body()
     data: {
       bio?: string;
@@ -136,12 +155,13 @@ export class MentorsController {
       schedule?: unknown;
     } = {},
   ) {
-    return this.mentorsService.registerMentor(userId, data);
+    return this.mentorsService.registerMentor(resolveUserId(tokenUserId), data);
   }
 
   @Post('bookings/:menteeId')
   async createBooking(
     @Param('menteeId') menteeId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
     @Body()
     data: {
       mentorId: string;
@@ -150,18 +170,19 @@ export class MentorsController {
       notes?: string;
     } = { mentorId: '', scheduledAt: '' },
   ) {
-    return this.mentorsService.createBooking(menteeId, data);
+    return this.mentorsService.createBooking(resolveUserId(tokenUserId), data);
   }
 
   @Put('bookings/:userId/:bookingId')
   async updateBookingStatus(
     @Param('userId') userId: string,
     @Param('bookingId') bookingId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
     @Body()
     body: { status?: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW' } = {},
   ) {
     return this.mentorsService.updateBookingStatus(
-      userId,
+      resolveUserId(tokenUserId),
       bookingId,
       body.status ?? 'CANCELLED',
     );
@@ -170,10 +191,11 @@ export class MentorsController {
   @Post('reviews/:menteeId')
   async reviewMentor(
     @Param('menteeId') menteeId: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
     @Body()
     data: { bookingId?: string; rating?: number; comment?: string } = {},
   ) {
-    return this.mentorsService.reviewMentor(menteeId, {
+    return this.mentorsService.reviewMentor(resolveUserId(tokenUserId), {
       bookingId: data.bookingId ?? '',
       rating: data.rating ?? 0,
       comment: data.comment,

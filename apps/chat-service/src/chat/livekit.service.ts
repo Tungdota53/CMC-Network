@@ -16,6 +16,7 @@ export class LiveKitService {
     identity: string;
     name?: string;
     metadata?: string;
+    role?: 'HOST' | 'VIEWER';
   }) {
     if (!this.url || !this.apiKey || !this.apiSecret) {
       throw new ServiceUnavailableException('LiveKit chưa được cấu hình');
@@ -28,18 +29,20 @@ export class LiveKitService {
       ttl: '2h',
     });
 
+    const canPublish = params.role !== 'VIEWER';
     token.addGrant({
       room: params.roomName,
       roomJoin: true,
-      canPublish: true,
+      canPublish,
       canSubscribe: true,
-      canPublishData: true,
+      canPublishData: canPublish,
     });
 
     return {
       url: this.url,
       token: await token.toJwt(),
       roomName: params.roomName,
+      role: params.role ?? 'HOST',
     };
   }
 }

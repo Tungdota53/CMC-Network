@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { X, Type, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { X, Type, Image as ImageIcon, Sparkles, Video } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/Button';
@@ -26,7 +26,7 @@ interface StoryCreatorProps {
 export function StoryCreator({ isOpen, onClose }: StoryCreatorProps) {
   const { user } = useAuthStore();
   const qc = useQueryClient();
-  const [mode, setMode] = useState<'SELECT' | 'TEXT' | 'PHOTO'>('SELECT');
+  const [mode, setMode] = useState<'SELECT' | 'TEXT' | 'PHOTO' | 'VIDEO'>('SELECT');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -50,7 +50,7 @@ export function StoryCreator({ isOpen, onClose }: StoryCreatorProps) {
     try {
       setSubmitting(true);
 
-      if (mode === 'PHOTO') {
+      if (mode === 'PHOTO' || mode === 'VIDEO') {
         if (!photoFile) return;
         const formData = new FormData();
         formData.append('file', photoFile);
@@ -150,15 +150,15 @@ export function StoryCreator({ isOpen, onClose }: StoryCreatorProps) {
             </div>
           )}
 
-          {mode === 'PHOTO' && (
+          {(mode === 'PHOTO' || mode === 'VIDEO') && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="p-4 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl flex flex-col items-center justify-center gap-3 text-center">
-                <ImageIcon className="w-8 h-8 text-muted-foreground" />
-                <p className="text-[14px] text-muted-foreground">Chọn ảnh để đăng lên tin</p>
+                {mode === 'VIDEO' ? <Video className="w-8 h-8 text-muted-foreground" /> : <ImageIcon className="w-8 h-8 text-muted-foreground" />}
+                <p className="text-[14px] text-muted-foreground">Chọn {mode === 'VIDEO' ? 'video' : 'ảnh'} để đăng lên tin</p>
                 <label className="w-full mt-2">
-                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                  <input type="file" accept={mode === 'VIDEO' ? 'video/mp4,video/webm,video/quicktime' : 'image/*'} className="hidden" onChange={handlePhotoChange} />
                   <span className="inline-flex w-full h-10 items-center justify-center rounded-md bg-secondary text-secondary-foreground font-medium cursor-pointer hover:bg-secondary/80">
-                    {photoFile ? 'Chọn ảnh khác' : 'Chọn ảnh'}
+                    {photoFile ? `Chọn ${mode === 'VIDEO' ? 'video' : 'ảnh'} khác` : `Chọn ${mode === 'VIDEO' ? 'video' : 'ảnh'}`}
                   </span>
                 </label>
               </div>
@@ -171,7 +171,7 @@ export function StoryCreator({ isOpen, onClose }: StoryCreatorProps) {
           <Button variant="outline" className="flex-1 rounded-xl h-12 font-semibold border-black/10 dark:border-white/10" onClick={() => setMode('SELECT')}>Hủy</Button>
           <Button
             onClick={handleSubmit}
-            disabled={submitting || (mode === 'TEXT' && !textContent.trim()) || (mode === 'PHOTO' && !photoFile) || mode === 'SELECT'}
+            disabled={submitting || (mode === 'TEXT' && !textContent.trim()) || ((mode === 'PHOTO' || mode === 'VIDEO') && !photoFile) || mode === 'SELECT'}
             className="flex-1 rounded-xl h-12 font-semibold bg-primary hover:bg-primary-hover shadow-lg shadow-primary/25 disabled:opacity-50"
           >
             {submitting ? 'Đang đăng...' : 'Đăng tin'}
@@ -194,6 +194,19 @@ export function StoryCreator({ isOpen, onClose }: StoryCreatorProps) {
                   <ImageIcon className="w-7 h-7" />
                 </div>
                 <span className="font-bold text-[18px] text-white">Tạo tin ảnh</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setMode('VIDEO')}
+              className="group relative w-56 h-72 rounded-[24px] overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(239,68,68,0.3)] focus:outline-none"
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-[#ef4444] to-[#991b1b] opacity-90" />
+              <div className="relative h-full flex flex-col items-center justify-center p-6">
+                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center text-[#ef4444] mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg">
+                  <Video className="w-7 h-7" />
+                </div>
+                <span className="font-bold text-[18px] text-white">Tạo tin video</span>
               </div>
             </button>
 
@@ -234,6 +247,16 @@ export function StoryCreator({ isOpen, onClose }: StoryCreatorProps) {
                   <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-black/5 dark:bg-white/5">
                     <ImageIcon className="w-16 h-16 text-muted-foreground/50 mb-4" />
                     <p className="text-muted-foreground text-center font-medium">Bản xem trước ảnh</p>
+                  </div>
+                )
+              )}
+              {mode === 'VIDEO' && (
+                photoPreview ? (
+                  <video src={photoPreview} className="w-full h-full object-contain bg-black" controls autoPlay muted playsInline />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-8 bg-black/5 dark:bg-white/5">
+                    <Video className="w-16 h-16 text-muted-foreground/50 mb-4" />
+                    <p className="text-muted-foreground text-center font-medium">Bản xem trước video</p>
                   </div>
                 )
               )}

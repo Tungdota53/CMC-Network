@@ -19,7 +19,13 @@ jest.mock('@campus-connect/database', () => {
       .mockImplementation((args) =>
         Array.isArray(args) ? Promise.all(args) : args(mockPrisma),
       ),
-    material: { findMany: jest.fn(), create: jest.fn() },
+    material: {
+      findMany: jest.fn(),
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
   };
   return {
     FileType: { PDF: 'PDF', DOC: 'DOC', OTHER: 'OTHER' },
@@ -33,6 +39,7 @@ describe('MaterialsService — upload validation', () => {
   const mockQueue = { add: jest.fn().mockResolvedValue({}) };
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStorageDelete.mockResolvedValue(undefined);
     mockStoragePut.mockResolvedValue({
       url: '/uploads/materials/test.pdf',
       key: 'materials/test.pdf',
@@ -91,6 +98,44 @@ describe('MaterialsService — upload validation', () => {
       }),
     );
     expect(prisma.material.create).toHaveBeenCalled();
+  });
+
+  it('deletes stored file when database creation fails', async () => {
+    jest.mocked(prisma.material.create).mockRejectedValue(new Error('db down'));
+
+    await expect(
+      service.uploadMaterial({
+        uploaderId: 'u1',
+        title: 'Notes',
+        subject: 'Math',
+        fileType: 'PDF',
+        fileBuffer: Buffer.from('%PDF-1.4'),
+        fileName: 'notes.pdf',
+        mimeType: 'application/pdf',
+      }),
+    ).rejects.toThrow('db down');
+    expect(mockStorageDelete).toHaveBeenCalledWith('materials/test.pdf');
+  });
+
+  it('soft-deletes metadata before removing storage', async () => {
+    jest.mocked(prisma.material.findUnique).mockResolvedValue({
+      id: 'm1',
+      uploaderId: 'u1',
+      s3Url: '/uploads/materials/test.pdf',
+    } as never);
+    jest
+      .mocked(prisma.material.update)
+      .mockResolvedValue({ id: 'm1' } as never);
+
+    await expect(service.deleteMaterial('m1', 'u1')).resolves.toEqual({
+      deleted: true,
+      id: 'm1',
+    });
+    expect(prisma.material.update).toHaveBeenCalledWith({
+      where: { id: 'm1' },
+      data: { deletedAt: expect.any(Date) },
+    });
+    expect(mockStorageDelete).toHaveBeenCalledWith('materials/test.pdf');
   });
 });
 

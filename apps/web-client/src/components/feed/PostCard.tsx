@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { CommentSection } from './CommentSection';
 import { ShareComposer } from './ShareComposer';
+import { PostMediaGallery } from './PostMediaGallery';
 import { copyTextToClipboard, getAbsoluteUrl, shareUrl } from '@/lib/browser-actions';
 import { formatRelativeTime } from '@/lib/time';
 import api from '@/lib/api';
@@ -69,22 +70,7 @@ function SharedPostPreview({ post }: { post: Post }) {
       )}
 
       {post.media && post.media.length > 0 && (
-        <div className={`grid gap-0.5 ${post.media.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-          {post.media.slice(0, 4).map((m, i) => (
-            <div key={m.id} className={`relative overflow-hidden bg-hover ${post.media.length === 1 ? 'max-h-[360px]' : 'aspect-square max-h-[180px]'}`}>
-              {m.mediaType === 'VIDEO' ? (
-                <video src={m.mediaUrl} className="w-full h-full object-cover" controls />
-              ) : (
-                <img src={m.mediaUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-              )}
-              {i === 3 && post.media.length > 4 && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-2xl font-bold">
-                  +{post.media.length - 4}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        <PostMediaGallery media={post.media} compact />
       )}
 
       {!post.content && (!post.media || post.media.length === 0) && (
@@ -123,6 +109,7 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
   const reactionTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const isAuthor = user?.id === post.author?.id;
+  const canDelete = isAuthor || user?.role === 'ADMIN';
 
   const reactMutation = useReactPost();
   const unreactMutation = useUnreactPost();
@@ -423,6 +410,13 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
                     Chia sẻ kèm caption
                   </button>
                   <button
+                    onClick={() => { setShowShareComposer(true); setShowMenu(false); }}
+                    className="flex min-h-11 w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-hover"
+                  >
+                    <Globe className="h-4 w-4" />
+                    Chia sẻ lên tin
+                  </button>
+                  <button
                     onClick={openChatShare}
                     className="flex min-h-11 w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-hover"
                   >
@@ -451,7 +445,6 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
                     {isSaved ? 'Bỏ lưu bài viết' : 'Lưu bài viết'}
                   </button>
                   {isAuthor && (
-                    <>
                       <button
                         onClick={handleLockComments}
                         className="flex min-h-11 w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-hover"
@@ -459,6 +452,8 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
                         {post.isCommentLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                         {post.isCommentLocked ? 'Mở bình luận' : 'Khóa bình luận'}
                       </button>
+                  )}
+                  {canDelete && (
                       <button
                         onClick={() => { setShowDeleteConfirm(true); setShowMenu(false); }}
                         className="flex min-h-11 w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm text-red-500 transition-colors hover:bg-hover"
@@ -466,9 +461,8 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
                         <Trash2 className="w-4 h-4" />
                         Xóa bài viết
                       </button>
-                    </>
                   )}
-                  {!isAuthor && (
+                  {!isAuthor && user?.role !== 'ADMIN' && (
                     <>
                       <button onClick={handleHidePost} className="flex min-h-11 w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-hover">
                         <EyeOff className="w-4 h-4" />
@@ -496,22 +490,7 @@ export function PostCard({ post, onDeleted }: PostCardProps) {
 
         {/* Media */}
         {post.media && post.media.length > 0 && (
-          <div className={`grid gap-0.5 ${post.media.length === 1 ? 'grid-cols-1' : post.media.length === 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
-            {post.media.slice(0, 4).map((m, i) => (
-              <div key={m.id} className={`relative overflow-hidden bg-hover ${post.media.length === 1 ? 'max-h-[500px] max-sm:max-h-[420px]' : 'aspect-square max-h-[250px]'}`}>
-                {m.mediaType === 'VIDEO' ? (
-                  <video src={m.mediaUrl} className="w-full h-full object-cover" controls />
-                ) : (
-                  <img src={m.mediaUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                )}
-                {i === 3 && post.media.length > 4 && (
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-3xl font-bold">
-                    +{post.media.length - 4}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <PostMediaGallery media={post.media} />
         )}
 
         {/* Link Preview */}

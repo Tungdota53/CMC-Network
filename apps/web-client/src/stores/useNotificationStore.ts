@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api from '@/lib/api';
+import { getNotificationActionUrl } from '@/components/notifications/notification-links';
 
 const hasAuthToken = () =>
   typeof window !== 'undefined' && !!localStorage.getItem('auth_token');
@@ -12,6 +13,7 @@ interface Notification {
   isRead: boolean;
   timeAgo: string;
   avatarUrl?: string;
+  senderName?: string;
   actionUrl?: string;
 }
 
@@ -25,6 +27,26 @@ interface NotificationState {
   markAllAsRead: () => void;
   setUnreadCount: (count: number) => void;
   fetchNotifications: () => Promise<void>;
+}
+
+function getAvatarUrl(notification: any) {
+  const value =
+    notification.sender?.avatarUrl ||
+    notification.sender?.avatar ||
+    notification.senderAvatar ||
+    notification.avatarUrl;
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+
+  const trimmed = value.trim();
+  try {
+    const url = new URL(trimmed);
+    if (url.pathname.startsWith('/avatars/') || url.pathname.startsWith('/covers/')) {
+      return url.pathname;
+    }
+    return trimmed;
+  } catch {
+    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  }
 }
 
 export const useNotificationStore = create<NotificationState>((set) => ({
@@ -97,8 +119,9 @@ export const useNotificationStore = create<NotificationState>((set) => ({
           type: n.type,
           isRead: n.isRead,
           timeAgo: timeAgoStr,
-          avatarUrl: n.sender?.avatarUrl,
-          actionUrl: n.actionUrl || (n.type === 'FRIEND_REQUEST' ? '/friends' : '#')
+          avatarUrl: getAvatarUrl(n),
+          senderName: n.sender?.fullName,
+          actionUrl: n.actionUrl || getNotificationActionUrl(n.type, n.relatedId)
         };
       });
       

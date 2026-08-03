@@ -25,6 +25,7 @@ interface MessageAreaProps {
   onForward?: (messageId: string) => void;
   onPin?: (messageId: string) => void;
   onCopy?: (text: string) => void;
+  onRetry?: (msg: any) => void;
 }
 
 /**
@@ -80,7 +81,7 @@ function SystemMessage({ content }: { content: string }) {
  */
 export function MessageArea({ 
   messages, conversationName, isGroup, conversationAvatarUrl, themeClassName, themeColor, loading, onLoadOlder,
-  onReply, onUnsend, onDeleteForMe, onEdit, onReact, onRemoveReaction, onForward, onPin, onCopy
+  onReply, onUnsend, onDeleteForMe, onEdit, onReact, onRemoveReaction, onForward, onPin, onCopy, onRetry
 }: MessageAreaProps) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -190,6 +191,7 @@ export function MessageArea({
                 onForward={onForward}
                 onPin={onPin}
                 onCopy={onCopy}
+                onRetry={onRetry}
                 allMessages={messages}
               />
             </div>

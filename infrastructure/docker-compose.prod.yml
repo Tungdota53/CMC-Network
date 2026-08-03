@@ -12,6 +12,19 @@ x-service-defaults: &service-defaults
   restart: unless-stopped
   env_file:
     - ../.env
+  environment:
+    NODE_ENV: production
+    LISTEN_HOST: 0.0.0.0
+    REDIS_REQUIRED: "true"
+    DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+    REDIS_URL: redis://redis:6379
+    AUTH_SERVICE_URL: http://auth-service:3002
+    USER_SERVICE_URL: http://user-service:3003
+    SOCIAL_SERVICE_URL: http://social-service:3004
+    CHAT_SERVICE_URL: http://chat-service:3005
+    STUDY_SERVICE_URL: http://study-service:3006
+    MATERIAL_SERVICE_URL: http://material-service:3007
+    MARKETPLACE_SERVICE_URL: http://marketplace-service:3008
   depends_on:
     postgres:
       condition: service_healthy
@@ -30,9 +43,9 @@ services:
     image: postgres:15-alpine
     container_name: campus_connect_db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-campus_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-campus_password}
-      POSTGRES_DB: ${POSTGRES_DB:-campus_connect}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -50,14 +63,14 @@ services:
 
   # --- PgBouncer — connection pooling ---
   pgbouncer:
-    image: edoburu/pgbouncer:latest
+    image: edoburu/pgbouncer:1.23.1
     container_name: campus_connect_pgbouncer
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-campus_admin}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-campus_password}
-      DB_NAME: ${POSTGRES_DB:-campus_connect}
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DB_NAME: ${POSTGRES_DB:?POSTGRES_DB is required}
       POOL_MODE: transaction
       MAX_CLIENT_CONN: 200
       DEFAULT_POOL_SIZE: 20
@@ -67,12 +80,12 @@ services:
       SERVER_RESET_QUERY: DISCARD ALL
       AUTH_TYPE: scram-sha-256
     ports:
-      - "6432:5432"
+      - "127.0.0.1:6432:5432"
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${POSTGRES_USER:-campus_admin}"]
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${POSTGRES_USER:?POSTGRES_USER is required}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -109,7 +122,7 @@ services:
       args:
         SERVICE: api-gateway
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
       interval: 15s
@@ -183,7 +196,7 @@ services:
     volumes:
       - uploads:/var/lib/campus-connect/uploads
     ports:
-      - "3005:3005"
+      - "127.0.0.1:3005:3005"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3005/health || exit 1"]
       interval: 15s

@@ -9,6 +9,7 @@ import { StoryCarousel } from '@/components/stories/StoryCarousel';
 import { EmptyState, ErrorState, PullToRefresh, SegmentedTabs } from '@/components/mobile';
 import { useFeed, useLatestFeed, Post } from '@/hooks/useFeed';
 import { Bell, Flame, Clock, Pencil, Search } from 'lucide-react';
+import { ActiveLiveStreams } from '@/components/live/ActiveLiveStreams';
 
 type FeedTab = 'trending' | 'latest';
 
@@ -68,6 +69,8 @@ export default function FeedPage() {
 
       {/* Create Post */}
       <CreatePost />
+
+      <ActiveLiveStreams />
 
       {/* Stories Carousel */}
       <StoryCarousel />

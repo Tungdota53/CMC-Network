@@ -6,10 +6,12 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useAuthStore } from '@/store/authStore';
 import { Video, Image as ImageIcon, Smile } from 'lucide-react';
 import { CreatePostModal } from './CreatePostModal';
+import { LiveStreamLauncher } from '@/components/live/LiveStreamLauncher';
 
 export function CreatePost() {
   const { user } = useAuthStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLiveOpen, setIsLiveOpen] = useState(false);
 
   useEffect(() => {
     const openComposer = () => setIsModalOpen(true);
@@ -44,7 +46,7 @@ export function CreatePost() {
           
           <div className="flex shrink-0 items-center gap-1 max-sm:ml-12 max-sm:w-[calc(100%-3rem)] max-sm:justify-between">
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => setIsLiveOpen(true)}
               className="flex min-h-11 min-w-11 items-center justify-center rounded-full p-2 text-red-500 transition-colors hover:bg-hover"
               title="Phát trực tiếp"
               aria-label="Tạo bài viết phát trực tiếp"
@@ -73,6 +75,7 @@ export function CreatePost() {
       </div>
 
       <CreatePostModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <LiveStreamLauncher open={isLiveOpen} onClose={() => setIsLiveOpen(false)} />
     </>
   );
 }

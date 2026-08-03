@@ -21,7 +21,7 @@ async function check(name, url) {
 
   try {
     const response = await fetch(url, { signal: controller.signal });
-    const ok = response.status >= 200 && response.status < 500;
+    const ok = response.status >= 200 && response.status < 400;
     return { name, url, ok, status: response.status };
   } catch (error) {
     return { name, url, ok: false, error: error.name || error.message };

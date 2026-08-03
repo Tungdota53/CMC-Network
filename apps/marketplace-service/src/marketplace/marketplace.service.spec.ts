@@ -8,7 +8,13 @@ jest.mock('@campus-connect/database', () => {
       .mockImplementation((args) =>
         Array.isArray(args) ? Promise.all(args) : args(mockPrisma),
       ),
-    product: { findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+    product: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
   };
   return {
     prisma: mockPrisma,
@@ -43,5 +49,44 @@ describe('MarketplaceService', () => {
     jest.mocked(prisma.product.findMany).mockResolvedValue([] as never);
     await service.getProducts('AVAILABLE');
     expect(prisma.product.findMany).toHaveBeenCalled();
+  });
+
+  it('claims an available product with one conditional update', async () => {
+    jest
+      .mocked(prisma.product.findUnique)
+      .mockResolvedValueOnce({
+        id: 'prod-1',
+        sellerId: 'seller-1',
+        status: 'AVAILABLE',
+      } as never)
+      .mockResolvedValueOnce({
+        id: 'prod-1',
+        sellerId: 'seller-1',
+        buyerId: 'buyer-1',
+        status: 'SOLD',
+      } as never);
+    jest.mocked(prisma.product.updateMany).mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.buyProduct('prod-1', 'buyer-1'),
+    ).resolves.toMatchObject({ buyerId: 'buyer-1', status: 'SOLD' });
+    expect(prisma.product.updateMany).toHaveBeenCalledWith({
+      where: { id: 'prod-1', status: 'AVAILABLE', buyerId: null },
+      data: { status: 'SOLD', buyerId: 'buyer-1' },
+    });
+  });
+
+  it('rejects the loser when another buyer claimed the product first', async () => {
+    jest.mocked(prisma.product.findUnique).mockResolvedValue({
+      id: 'prod-1',
+      sellerId: 'seller-1',
+      status: 'AVAILABLE',
+    } as never);
+    jest.mocked(prisma.product.updateMany).mockResolvedValue({ count: 0 });
+
+    await expect(service.buyProduct('prod-1', 'buyer-2')).rejects.toThrow(
+      'Sản phẩm đã được bán',
+    );
+    expect(prisma.product.update).not.toHaveBeenCalled();
   });
 });

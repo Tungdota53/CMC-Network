@@ -2,7 +2,16 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Các route công khai — không cần đăng nhập
-const PUBLIC_PATHS = ['/login', '/register', '/verify-email', '/forgot-password', '/reset-password'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/register',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+  '/privacy',
+  '/terms',
+  '/data-declaration',
+];
 
 // Các route chỉ dành cho người CHƯA đăng nhập (auth pages)
 const AUTH_ONLY_PATHS = ['/login', '/register'];

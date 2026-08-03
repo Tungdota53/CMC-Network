@@ -273,6 +273,14 @@ Trước khi phát hành, thực hiện đầy đủ [`DEPLOYMENT_STABILITY_CHEC
 - [`DEPLOYMENT_STABILITY_CHECKLIST.md`](DEPLOYMENT_STABILITY_CHECKLIST.md) — checklist triển khai ổn định.
 - [`SECURITY_HARDENING_AUDIT.md`](SECURITY_HARDENING_AUDIT.md) — kết quả rà soát hardening và bảo mật.
 
+## Pháp lý và dữ liệu
+
+- [Chính sách bảo mật](https://cmcnetwork.io.vn/privacy)
+- [Điều khoản sử dụng](https://cmcnetwork.io.vn/terms)
+- [Khai báo dữ liệu](https://cmcnetwork.io.vn/data-declaration)
+
+Các bản trên website là bản hiển thị hiện hành. Trước khi phát hành pháp lý chính thức, đơn vị vận hành cần điền pháp nhân chịu trách nhiệm, địa chỉ liên hệ, đầu mối bảo vệ dữ liệu, danh sách nhà xử lý thực tế và lịch lưu giữ định lượng.
+
 ## Đóng góp
 
 1. Tạo branch từ `main`.

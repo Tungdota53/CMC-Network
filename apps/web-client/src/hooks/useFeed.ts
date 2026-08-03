@@ -67,6 +67,13 @@ export interface FeedResponse {
   nextCursor: any | null;
 }
 
+function inferMediaType(mediaUrl: string, postType?: string): PostMedia['mediaType'] {
+  if (postType === 'VIDEO' || /\.(mp4|webm|mov)(?:[?#]|$)/i.test(mediaUrl)) {
+    return 'VIDEO';
+  }
+  return 'IMAGE';
+}
+
 export function mapBackendPost(post: any): Post {
   const mediaUrls: string[] = Array.isArray(post.mediaUrls) ? post.mediaUrls : [];
   const author = post.author ?? post.user ?? {};
@@ -96,7 +103,7 @@ export function mapBackendPost(post: any): Post {
     media: (post.media ?? mediaUrls.map((mediaUrl, index) => ({ id: `${post.id}-${index}`, mediaUrl }))).map((media: any, index: number) => ({
       id: media.id ?? `${post.id}-${index}`,
       mediaUrl: media.mediaUrl ?? media.url,
-      mediaType: media.mediaType ?? 'IMAGE',
+      mediaType: media.mediaType ?? inferMediaType(media.mediaUrl ?? media.url, post.type),
       fileName: media.fileName ?? null,
       fileSize: media.fileSize ?? null,
       displayOrder: media.displayOrder ?? index,
@@ -210,8 +217,9 @@ export function useUpdatePost() {
       const res = await api.put(`/posts/${postId}`, data);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['feed'] });
+      qc.invalidateQueries({ queryKey: ['post', variables.postId] });
     },
   });
 }
@@ -219,10 +227,11 @@ export function useUpdatePost() {
 /** DELETE /posts/:id — xóa bài viết */
 export function useDeletePost() {
   const qc = useQueryClient();
-  const userId = useAuthStore((state) => state.user?.id);
+  const user = useAuthStore((state) => state.user);
   return useMutation({
     mutationFn: async (postId: string) => {
-      const res = await api.delete(`/posts/${postId}`, { data: { userId } });
+      const endpoint = user?.role === 'ADMIN' ? `/posts/admin/${postId}` : `/posts/${postId}`;
+      const res = await api.delete(endpoint);
       return res.data;
     },
     // Optimistic: xóa post khỏi mọi trang feed ngay lập tức
@@ -249,8 +258,10 @@ export function useDeletePost() {
         qc.setQueryData(key, data);
       });
     },
-    onSettled: () => {
+    onSettled: (_data, _error, postId) => {
       qc.invalidateQueries({ queryKey: ['feed'] });
+      qc.invalidateQueries({ queryKey: ['post', postId] });
+      qc.invalidateQueries({ queryKey: ['saved-posts'] });
     },
   });
 }
@@ -293,8 +304,9 @@ export function useReactPost() {
         context.previousFeed.forEach(([queryKey, data]: any) => qc.setQueryData(queryKey, data));
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, variables) => {
       qc.invalidateQueries({ queryKey: ['feed'] });
+      qc.invalidateQueries({ queryKey: ['post', variables.postId] });
     },
   });
 }
@@ -336,8 +348,9 @@ export function useUnreactPost() {
         context.previousFeed.forEach(([queryKey, data]: any) => qc.setQueryData(queryKey, data));
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, postId) => {
       qc.invalidateQueries({ queryKey: ['feed'] });
+      qc.invalidateQueries({ queryKey: ['post', postId] });
     },
   });
 }
@@ -377,8 +390,10 @@ export function useSavePost() {
         context.previousFeed.forEach(([queryKey, data]: any) => qc.setQueryData(queryKey, data));
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, postId) => {
       qc.invalidateQueries({ queryKey: ['feed'] });
+      qc.invalidateQueries({ queryKey: ['post', postId] });
+      qc.invalidateQueries({ queryKey: ['saved-posts'] });
     },
   });
 }
@@ -418,8 +433,10 @@ export function useUnsavePost() {
         context.previousFeed.forEach(([queryKey, data]: any) => qc.setQueryData(queryKey, data));
       }
     },
-    onSettled: () => {
+    onSettled: (_data, _error, postId) => {
       qc.invalidateQueries({ queryKey: ['feed'] });
+      qc.invalidateQueries({ queryKey: ['post', postId] });
+      qc.invalidateQueries({ queryKey: ['saved-posts'] });
     },
   });
 }
@@ -483,8 +500,9 @@ export function useLockComments() {
       const res = await api.patch(`/posts/${postId}/lock-comments`, { lock });
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['feed'] });
+      qc.invalidateQueries({ queryKey: ['post', variables.postId] });
     },
   });
 }
@@ -519,6 +537,10 @@ export function useCreateComment() {
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['comments', variables.postId] });
       qc.invalidateQueries({ queryKey: ['feed'] });
+      qc.invalidateQueries({ queryKey: ['post', variables.postId] });
+      if (variables.parentId) {
+        qc.invalidateQueries({ queryKey: ['replies', variables.parentId] });
+      }
     },
   });
 }

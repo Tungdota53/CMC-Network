@@ -13,6 +13,7 @@ import {
   createStorageProvider,
 } from '@campus-connect/common';
 import { resolve } from 'path';
+import { optimizeAvatar } from './avatar-image';
 
 @Injectable()
 export class UsersService {
@@ -32,10 +33,11 @@ export class UsersService {
     type: string,
     content: string,
     relatedId?: string,
+    senderId?: string,
   ) {
     try {
       await prisma.notification.create({
-        data: { userId, type: type as never, content, relatedId },
+        data: { userId, type: type as never, content, relatedId, senderId },
       });
     } catch {
       // ignore persistence errors
@@ -91,10 +93,29 @@ export class UsersService {
   }
 
   async getUserCount() {
-    const count = await prisma.user.count({
-      where: { isSuspended: false },
-    });
-    return { count };
+    const [count, usersWithAvatars] = await Promise.all([
+      prisma.user.count({
+        where: { isSuspended: false },
+      }),
+      prisma.user.findMany({
+        where: {
+          isSuspended: false,
+          avatarUrl: { not: null },
+        },
+        select: {
+          id: true,
+          fullName: true,
+          avatarUrl: true,
+        },
+        orderBy: { lastLoginAt: 'desc' },
+        take: 4,
+      }),
+    ]);
+
+    return {
+      count,
+      avatars: usersWithAvatars.filter((user) => Boolean(user.avatarUrl)),
+    };
   }
 
   async getProfile(userId: string) {
@@ -108,6 +129,7 @@ export class UsersService {
       cohort: true,
       bio: true,
       avatarUrl: true,
+      avatarOriginalUrl: true,
       coverPhotoUrl: true,
       location: true,
       reputationScore: true,
@@ -138,6 +160,7 @@ export class UsersService {
       cohort: true,
       bio: true,
       avatarUrl: true,
+      avatarOriginalUrl: true,
       coverPhotoUrl: true,
       location: true,
       reputationScore: true,
@@ -309,31 +332,64 @@ export class UsersService {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { avatarUrl: true },
+      select: { avatarUrl: true, avatarOriginalUrl: true },
     });
 
-    const storedFile = await this.storageProvider.put({
-      buffer: file.buffer,
-      originalName: file.originalname,
-      mimeType: file.mimetype || 'image/png',
-      size: file.size || file.buffer.length,
+    let optimized: Awaited<ReturnType<typeof optimizeAvatar>>;
+    try {
+      optimized = await optimizeAvatar(file.buffer);
+    } catch {
+      throw new BadRequestException('Nội dung ảnh đại diện không hợp lệ');
+    }
+
+    const thumbnail = await this.storageProvider.put({
+      buffer: optimized.thumbnail,
+      originalName: 'avatar-thumbnail.webp',
+      mimeType: 'image/webp',
+      size: optimized.thumbnail.length,
       folder: 'avatars',
     });
 
-    const avatarUrl = storedFile.url;
+    let detail;
     try {
-      await this.updateProfile(userId, { avatarUrl });
+      detail = await this.storageProvider.put({
+        buffer: optimized.detail,
+        originalName: 'avatar-detail.webp',
+        mimeType: 'image/webp',
+        size: optimized.detail.length,
+        folder: 'avatars-original',
+      });
     } catch (error) {
-      await this.storageProvider.delete(storedFile.key);
+      await this.storageProvider.delete(thumbnail.key);
       throw error;
     }
 
-    if (user?.avatarUrl) {
-      const oldKey = this.localProfileAssetKey(user.avatarUrl);
+    const avatarUrl = thumbnail.url;
+    const avatarOriginalUrl = detail.url;
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { avatarUrl, avatarOriginalUrl },
+      });
+    } catch (error) {
+      await Promise.all([
+        this.storageProvider.delete(thumbnail.key),
+        this.storageProvider.delete(detail.key),
+      ]);
+      throw error;
+    }
+
+    for (const oldUrl of [user?.avatarUrl, user?.avatarOriginalUrl]) {
+      if (!oldUrl) continue;
+      const oldKey = this.localProfileAssetKey(oldUrl);
       if (oldKey) await this.storageProvider.delete(oldKey);
     }
 
-    return { message: 'Upload ảnh đại diện thành công', avatarUrl };
+    return {
+      message: 'Upload ảnh đại diện thành công',
+      avatarUrl,
+      avatarOriginalUrl,
+    };
   }
 
   async uploadCover(
@@ -386,7 +442,7 @@ export class UsersService {
   private localProfileAssetKey(url: string): string | null {
     if (!url.startsWith('/')) return null;
     const key = url.replace(/^\/+/, '');
-    return /^(avatars|covers)\/[^/]+$/.test(key) ? key : null;
+    return /^(avatars|avatars-original|covers)\/[^/]+$/.test(key) ? key : null;
   }
 
   async sendFriendRequest(senderId: string, receiverId: string) {
@@ -438,6 +494,7 @@ export class UsersService {
       receiverId,
       'FRIEND_REQUEST',
       `${request.sender.fullName} đã gửi lời mời kết bạn`,
+      senderId,
       senderId,
     );
 
@@ -495,6 +552,7 @@ export class UsersService {
         request.senderId,
         'FRIEND_ACCEPT',
         `${accepter?.fullName ?? 'Ai đó'} đã chấp nhận lời mời kết bạn`,
+        request.receiverId,
         request.receiverId,
       );
     } else {
@@ -731,7 +789,7 @@ export class UsersService {
           ...where,
           OR: profileMatches,
         },
-        take: 8,
+        take: 40,
         select: {
           id: true,
           fullName: true,
@@ -746,7 +804,7 @@ export class UsersService {
 
     return prisma.user.findMany({
       where,
-      take: 8,
+      take: 40,
       select: {
         id: true,
         fullName: true,

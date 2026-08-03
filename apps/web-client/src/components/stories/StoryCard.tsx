@@ -14,7 +14,29 @@ export function StoryCard({ userGroup, onClick }: StoryCardProps) {
   
   // Decide cover style
   let coverContent;
-  if (firstUnviewed?.type === 'TEXT') {
+  if (firstUnviewed?.sharedPost) {
+    const sharedPost = firstUnviewed.sharedPost;
+    coverContent = (
+      <div
+        className="flex h-full w-full items-center justify-center p-2"
+        style={{ background: firstUnviewed.bgGradient || '#1877F2' }}
+      >
+        <div className="mt-3 w-full overflow-hidden rounded-lg bg-white text-slate-900 shadow-lg transition-transform duration-300 group-hover:scale-[1.03]">
+          <div className="flex items-center gap-1.5 p-2">
+            <Avatar src={sharedPost.authorAvatarUrl} fallback={sharedPost.authorName.charAt(0) || '?'} size="sm" />
+            <p className="min-w-0 flex-1 truncate text-[8px] font-bold leading-tight">{sharedPost.authorName}</p>
+          </div>
+          {sharedPost.content && (
+            <p className="line-clamp-3 px-2 pb-2 text-[7px] leading-[1.35]">{sharedPost.content}</p>
+          )}
+          {sharedPost.mediaUrl && (
+            <img src={sharedPost.mediaUrl} alt="" className="h-[82px] w-full object-cover" />
+          )}
+          <div className="border-t border-slate-200 py-1 text-center text-[7px] font-semibold text-blue-600">Xem bài viết</div>
+        </div>
+      </div>
+    );
+  } else if (firstUnviewed?.type === 'TEXT') {
     coverContent = (
       <div
         className="w-full h-full flex items-center justify-center p-2"

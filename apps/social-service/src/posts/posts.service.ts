@@ -7,7 +7,7 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
-import { PostType, prisma } from '@campus-connect/database';
+import { PostType, PostVisibility, prisma } from '@campus-connect/database';
 import {
   NotificationDispatcher,
   createStorageProvider,
@@ -16,6 +16,10 @@ import {
   type StorageProvider,
 } from '@campus-connect/common';
 import { resolve } from 'path';
+import {
+  AdminPostQueryDto,
+  AdminPostSortOrder,
+} from './dto/admin-post-query.dto';
 
 type UploadFile = {
   buffer: Buffer;
@@ -24,11 +28,32 @@ type UploadFile = {
   size?: number;
 };
 
+const MAX_POST_CONTENT_LENGTH = 10_000;
+const MAX_POST_MEDIA = 10;
+const MAX_POST_LINKS = 5;
+const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
+
+function normalizePostContent(content: string): string {
+  return content
+    .trim()
+    .split('\n')
+    .map((line) => line.trim().replace(/[ \t]+/g, ' '))
+    .filter(Boolean)
+    .join('\n');
+}
+
+function duplicateFingerprint(content: string): string {
+  return normalizePostContent(content).toLocaleLowerCase('vi-VN');
+}
+
 @Injectable()
 export class PostsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger('PostsService');
   private readonly storage: StorageProvider = createStorageProvider(
-    resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+    resolve(
+      process.env.UPLOAD_ROOT ||
+        resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+    ),
     process.env.UPLOAD_PUBLIC_BASE_URL || '/uploads',
   );
   /** Handle for the background story-purge timer. */
@@ -124,6 +149,41 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  /** Restrict every post read to content the current viewer may access. */
+  private visibilityFilter(viewerId?: string) {
+    if (!viewerId) return { visibility: PostVisibility.PUBLIC };
+
+    return {
+      OR: [
+        { visibility: PostVisibility.PUBLIC },
+        { userId: viewerId },
+        {
+          visibility: PostVisibility.FRIENDS,
+          user: {
+            OR: [
+              { friendships: { some: { userBId: viewerId } } },
+              { friendships2: { some: { userAId: viewerId } } },
+            ],
+          },
+        },
+      ],
+    };
+  }
+
+  private async assertCanViewPost(postId: string, viewerId?: string) {
+    const post = await prisma.post.findFirst({
+      where: {
+        id: postId,
+        type: { not: PostType.STORY },
+        deletedAt: null,
+        ...this.visibilityFilter(viewerId),
+        ...(viewerId ? { hides: { none: { userId: viewerId } } } : {}),
+      },
+      select: { id: true },
+    });
+    if (!post) throw new NotFoundException('Không tìm thấy bài viết');
+  }
+
   async getFeed(page = 1, limit = 10, viewerId?: string) {
     // Cache the computed page briefly to absorb hot-feed traffic. Keyed by
     // viewer (likes are viewer-scoped) + page + limit. 30s TTL keeps it fresh.
@@ -145,6 +205,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       where: {
         type: { not: PostType.STORY },
         deletedAt: null,
+        ...this.visibilityFilter(viewerId),
         ...hiddenFilter,
       },
       take: 200,
@@ -185,6 +246,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       where: {
         type: { not: PostType.STORY },
         deletedAt: null,
+        ...this.visibilityFilter(viewerId),
         ...hiddenFilter,
       },
       orderBy: { createdAt: 'desc' },
@@ -204,6 +266,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         userId,
         type: { not: PostType.STORY },
         deletedAt: null,
+        ...this.visibilityFilter(viewerId),
         ...hiddenFilter,
       },
       orderBy: { createdAt: 'desc' },
@@ -229,6 +292,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         clubId,
         type: { not: PostType.STORY },
         deletedAt: null,
+        ...this.visibilityFilter(viewerId),
         ...hiddenFilter,
       },
       orderBy: { createdAt: 'desc' },
@@ -244,6 +308,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         id: postId,
         type: { not: PostType.STORY },
         deletedAt: null,
+        ...this.visibilityFilter(viewerId),
         ...(viewerId ? { hides: { none: { userId: viewerId } } } : {}),
       },
       include: this.postInclude(viewerId),
@@ -350,9 +415,51 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     typeOverride?: PostType,
     pollOptions?: any,
     clubId?: string,
+    visibility: PostVisibility = PostVisibility.PUBLIC,
   ) {
-    if (!content?.trim() && !mediaUrls?.length && !pollOptions) {
+    const normalizedContent = normalizePostContent(content || '');
+
+    if (!normalizedContent && !mediaUrls?.length && !pollOptions) {
       throw new BadRequestException('Bài viết không được để trống');
+    }
+    if (normalizedContent.length > MAX_POST_CONTENT_LENGTH) {
+      throw new BadRequestException(
+        `Nội dung bài viết không được vượt quá ${MAX_POST_CONTENT_LENGTH} ký tự`,
+      );
+    }
+    if (mediaUrls.length > MAX_POST_MEDIA) {
+      throw new BadRequestException(
+        `Bài viết không được có quá ${MAX_POST_MEDIA} tệp đính kèm`,
+      );
+    }
+    const linkCount =
+      normalizedContent.match(/https?:\/\/[^\s]+/gi)?.length ?? 0;
+    if (linkCount > MAX_POST_LINKS) {
+      throw new BadRequestException(
+        `Bài viết không được chứa quá ${MAX_POST_LINKS} liên kết`,
+      );
+    }
+
+    if (normalizedContent && typeOverride !== PostType.STORY) {
+      const recentPosts = await prisma.post.findMany({
+        where: {
+          userId,
+          deletedAt: null,
+          createdAt: { gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) },
+          type: { not: PostType.STORY },
+        },
+        select: { content: true },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+      const fingerprint = duplicateFingerprint(normalizedContent);
+      if (
+        recentPosts.some(
+          (post) => duplicateFingerprint(post.content || '') === fingerprint,
+        )
+      ) {
+        throw new BadRequestException('Nội dung này đã được đăng gần đây');
+      }
     }
 
     if (clubId) {
@@ -373,9 +480,10 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         clubId: clubId || null,
         type:
           typeOverride || (mediaUrls.length ? PostType.IMAGE : PostType.TEXT),
-        content,
+        content: normalizedContent,
         mediaUrls,
         pollOptions: pollOptions || null,
+        visibility,
       },
       include: {
         user: { select: PostsService.authorSelect },
@@ -389,37 +497,39 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async likePost(postId: string, userId: string, type: string) {
-    const existingLike = await prisma.postLike.findUnique({
-      where: { postId_userId: { postId, userId } },
-    });
+    const created = await prisma.$transaction(async (tx) => {
+      const existingLike = await tx.postLike.findUnique({
+        where: { postId_userId: { postId, userId } },
+      });
 
-    if (existingLike) {
-      if (existingLike.type === type) {
-        await prisma.postLike.delete({ where: { id: existingLike.id } });
-        return prisma.post.update({
-          where: { id: postId },
-          data: { likes: { decrement: 1 } },
-          include: { likesRel: true },
+      if (existingLike) {
+        if (existingLike.type === type) {
+          await tx.postLike.delete({ where: { id: existingLike.id } });
+          await tx.post.updateMany({
+            where: { id: postId, likes: { gt: 0 } },
+            data: { likes: { decrement: 1 } },
+          });
+          return false;
+        }
+
+        await tx.postLike.update({
+          where: { id: existingLike.id },
+          data: { type },
         });
+        return false;
       }
 
-      await prisma.postLike.update({
-        where: { id: existingLike.id },
-        data: { type },
-      });
-      return prisma.post.findUnique({
+      try {
+        await tx.postLike.create({ data: { postId, userId, type } });
+      } catch (error: any) {
+        if (error?.code === 'P2002') return false;
+        throw error;
+      }
+      await tx.post.update({
         where: { id: postId },
-        include: { likesRel: true },
+        data: { likes: { increment: 1 } },
       });
-    }
-
-    await prisma.postLike.create({
-      data: { postId, userId, type },
-    });
-    const updatedPost = await prisma.post.update({
-      where: { id: postId },
-      data: { likes: { increment: 1 } },
-      include: { likesRel: true },
+      return true;
     });
 
     // Notify the post owner (skip self-likes).
@@ -427,7 +537,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       where: { id: postId },
       select: { userId: true },
     });
-    if (post && post.userId !== userId) {
+    if (created && post && post.userId !== userId) {
       const actor = await prisma.user.findUnique({
         where: { id: userId },
         select: { fullName: true },
@@ -437,10 +547,14 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         'LIKE',
         `${actor?.fullName ?? 'Ai đó'} đã thích bài viết của bạn`,
         postId,
+        userId,
       );
     }
 
-    return updatedPost;
+    return prisma.post.findUnique({
+      where: { id: postId },
+      include: { likesRel: true },
+    });
   }
 
   /**
@@ -455,31 +569,34 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     });
     if (!post) throw new NotFoundException('Không tìm thấy bài viết');
 
-    const existing = await prisma.postLike.findUnique({
-      where: { postId_userId: { postId, userId } },
-    });
-
-    if (existing) {
-      if (existing.type !== type) {
-        await prisma.postLike.update({
-          where: { id: existing.id },
-          data: { type },
-        });
-      }
-      return prisma.post.findUnique({
-        where: { id: postId },
-        include: { likesRel: true },
+    const created = await prisma.$transaction(async (tx) => {
+      const existing = await tx.postLike.findUnique({
+        where: { postId_userId: { postId, userId } },
       });
-    }
+      if (existing) {
+        if (existing.type !== type) {
+          await tx.postLike.update({
+            where: { id: existing.id },
+            data: { type },
+          });
+        }
+        return false;
+      }
 
-    await prisma.postLike.create({ data: { postId, userId, type } });
-    const updatedPost = await prisma.post.update({
-      where: { id: postId },
-      data: { likes: { increment: 1 } },
-      include: { likesRel: true },
+      try {
+        await tx.postLike.create({ data: { postId, userId, type } });
+      } catch (error: any) {
+        if (error?.code === 'P2002') return false;
+        throw error;
+      }
+      await tx.post.update({
+        where: { id: postId },
+        data: { likes: { increment: 1 } },
+      });
+      return true;
     });
 
-    if (post.userId !== userId) {
+    if (created && post.userId !== userId) {
       const actor = await prisma.user.findUnique({
         where: { id: userId },
         select: { fullName: true },
@@ -489,10 +606,14 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         'LIKE',
         `${actor?.fullName ?? 'Ai đó'} đã bày tỏ cảm xúc về bài viết của bạn`,
         postId,
+        userId,
       );
     }
 
-    return updatedPost;
+    return prisma.post.findUnique({
+      where: { id: postId },
+      include: { likesRel: true },
+    });
   }
 
   /**
@@ -500,20 +621,19 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
    * Matches FE `DELETE /posts/:id/react`.
    */
   async removeReaction(postId: string, userId: string) {
-    const existing = await prisma.postLike.findUnique({
-      where: { postId_userId: { postId, userId } },
-    });
-    if (!existing) {
-      return prisma.post.findUnique({
-        where: { id: postId },
-        include: { likesRel: true },
+    await prisma.$transaction(async (tx) => {
+      const deleted = await tx.postLike.deleteMany({
+        where: { postId, userId },
       });
-    }
-
-    await prisma.postLike.delete({ where: { id: existing.id } });
-    return prisma.post.update({
+      if (deleted.count === 1) {
+        await tx.post.updateMany({
+          where: { id: postId, likes: { gt: 0 } },
+          data: { likes: { decrement: 1 } },
+        });
+      }
+    });
+    return prisma.post.findUnique({
       where: { id: postId },
-      data: { likes: { decrement: 1 } },
       include: { likesRel: true },
     });
   }
@@ -524,10 +644,11 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     type: string,
     content: string,
     relatedId?: string,
+    senderId?: string,
   ) {
     try {
       await prisma.notification.create({
-        data: { userId, type: type as never, content, relatedId },
+        data: { userId, type: type as never, content, relatedId, senderId },
       });
     } catch {
       // ignore persistence errors
@@ -565,18 +686,43 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     return prisma.post.delete({ where: { id: postId } });
   }
 
-  async commentPost(postId: string, userId: string, content: string) {
+  async commentPost(
+    postId: string,
+    userId: string,
+    content: string,
+    parentId?: string,
+  ) {
     if (!content.trim())
       throw new BadRequestException('Nội dung bình luận không được để trống');
 
+    await this.assertCanViewPost(postId, userId);
+
     const post = await prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, commentLocked: true },
     });
     if (!post) throw new NotFoundException('Không tìm thấy bài viết');
+    if (post.commentLocked) {
+      throw new ForbiddenException('Bình luận đã bị khóa');
+    }
+
+    if (parentId) {
+      const parent = await prisma.comment.findFirst({
+        where: { id: parentId, postId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!parent) {
+        throw new BadRequestException('Bình luận cha không hợp lệ');
+      }
+    }
 
     const comment = await prisma.comment.create({
-      data: { postId, userId, content },
+      data: {
+        postId,
+        userId,
+        content: content.trim(),
+        parentId: parentId ?? null,
+      },
       include: {
         user: { select: PostsService.authorSelect },
       },
@@ -587,8 +733,9 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       await this.notify(
         post.userId,
         'COMMENT',
-        `${comment.user.fullName} đã bình luận bài viết của bạn`,
+        `${comment.user.fullName} đã ${parentId ? 'phản hồi' : 'bình luận'} bài viết của bạn`,
         postId,
+        userId,
       );
     }
 
@@ -601,6 +748,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getComments(postId: string, page = 1, limit = 10, viewerId?: string) {
+    await this.assertCanViewPost(postId, viewerId);
     const skip = (page - 1) * limit;
     const comments = await prisma.comment.findMany({
       where: { postId, parentId: null, deletedAt: null },
@@ -626,6 +774,13 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getReplies(commentId: string, page = 1, limit = 10, viewerId?: string) {
+    const parent = await prisma.comment.findFirst({
+      where: { id: commentId, deletedAt: null },
+      select: { postId: true },
+    });
+    if (!parent) throw new NotFoundException('Không tìm thấy bình luận');
+    await this.assertCanViewPost(parent.postId, viewerId);
+
     const skip = (page - 1) * limit;
     const replies = await prisma.comment.findMany({
       where: { parentId: commentId, deletedAt: null },
@@ -741,25 +896,36 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     });
     if (!comment) throw new NotFoundException('Không tìm thấy bình luận');
 
-    const existing = await prisma.commentLike.findUnique({
-      where: { commentId_userId: { commentId, userId } },
-    });
-
-    if (existing) {
-      await prisma.commentLike.delete({ where: { id: existing.id } });
-      await prisma.comment.update({
-        where: { id: commentId },
-        data: { likes: { decrement: 1 } },
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.commentLike.findUnique({
+        where: { commentId_userId: { commentId, userId } },
       });
-      return { liked: false };
-    }
 
-    await prisma.commentLike.create({ data: { commentId, userId } });
-    await prisma.comment.update({
-      where: { id: commentId },
-      data: { likes: { increment: 1 } },
+      if (existing) {
+        const deleted = await tx.commentLike.deleteMany({
+          where: { commentId, userId },
+        });
+        if (deleted.count === 1) {
+          await tx.comment.updateMany({
+            where: { id: commentId, likes: { gt: 0 } },
+            data: { likes: { decrement: 1 } },
+          });
+        }
+        return { liked: false };
+      }
+
+      try {
+        await tx.commentLike.create({ data: { commentId, userId } });
+      } catch (error: any) {
+        if (error?.code === 'P2002') return { liked: true };
+        throw error;
+      }
+      await tx.comment.update({
+        where: { id: commentId },
+        data: { likes: { increment: 1 } },
+      });
+      return { liked: true };
     });
-    return { liked: true };
   }
 
   /**
@@ -767,15 +933,16 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
    * Matches FE `DELETE /comments/:id/like`.
    */
   async unlikeComment(commentId: string, userId: string) {
-    const existing = await prisma.commentLike.findUnique({
-      where: { commentId_userId: { commentId, userId } },
-    });
-    if (!existing) return { liked: false };
-
-    await prisma.commentLike.delete({ where: { id: existing.id } });
-    await prisma.comment.update({
-      where: { id: commentId },
-      data: { likes: { decrement: 1 } },
+    await prisma.$transaction(async (tx) => {
+      const deleted = await tx.commentLike.deleteMany({
+        where: { commentId, userId },
+      });
+      if (deleted.count === 1) {
+        await tx.comment.updateMany({
+          where: { id: commentId, likes: { gt: 0 } },
+          data: { likes: { decrement: 1 } },
+        });
+      }
     });
     return { liked: false };
   }
@@ -851,19 +1018,68 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         'SYSTEM',
         'Bài viết của bạn vừa được chia sẻ',
         rootPostId,
+        userId,
       );
     }
 
     return shared;
   }
 
-  async getAllPostsAdmin() {
-    return prisma.post.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: true,
+  async getAllPostsAdmin(query: AdminPostQueryDto) {
+    const { page, limit, search, type, visibility, sortOrder } = query;
+    const normalizedSearch = search?.trim();
+    const where = {
+      ...(type ? { type } : {}),
+      ...(visibility ? { visibility } : {}),
+      ...(normalizedSearch
+        ? {
+            OR: [
+              {
+                content: {
+                  contains: normalizedSearch,
+                  mode: 'insensitive' as const,
+                },
+              },
+              {
+                user: {
+                  fullName: {
+                    contains: normalizedSearch,
+                    mode: 'insensitive' as const,
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+    const [data, total] = await prisma.$transaction([
+      prisma.post.findMany({
+        where,
+        orderBy: { createdAt: sortOrder ?? AdminPostSortOrder.DESC },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      }),
+      prisma.post.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   }
 
   async adminDeletePost(postId: string) {

@@ -1,6 +1,7 @@
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { json, urlencoded } from 'express';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 import { SecurityHeadersMiddleware } from './security-headers.middleware';
 import { logger as createLogger } from '@campus-connect/logger';
@@ -50,6 +51,12 @@ export async function bootstrapService(
     logger: ['error', 'warn', 'log'],
   });
 
+  app.set('trust proxy', 1);
+
+  const requestBodyLimit = process.env.REQUEST_BODY_LIMIT || '256kb';
+  app.use(json({ limit: requestBodyLimit, strict: true }));
+  app.use(urlencoded({ limit: requestBodyLimit, extended: false, parameterLimit: 100 }));
+
   // Security headers (helmet replacement).
   app.use(new SecurityHeadersMiddleware().use);
 
@@ -91,10 +98,17 @@ export async function bootstrapService(
   app.enableShutdownHooks();
 
   const port = Number(process.env.PORT) || options.port;
-  await app.listen(port, '0.0.0.0');
+  const listenHost = process.env.LISTEN_HOST || '127.0.0.1';
+  const isPm2ClusterWorker = process.env.NODE_APP_INSTANCE !== undefined;
+  if (isPm2ClusterWorker) {
+    await app.listen(port);
+  } else {
+    await app.listen(port, listenHost);
+  }
 
   log.info(`🚀 ${options.serviceName} listening on port ${port}`);
-  new Logger(options.serviceName).log(`Ready on http://localhost:${port}`);
+  const boundHost = isPm2ClusterWorker ? 'PM2 cluster socket' : listenHost;
+  new Logger(options.serviceName).log(`Ready on ${boundHost}:${port}`);
 
   // --- Graceful shutdown ---
   const shutdown = async (signal: string) => {

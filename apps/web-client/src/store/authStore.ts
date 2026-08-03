@@ -37,6 +37,7 @@ function clearAuthStorage() {
   localStorage.removeItem('auth_token');
   localStorage.removeItem('refresh_token');
   document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+  document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
   document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
 }
 
@@ -72,9 +73,6 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        try {
-          await api.post('/auth/logout');
-        } catch { /* ignore */ }
         clearAuthStorage();
         set({ user: null, isAuthenticated: false });
       },

@@ -123,30 +123,37 @@ export class MentorsService {
     });
     if (!mentorProfile) throw new NotFoundException('Mentor không tồn tại');
 
-    const windowStart = new Date(scheduledAt.getTime() - 30 * 60 * 1000);
-    const windowEnd = new Date(scheduledAt.getTime() + 30 * 60 * 1000);
-    const conflict = await prisma.mentorBooking.findFirst({
-      where: {
-        mentorId: data.mentorId,
-        status: { in: ['PENDING', 'CONFIRMED'] },
-        scheduledAt: { gte: windowStart, lte: windowEnd },
-      },
-    });
-    if (conflict)
-      throw new BadRequestException('Mentor đã có lịch gần khung giờ này');
+    return prisma.$transaction(async (tx) => {
+      // Serialize bookings for one mentor so concurrent requests cannot both
+      // pass the overlap check. PostgreSQL releases this lock at transaction end.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${data.mentorId}))`;
 
-    return prisma.mentorBooking.create({
-      data: {
-        mentorId: data.mentorId,
-        menteeId,
-        scheduledAt,
-        topic: data.topic,
-        notes: data.notes,
-      },
-      include: {
-        mentor: { select: MENTOR_SELECT },
-        mentee: { select: MENTOR_SELECT },
-      },
+      const windowStart = new Date(scheduledAt.getTime() - 30 * 60 * 1000);
+      const windowEnd = new Date(scheduledAt.getTime() + 30 * 60 * 1000);
+      const conflict = await tx.mentorBooking.findFirst({
+        where: {
+          mentorId: data.mentorId,
+          status: { in: ['PENDING', 'CONFIRMED'] },
+          scheduledAt: { gte: windowStart, lte: windowEnd },
+        },
+      });
+      if (conflict) {
+        throw new BadRequestException('Mentor đã có lịch gần khung giờ này');
+      }
+
+      return tx.mentorBooking.create({
+        data: {
+          mentorId: data.mentorId,
+          menteeId,
+          scheduledAt,
+          topic: data.topic,
+          notes: data.notes,
+        },
+        include: {
+          mentor: { select: MENTOR_SELECT },
+          mentee: { select: MENTOR_SELECT },
+        },
+      });
     });
   }
 
@@ -174,40 +181,48 @@ export class MentorsService {
       where: { id: bookingId },
     });
     if (!booking) throw new NotFoundException('Không tìm thấy lịch hẹn');
-    if (booking.mentorId !== userId && booking.menteeId !== userId) {
+    const isMentor = booking.mentorId === userId;
+    const isMentee = booking.menteeId === userId;
+    if (!isMentor && !isMentee) {
       throw new BadRequestException('Bạn không có quyền với lịch hẹn này');
     }
 
-    const updated = await prisma.mentorBooking.update({
-      where: { id: bookingId },
-      data: { status },
-    });
+    if (status !== 'CANCELLED' && !isMentor) {
+      throw new BadRequestException(
+        'Chỉ mentor mới có quyền cập nhật trạng thái này',
+      );
+    }
 
-    // Khi hoàn thành buổi mentor, tăng tổng số session của mentor.
-    if (status === 'COMPLETED') {
-      await prisma.mentorProfile.update({
-        where: { userId: booking.mentorId },
-        data: { totalSessions: { increment: 1 } },
+    const allowedFrom: Record<typeof status, string[]> = {
+      CONFIRMED: ['PENDING'],
+      COMPLETED: ['CONFIRMED'],
+      CANCELLED: ['PENDING', 'CONFIRMED'],
+      NO_SHOW: ['CONFIRMED'],
+    };
+    if (!allowedFrom[status].includes(booking.status)) {
+      throw new BadRequestException('Chuyển trạng thái lịch hẹn không hợp lệ');
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const changed = await tx.mentorBooking.updateMany({
+        where: { id: bookingId, status: booking.status },
+        data: { status },
       });
-    }
+      if (changed.count !== 1) {
+        throw new BadRequestException(
+          'Lịch hẹn đã được cập nhật bởi yêu cầu khác',
+        );
+      }
 
-    // Tích hợp đồng bộ Google Calendar
-    if (status === 'CONFIRMED') {
-      this.syncWithGoogleCalendar(updated);
-    }
+      if (status === 'COMPLETED') {
+        await tx.mentorProfile.update({
+          where: { userId: booking.mentorId },
+          data: { totalSessions: { increment: 1 } },
+        });
+      }
 
-    return updated;
-  }
-
-  /** Mock Google Calendar Sync */
-  private syncWithGoogleCalendar(booking: any) {
-    console.log(
-      `[Google Calendar Sync] Bắt đầu đồng bộ cho booking ${booking.id}...`,
-    );
-    // Placeholder cho Google API call
-    console.log(
-      `[Google Calendar Sync] Đã thêm sự kiện: Mentor Session vào lịch của Mentor và Mentee.`,
-    );
+      return tx.mentorBooking.findUnique({ where: { id: bookingId } });
+    });
   }
 
   /** Mentee đánh giá mentor sau buổi học; cập nhật lại rating trung bình. */

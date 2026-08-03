@@ -8,6 +8,7 @@ interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export function Avatar({ src, fallback, size = 'md', className, ...props }: AvatarProps) {
+  const [imageFailed, setImageFailed] = React.useState(false);
   const sizeClasses = {
     sm: 'h-8 w-8 text-xs',
     md: 'h-10 w-10 text-sm',
@@ -24,8 +25,8 @@ export function Avatar({ src, fallback, size = 'md', className, ...props }: Avat
       )}
       {...props}
     >
-      {src ? (
-        <img src={src} alt="Avatar" className="aspect-square h-full w-full object-cover" />
+      {src && !imageFailed ? (
+        <img src={src} alt="Avatar" onError={() => setImageFailed(true)} className="aspect-square h-full w-full object-cover" />
       ) : (
         <span className="flex h-full w-full items-center justify-center font-medium text-foreground/60">
           {fallback || "?"}

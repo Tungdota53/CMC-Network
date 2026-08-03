@@ -8,6 +8,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { CMCLogo } from '@/components/CMCLogo';
 import api from '@/lib/api';
 
+type ActiveStudentAvatar = {
+  id: string;
+  fullName: string;
+  avatarUrl: string;
+};
+
 export default function AuthLayout({
   children,
 }: {
@@ -21,6 +27,7 @@ export default function AuthLayout({
   const contentRef = useRef<HTMLDivElement>(null);
 
   const [userCount, setUserCount] = useState<number | null>(null);
+  const [activeStudentAvatars, setActiveStudentAvatars] = useState<ActiveStudentAvatar[]>([]);
 
   useEffect(() => {
     // TODO (AI_2): Cần API GET /users/count (public) trả về tổng số user thật. 
@@ -28,6 +35,12 @@ export default function AuthLayout({
     const fetchUserCount = async () => {
       try {
         const res = await api.get('/users/count');
+        const payload = res.data?.data ?? res.data;
+        setActiveStudentAvatars(
+          Array.isArray(payload?.avatars)
+            ? payload.avatars.filter((user: ActiveStudentAvatar) => Boolean(user.avatarUrl)).slice(0, 4)
+            : [],
+        );
         if (res.data?.data?.count) {
           setUserCount(res.data.data.count);
         } else if (res.data?.count) {
@@ -112,12 +125,26 @@ export default function AuthLayout({
               Nền tảng sinh viên hiện đại nhất. Quản lý học tập, kết nối bạn bè và khám phá những sự kiện thú vị ngay trong khuôn viên trường.
             </p>
             <div className="flex gap-4 items-center">
-              <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-                </span>
-              </div>
+              {activeStudentAvatars.length > 0 ? (
+                <div className="flex -space-x-3" aria-label="Sinh viên đang hoạt động">
+                  {activeStudentAvatars.map((user) => (
+                    <img
+                      key={user.id}
+                      src={user.avatarUrl}
+                      alt={user.fullName}
+                      title={user.fullName}
+                      className="h-10 w-10 rounded-full border-2 border-[#1e3a78] bg-slate-800 object-cover shadow-lg"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                  </span>
+                </div>
+              )}
               <div className="text-sm text-slate-400 flex flex-col justify-center">
                 <span className="font-semibold text-white text-base">
                   {userCount !== null ? `${userCount.toLocaleString()} sinh viên` : 'Đang cập nhật...'}
@@ -172,6 +199,11 @@ export default function AuthLayout({
               </AnimatePresence>
             </div>
           </div>
+          <nav aria-label="Liên kết pháp lý" className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 px-2 text-xs text-slate-400">
+            <Link href="/privacy" className="hover:text-white">Chính sách bảo mật</Link>
+            <Link href="/terms" className="hover:text-white">Điều khoản sử dụng</Link>
+            <Link href="/data-declaration" className="hover:text-white">Khai báo dữ liệu</Link>
+          </nav>
         </div>
       </div>
       

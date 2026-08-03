@@ -30,8 +30,6 @@ export default function MySessionsPage() {
   const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
   const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
-  const handleConfirm = (bookingId: string) => updateStatus.mutate({ bookingId, status: 'CONFIRMED' });
-  const handleComplete = (bookingId: string) => updateStatus.mutate({ bookingId, status: 'COMPLETED' });
   const handleCancel = (bookingId: string) => updateStatus.mutate({ bookingId, status: 'CANCELLED' });
   const handleReview = (bookingId: string) => {
     const rating = window.prompt('Đánh giá từ 1-5 sao:', '5');
@@ -95,8 +93,6 @@ export default function MySessionsPage() {
                 date={fmtDate(session.scheduledAt)}
                 time={fmtTime(session.scheduledAt)}
                 status={session.status}
-                onConfirm={() => handleConfirm(session.id)}
-                onComplete={() => handleComplete(session.id)}
                 onCancel={() => handleCancel(session.id)}
                 onReview={() => handleReview(session.id)}
                 loading={updateStatus.isPending}

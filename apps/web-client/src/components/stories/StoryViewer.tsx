@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
-import { X, Play, Pause, Volume2, VolumeX, Heart, ThumbsUp, MessageCircle, Send } from 'lucide-react';
-import { StoryUserGroup, Story } from '@/hooks/useStories';
+import { X, Play, Pause, Volume2, VolumeX, Heart, ThumbsUp, MessageCircle, Send, Trash2 } from 'lucide-react';
+import { StoryUserGroup, Story, useDeleteStory } from '@/hooks/useStories';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { formatRelativeTime } from '@/lib/time';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import Link from 'next/link';
 
 interface StoryViewerProps {
   users: StoryUserGroup[];
@@ -23,9 +24,22 @@ export function StoryViewer({ users, initialUserIndex, onClose }: StoryViewerPro
   const [isMuted, setIsMuted] = useState(true);
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const deleteStory = useDeleteStory();
 
   const currentUser = users[currentUserIdx];
   const currentStory: Story | undefined = currentUser?.stories[currentStoryIdx];
+  const canDelete = user?.id === currentUser?.userId || user?.role === 'ADMIN';
+
+  const handleDeleteStory = useCallback(async () => {
+    if (!currentStory || !canDelete) return;
+    try {
+      await deleteStory.mutateAsync({ storyId: currentStory.id, isAdmin: user?.role === 'ADMIN' });
+      onClose();
+    } catch {
+      alert('Không thể xóa story lúc này');
+    }
+  }, [canDelete, currentStory, deleteStory, onClose, user?.role]);
 
   // Auto-advance logic and gesture placeholders
   const handleNext = useCallback(() => {
@@ -132,6 +146,15 @@ export function StoryViewer({ users, initialUserIndex, onClose }: StoryViewerPro
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {canDelete && (
+                <button
+                  onClick={() => { setIsPaused(true); setShowDeleteConfirm(true); }}
+                  className="p-1 text-white hover:bg-white/20 rounded-full transition"
+                  aria-label="Xóa story"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
               <button onClick={() => setIsPaused(!isPaused)} className="p-1 text-white hover:bg-white/20 rounded-full transition">
                 {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
               </button>
@@ -161,22 +184,46 @@ export function StoryViewer({ users, initialUserIndex, onClose }: StoryViewerPro
             <img src={currentStory.mediaUrl} alt="" className="w-full h-full object-contain pointer-events-none" />
           )}
           {currentStory.type === 'VIDEO' && (
-            <video src={currentStory.mediaUrl} className="w-full h-full object-contain pointer-events-none" autoPlay muted={isMuted} loop />
+            <video src={currentStory.mediaUrl} className="w-full h-full object-contain pointer-events-none" autoPlay muted={isMuted} playsInline onEnded={handleNext} />
           )}
           {currentStory.type === 'TEXT' && (
             <div 
               className="w-full h-full flex items-center justify-center p-6"
               style={{ background: currentStory.bgGradient || currentStory.bgColor || '#1877F2' }}
             >
-              <p 
-                className="text-white text-center font-bold"
-                style={{ 
-                  fontFamily: currentStory.fontStyle || 'inherit',
-                  fontSize: `${currentStory.fontSize || 28}px`
-                }}
-              >
-                {currentStory.textContent}
-              </p>
+              {currentStory.sharedPost ? (
+                <Link
+                  href={`/posts/${currentStory.sharedPost.id}`}
+                  className="relative z-20 block w-full max-w-[340px] overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl transition-transform hover:scale-[1.01]"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="flex items-center gap-2.5 p-3">
+                    <Avatar src={currentStory.sharedPost.authorAvatarUrl} fallback={currentStory.sharedPost.authorName.charAt(0) || '?'} size="sm" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold">{currentStory.sharedPost.authorName}</p>
+                      <p className="text-xs text-slate-500">Bài viết trên CMC Network</p>
+                    </div>
+                    {currentStory.sharedPost.hasBlueBadge && <VerifiedBadge size={14} />}
+                  </div>
+                  {currentStory.sharedPost.content && (
+                    <p className="line-clamp-6 whitespace-pre-wrap px-3 pb-3 text-sm leading-relaxed">{currentStory.sharedPost.content}</p>
+                  )}
+                  {currentStory.sharedPost.mediaUrl && (
+                    <img src={currentStory.sharedPost.mediaUrl} alt="Ảnh bài viết được chia sẻ" className="max-h-[430px] w-full object-cover" />
+                  )}
+                  <div className="border-t border-slate-200 px-3 py-2 text-center text-xs font-semibold text-blue-600">Xem bài viết</div>
+                </Link>
+              ) : (
+                <p
+                  className="text-center font-bold text-white"
+                  style={{
+                    fontFamily: currentStory.fontStyle || 'inherit',
+                    fontSize: `${currentStory.fontSize || 28}px`
+                  }}
+                >
+                  {currentStory.textContent}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -212,6 +259,21 @@ export function StoryViewer({ users, initialUserIndex, onClose }: StoryViewerPro
             <ThumbsUp className="w-6 h-6 text-white group-hover:text-blue-500 group-hover:fill-blue-500 transition-colors" />
           </button>
         </div>
+
+        {showDeleteConfirm && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 px-5" onClick={() => { setShowDeleteConfirm(false); setIsPaused(false); }}>
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-slate-900 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+              <h3 className="mb-2 text-lg font-bold">Xóa story?</h3>
+              <p className="mb-6 text-sm text-slate-600">Story sẽ bị xóa vĩnh viễn và không thể khôi phục.</p>
+              <div className="flex gap-3">
+                <button onClick={() => { setShowDeleteConfirm(false); setIsPaused(false); }} className="flex-1 rounded-xl bg-slate-100 py-2.5 text-sm font-semibold hover:bg-slate-200">Hủy</button>
+                <button onClick={() => void handleDeleteStory()} disabled={deleteStory.isPending} className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50">
+                  {deleteStory.isPending ? 'Đang xóa...' : 'Xóa'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

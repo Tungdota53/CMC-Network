@@ -25,15 +25,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = useAuthStore((state) => state.refreshUser);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const userId = useAuthStore((state) => state.user?.id);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     const token = localStorage.getItem('auth_token');
     const refreshToken = localStorage.getItem('refresh_token');
     const tokenUserId = getTokenUserId(token);
-    if ((token || refreshToken) && (!isAuthenticated || !userId || (tokenUserId && tokenUserId !== userId))) {
+    if ((token || refreshToken) && (!isAuthenticated || !userId || !tokenUserId || tokenUserId !== userId)) {
       refreshUser();
     }
-  }, [refreshUser, isAuthenticated, userId]);
+  }, [refreshUser, isAuthenticated, userId, hasHydrated]);
 
   return <>{children}</>;
 }

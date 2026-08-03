@@ -312,17 +312,21 @@ export class ClubsService {
     if (!request)
       throw new NotFoundException('Không tìm thấy yêu cầu tham gia');
 
-    await prisma.$transaction([
-      prisma.clubMember.upsert({
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.clubJoinRequest.updateMany({
+        where: { id: request.id, status: 'PENDING' },
+        data: { status: 'APPROVED' },
+      });
+      if (claimed.count !== 1) {
+        throw new NotFoundException('Không tìm thấy yêu cầu tham gia');
+      }
+
+      await tx.clubMember.upsert({
         where: { clubId_userId: { clubId, userId: request.userId } },
         create: { clubId, userId: request.userId, role: 'MEMBER' },
         update: {},
-      }),
-      prisma.clubJoinRequest.update({
-        where: { id: request.id },
-        data: { status: 'APPROVED' },
-      }),
-    ]);
+      });
+    });
     return { success: true };
   }
 

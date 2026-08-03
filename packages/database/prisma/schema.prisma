@@ -25,6 +25,7 @@ model User {
   cohort                 String?
   bio                    String?
   avatarUrl              String?
+  avatarOriginalUrl      String?
   coverPhotoUrl          String?
   reputationScore        Int                     @default(0)
   isVerified             Boolean                 @default(false)
@@ -73,7 +74,9 @@ model User {
   messageReadReceipts    MessageReadReceipt[]
   pinnedMessages         PinnedMessage[]
   startedCallSessions    CallSession[]           @relation("CallStartedBy")
+  liveStreams            LiveStream[]
   notifications          Notification[]
+  notificationsSent      Notification[]          @relation("NotificationSender")
   notificationPreference NotificationPreference?
   postLikes              PostLike[]
   postHides              PostHide[]
@@ -297,6 +300,24 @@ model Post {
   @@index([type])
   @@index([visibility, createdAt(sort: Desc)])
   @@map("posts")
+}
+
+model LiveStream {
+  id          String           @id @default(uuid()) @db.Uuid
+  hostId      String           @db.Uuid
+  title       String
+  description String?
+  roomName    String           @unique
+  status      LiveStreamStatus @default(LIVE)
+  startedAt   DateTime         @default(now())
+  endedAt     DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  host        User             @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([status, startedAt(sort: Desc)])
+  @@index([hostId, status])
+  @@map("live_streams")
 }
 
 model StoryView {
@@ -788,8 +809,10 @@ model Notification {
   content   String
   isRead    Boolean          @default(false)
   relatedId String?          @db.Uuid
+  senderId  String?          @db.Uuid
   createdAt DateTime         @default(now())
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender    User?            @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([isRead])
@@ -1062,6 +1085,11 @@ enum PostVisibility {
   PUBLIC
   FRIENDS
   PRIVATE
+}
+
+enum LiveStreamStatus {
+  LIVE
+  ENDED
 }
 
 enum ConversationType {

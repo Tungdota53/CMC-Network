@@ -6,6 +6,7 @@ import { useState, useMemo } from 'react';
 import { Select } from '@/components/ui/Select';
 import api from '@/lib/api';
 import { Calendar, CheckCircle2, Eye, EyeOff, Info, KeyRound, Lock, Mail, User, Users, XCircle } from 'lucide-react';
+import Link from 'next/link';
 
 const getErrorMessage = (err: any, fallback: string) => {
   const raw = err?.error?.message || err?.response?.data?.error?.message || err?.message;
@@ -48,6 +49,7 @@ export function RegisterForm() {
   const [isResending, setIsResending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
 
   const passwordChecks = useMemo(() => [
     { label: 'Ít nhất 8 ký tự', valid: formData.password.length >= 8 },
@@ -111,6 +113,10 @@ export function RegisterForm() {
 
   const onSubmitRegister = async () => {
     setGlobalError('');
+    if (!acceptedLegal) {
+      setGlobalError('Bạn cần đồng ý với Điều khoản sử dụng, Chính sách bảo mật và Khai báo dữ liệu.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       await api.post('/auth/register', {
@@ -471,10 +477,33 @@ export function RegisterForm() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+            <div className="flex items-start gap-3">
+              <input
+                id="accepted-legal"
+                type="checkbox"
+                checked={acceptedLegal}
+                onChange={(event) => {
+                  setAcceptedLegal(event.target.checked);
+                  setGlobalError('');
+                }}
+                className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-white/30 accent-blue-500"
+              />
+              <label htmlFor="accepted-legal" className="cursor-pointer text-sm leading-6 text-slate-300">
+                Tôi đã đọc và đồng ý với{' '}
+                <Link href="/terms" target="_blank" className="font-semibold text-blue-300 underline underline-offset-2 hover:text-blue-200">Điều khoản sử dụng</Link>,{' '}
+                <Link href="/privacy" target="_blank" className="font-semibold text-blue-300 underline underline-offset-2 hover:text-blue-200">Chính sách bảo mật</Link>{' '}
+                và{' '}
+                <Link href="/data-declaration" target="_blank" className="font-semibold text-blue-300 underline underline-offset-2 hover:text-blue-200">Khai báo dữ liệu</Link>.
+              </label>
+            </div>
+          </div>
+
           <Button
             type="button"
             onClick={onSubmitRegister}
-            className="sticky bottom-[calc(env(safe-area-inset-bottom)+8px)] z-10 mt-6 h-12 w-full overflow-hidden rounded-xl border border-white/10 bg-gradient-to-r from-blue-600 to-indigo-600 text-[15px] font-bold text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] transition-all hover:from-blue-500 hover:to-indigo-500 sm:static"
+            disabled={!acceptedLegal || isSubmitting}
+            className="sticky bottom-[calc(env(safe-area-inset-bottom)+8px)] z-10 mt-6 h-12 w-full overflow-hidden rounded-xl border border-white/10 bg-gradient-to-r from-blue-600 to-indigo-600 text-[15px] font-bold text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] transition-all hover:from-blue-500 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 sm:static"
             isLoading={isSubmitting}
           >
             <span className="relative z-10 flex items-center justify-center gap-2">

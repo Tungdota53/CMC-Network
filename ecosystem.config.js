@@ -21,6 +21,7 @@ function loadRootEnv() {
 }
 
 const rootEnv = loadRootEnv();
+const loopbackEnv = { ...rootEnv, LISTEN_HOST: '127.0.0.1' };
 
 /**
  * PM2 Ecosystem — CampusConnect
@@ -48,7 +49,7 @@ module.exports = {
       exec_mode: 'fork',
       max_memory_restart: '400M',
       env: {
-        ...rootEnv,
+        ...loopbackEnv,
         NODE_ENV: 'production',
         PORT: 3001,
         AUTH_SERVICE_URL: 'http://localhost:3002',
@@ -71,7 +72,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
-        ...rootEnv,
+        ...loopbackEnv,
         NODE_ENV: 'production',
         PORT: 3002,
       },
@@ -86,7 +87,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
-        ...rootEnv,
+        ...loopbackEnv,
         NODE_ENV: 'production',
         PORT: 3003,
       },
@@ -101,7 +102,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
-        ...rootEnv,
+        ...loopbackEnv,
         NODE_ENV: 'production',
         PORT: 3004,
       },
@@ -116,7 +117,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '500M',
       env: {
-        ...rootEnv,
+        ...loopbackEnv,
         NODE_ENV: 'production',
         PORT: 3005,
       },
@@ -131,7 +132,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
-        ...rootEnv,
+        ...loopbackEnv,
         NODE_ENV: 'production',
         PORT: 3006,
       },
@@ -146,7 +147,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '500M',
       env: {
-        ...rootEnv,
+        ...loopbackEnv,
         NODE_ENV: 'production',
         PORT: 3007,
       },
@@ -161,7 +162,7 @@ module.exports = {
       exec_mode: 'cluster',
       max_memory_restart: '400M',
       env: {
-        ...rootEnv,
+        ...loopbackEnv,
         NODE_ENV: 'production',
         PORT: 3008,
       },
@@ -172,7 +173,7 @@ module.exports = {
       name: 'web-client',
       cwd: './apps/web-client',
       script: 'node_modules/next/dist/bin/next',
-      args: 'start -H 0.0.0.0',
+      args: 'start -H 127.0.0.1',
       instances: 1,
       exec_mode: 'fork',
       max_memory_restart: '500M',
@@ -188,7 +189,7 @@ module.exports = {
       name: 'ai-service',
       cwd: './apps/ai-service',
       script: 'python3',
-      args: '-m uvicorn main:app --host 0.0.0.0 --port 8000',
+      args: '-m uvicorn main:app --host 127.0.0.1 --port 8000',
       instances: 1,
       exec_mode: 'fork',
       max_memory_restart: '400M',
@@ -203,7 +204,7 @@ module.exports = {
       name: 'admin-dashboard',
       cwd: './apps/admin-dashboard',
       script: 'node_modules/vite/bin/vite.js',
-      args: 'preview --host 0.0.0.0 --port 25443',
+      args: 'preview --host 127.0.0.1 --port 25443',
       instances: 1,
       exec_mode: 'fork',
       max_memory_restart: '300M',

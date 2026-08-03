@@ -8,7 +8,7 @@ import { useNotificationStore } from '@/stores/useNotificationStore';
 
 export const NotificationDropdown = ({ onClose }: { onClose: () => void }) => {
   const [activeTab, setActiveTab] = useState<'ALL' | 'UNREAD'>('ALL');
-  const { notifications, markAsRead, markAllAsRead } = useNotificationStore();
+  const { notifications, markAsRead, markAllAsRead, isLoading } = useNotificationStore();
 
   const filteredNotifs = activeTab === 'ALL' ? notifications : notifications.filter(n => !n.isRead);
   const emptyTitle = activeTab === 'UNREAD' ? 'Không có thông báo chưa đọc' : 'Chưa có thông báo';
@@ -17,7 +17,7 @@ export const NotificationDropdown = ({ onClose }: { onClose: () => void }) => {
     : 'Khi có hoạt động mới, thông báo sẽ xuất hiện tại đây.';
 
   return (
-    <div className="fixed inset-x-3 top-16 max-h-[calc(100vh-5rem)] rounded-2xl z-50 flex flex-col isolate sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[360px] sm:max-h-[85vh]">
+    <div role="dialog" aria-modal="false" aria-labelledby="notification-title" className="fixed inset-x-3 top-16 max-h-[calc(100dvh-5rem)] rounded-2xl z-50 flex flex-col isolate sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[400px] sm:max-h-[min(720px,calc(100dvh-5rem))]">
       {/* Bulletproof Glass Background Layer */}
       <div 
         className="absolute inset-0 rounded-2xl pointer-events-none -z-10"
@@ -31,23 +31,29 @@ export const NotificationDropdown = ({ onClose }: { onClose: () => void }) => {
       />
       
       <div className="relative z-10 flex flex-col h-full overflow-hidden rounded-2xl">
-        <div className="p-4 flex items-center justify-between">
-        <h2 className="text-[22px] font-bold text-foreground">Thông báo</h2>
+        <div className="sticky top-0 z-10 p-4 pb-2 flex items-center justify-between bg-card/85 backdrop-blur-xl">
+        <h2 id="notification-title" className="text-[22px] font-bold text-foreground">Thông báo</h2>
         <div className="flex gap-2">
-          <button className="w-8 h-8 rounded-full hover:bg-hover flex items-center justify-center transition-colors">
+          <button type="button" aria-label="Tùy chọn thông báo" className="w-8 h-8 rounded-full hover:bg-hover flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
             <MoreHorizontal className="w-5 h-5 text-foreground/70" />
           </button>
         </div>
       </div>
       
-      <div className="px-4 pb-2 flex gap-2">
+      <div className="px-4 pb-2 flex gap-2 bg-card/85 backdrop-blur-xl" role="tablist" aria-label="Bộ lọc thông báo">
         <button 
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'ALL'}
           onClick={() => setActiveTab('ALL')}
           className={`px-4 py-1.5 rounded-full text-[14px] font-semibold transition-colors ${activeTab === 'ALL' ? 'bg-primary/20 text-primary' : 'hover:bg-hover text-foreground'}`}
         >
           Tất cả
         </button>
         <button 
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'UNREAD'}
           onClick={() => setActiveTab('UNREAD')}
           className={`px-4 py-1.5 rounded-full text-[14px] font-semibold transition-colors ${activeTab === 'UNREAD' ? 'bg-primary/20 text-primary' : 'hover:bg-hover text-foreground'}`}
         >
@@ -67,7 +73,19 @@ export const NotificationDropdown = ({ onClose }: { onClose: () => void }) => {
           </button>
         </div>
         
-        {filteredNotifs.length > 0 ? (
+        {isLoading ? (
+          <div className="space-y-2 px-2 py-1" aria-label="Đang tải thông báo">
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item} className="flex animate-pulse items-center gap-3 rounded-xl p-3">
+                <div className="h-12 w-12 shrink-0 rounded-full bg-foreground/10" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 w-4/5 rounded bg-foreground/10" />
+                  <div className="h-3 w-2/5 rounded bg-foreground/10" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredNotifs.length > 0 ? (
           filteredNotifs.map(notif => (
             <NotificationItem key={notif.id} {...notif} onRead={markAsRead} />
           ))
@@ -82,7 +100,7 @@ export const NotificationDropdown = ({ onClose }: { onClose: () => void }) => {
         )}
       </div>
       
-      <div className="p-2 border-t border-border/50">
+      <div className="sticky bottom-0 z-10 p-2 border-t border-border/50 bg-card/90 backdrop-blur-xl">
         <Link href="/notifications" onClick={onClose} className="block w-full text-center py-2 text-[14px] font-semibold text-primary hover:bg-hover rounded-lg transition-colors">
           Xem tất cả thông báo
         </Link>

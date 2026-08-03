@@ -93,6 +93,7 @@ interface MessageBubbleProps {
   onForward?: (messageId: string) => void;
   onPin?: (messageId: string) => void;
   onCopy?: (text: string) => void;
+  onRetry?: (msg: any) => void;
   allMessages?: any[];
 }
 
@@ -386,7 +387,7 @@ function MessageHoverActions({
 // ============================================================
 export function MessageBubble({ 
   msg, isFirstInGroup, isLastInGroup, conversationName, isGroup, themeColor,
-  onReply, onUnsend, onDeleteForMe, onEdit, onReact, onRemoveReaction, onForward, onPin, onCopy,
+  onReply, onUnsend, onDeleteForMe, onEdit, onReact, onRemoveReaction, onForward, onPin, onCopy, onRetry,
   allMessages
 }: MessageBubbleProps) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -562,7 +563,17 @@ export function MessageBubble({
         )}
 
         {/* Status */}
-        {msg.isOwn && isLastInGroup && <MessageStatus status={msg.status} />}
+        {msg.isOwn && isLastInGroup && (
+          msg.status === 'FAILED' ? (
+            <button
+              type="button"
+              onClick={() => onRetry?.(msg)}
+              className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:underline"
+            >
+              <AlertCircle className="h-3 w-3" /> Gửi lại
+            </button>
+          ) : <MessageStatus status={msg.status} />
+        )}
       </div>
 
       {/* Context Menu */}

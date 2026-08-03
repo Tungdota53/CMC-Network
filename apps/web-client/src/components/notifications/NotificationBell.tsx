@@ -22,13 +22,24 @@ export const NotificationBell = () => {
         setIsOpen(false);
       }
     };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false);
+    };
     document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, []);
 
   return (
     <div className="relative" ref={containerRef}>
       <button 
+        type="button"
+        aria-label={unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
         onClick={() => {
           setIsOpen(!isOpen);
           if (!isOpen) fetchNotifications();
@@ -37,7 +48,7 @@ export const NotificationBell = () => {
       >
         <Bell className="w-[20px] h-[20px]" fill={isOpen ? 'currentColor' : 'none'} strokeWidth={isOpen ? 0 : 2} />
         {unreadCount > 0 && (
-          <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-card">
+          <div aria-hidden="true" className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-card">
             <span className="text-[10px] font-bold text-white leading-none">{unreadCount > 9 ? '9+' : unreadCount}</span>
           </div>
         )}

@@ -276,7 +276,8 @@ export default function ChatConversationPage() {
       createdAt: new Date().toISOString(),
       isOwn: true,
       status: 'SENDING',
-      replyToId: replyToId || null
+      replyToId: replyToId || null,
+      retryPayload: { kind: 'text', text, replyToId, typeOverride },
     };
     
     // Step 1: Show immediately (optimistic)
@@ -291,6 +292,7 @@ export default function ChatConversationPage() {
         tempId: tempId,
         replyToId: replyToId || null
       }, (ack: any) => {
+        window.clearTimeout(ackTimeout);
         // Step 3: NestJS @SubscribeMessage returns ACK here
         if (ack?.data?.message) {
           const savedMessage = { ...ack.data.message };
@@ -302,6 +304,9 @@ export default function ChatConversationPage() {
           setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'FAILED' } : m));
         }
       });
+      const ackTimeout = window.setTimeout(() => {
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'FAILED' } : m));
+      }, 12000);
     } else {
       // REST fallback
       try {
@@ -330,7 +335,7 @@ export default function ChatConversationPage() {
   };
 
   const handleSendMedia = async (file: File, replyToId?: string) => {
-    const tempId = `${Date.now()}-${file.name}`;
+    const tempId = `media-tmp-${++tempIdCounter.current}-${file.name}`;
     const type = getMessageTypeFromFile(file);
     const tempMessage = {
       id: tempId,
@@ -342,7 +347,8 @@ export default function ChatConversationPage() {
       createdAt: new Date().toISOString(),
       isOwn: true,
       status: 'SENDING',
-      replyToId: replyToId || null
+      replyToId: replyToId || null,
+      retryPayload: { kind: 'media', file, replyToId },
     };
     setMessages(prev => [...prev, tempMessage]);
 
@@ -365,6 +371,7 @@ export default function ChatConversationPage() {
           tempId,
           replyToId: replyToId || null
         }, (ack: any) => {
+          window.clearTimeout(ackTimeout);
           if (ack?.data?.message) {
             const savedMessage = { ...ack.data.message, isOwn: true, status: 'SENT' };
             setMessages(prev => prev.map(m => m.id === tempId ? savedMessage : m));
@@ -372,6 +379,9 @@ export default function ChatConversationPage() {
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'FAILED' } : m));
           }
         });
+        const ackTimeout = window.setTimeout(() => {
+          setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'FAILED' } : m));
+        }, 15000);
       } else {
         const res = await api.post(`/conversations/${id}/messages`, {
           content: file.name,
@@ -386,6 +396,20 @@ export default function ChatConversationPage() {
       console.error('Failed to send media:', error);
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'FAILED' } : m));
     }
+  };
+
+  const handleRetryMessage = (message: any) => {
+    if (message.status !== 'FAILED' || !message.retryPayload) return;
+    setMessages(prev => prev.filter(item => item.id !== message.id));
+    if (message.retryPayload.kind === 'media' && message.retryPayload.file) {
+      void handleSendMedia(message.retryPayload.file, message.retryPayload.replyToId);
+      return;
+    }
+    void handleSendMessage(
+      message.retryPayload.text || message.content || '',
+      message.retryPayload.replyToId,
+      message.retryPayload.typeOverride || 'TEXT',
+    );
   };
 
   // ============================================================
@@ -699,6 +723,7 @@ export default function ChatConversationPage() {
         onRemoveReaction={handleRemoveReaction}
         onForward={handleForward}
         onPin={handlePinMessage}
+        onRetry={handleRetryMessage}
       />
 
       {/* MessageInput — Plan 02J: auto-resize textarea */}

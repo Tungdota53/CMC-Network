@@ -66,6 +66,10 @@ export class RateLimitGuard implements CanActivate {
     return !!this.redis && this.redis.status === 'ready';
   }
 
+  private get redisRequired(): boolean {
+    return process.env.REDIS_REQUIRED === 'true' || process.env.NODE_ENV === 'production';
+  }
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const handler = context.getHandler();
     const controller = context.getClass();
@@ -76,7 +80,7 @@ export class RateLimitGuard implements CanActivate {
     ]);
     if (skip) return true;
 
-    const options =
+    const configuredOptions =
       this.reflector.getAllAndOverride<RateLimitOptions>(RATE_LIMIT_KEY, [
         handler,
         controller,
@@ -84,11 +88,32 @@ export class RateLimitGuard implements CanActivate {
 
     const req = context.switchToHttp().getRequest<Request>();
     const res = context.switchToHttp().getResponse<Response>();
+    const options = this.isSensitiveAuthRoute(req)
+      ? {
+          limit: Number(process.env.AUTH_RATE_LIMIT_MAX) || 5,
+          windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60_000,
+        }
+      : configuredOptions;
     const ip = this.clientIp(req);
-    const key = `ratelimit:${ip}:${controller.name}.${handler.name}`;
+    const routeKey = this.isSensitiveAuthRoute(req)
+      ? `auth:${req.path.toLowerCase()}`
+      : `${controller.name}.${handler.name}`;
+    const service = process.env.SERVICE_NAME || 'unknown-service';
+    const key = `ratelimit:${service}:${ip}:${routeKey}`;
 
     if (this.redisReady) {
       return this.checkRedis(key, options, res);
+    }
+
+    if (this.redisRequired) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+          message: 'Dịch vụ bảo mật tạm thời chưa sẵn sàng.',
+          error: 'Service Unavailable',
+        },
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
     }
 
     return this.checkMemory(key, options, res);
@@ -170,11 +195,15 @@ export class RateLimitGuard implements CanActivate {
   }
 
   private clientIp(req: Request): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.length > 0) {
-      return forwarded.split(',')[0].trim();
-    }
     return req.ip || req.socket?.remoteAddress || 'unknown';
+  }
+
+  private isSensitiveAuthRoute(req: Request): boolean {
+    if (req.method.toUpperCase() !== 'POST') return false;
+
+    return /^\/(?:api\/)?auth\/(?:login|register|verify-email|resend-otp|forgot-password|reset-password|refresh|2fa\/login)\/?$/i.test(
+      req.path,
+    );
   }
 
   /** Periodically drop expired counters so the map doesn't grow unbounded. */

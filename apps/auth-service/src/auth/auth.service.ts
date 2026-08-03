@@ -223,12 +223,7 @@ export class AuthService {
       where: { email: normalizedEmail },
     });
     if (existingUser) {
-      if (!existingUser.emailVerified && !existingUser.lastLoginAt) {
-        // Delete the stuck unverified dummy user so they can register properly
-        await prisma.user.delete({ where: { id: existingUser.id } });
-      } else {
-        throw new BadRequestException('Email đã tồn tại trong hệ thống');
-      }
+      throw new BadRequestException('Email đã tồn tại trong hệ thống');
     }
 
     const salt = await bcrypt.genSalt();

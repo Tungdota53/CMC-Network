@@ -25,6 +25,7 @@ function clearAuthStorage() {
   localStorage.removeItem('auth_token');
   localStorage.removeItem('refresh_token');
   document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+  document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
   document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
 }
 
@@ -68,6 +69,7 @@ api.interceptors.request.use(
       ['post', 'put', 'patch', 'delete'].includes(method) &&
       typeof config.url === 'string' &&
       config.url.startsWith('/posts') &&
+      !config.url.startsWith('/posts/live-streams') &&
       !(config.data instanceof FormData)
     ) {
       config.data = { ...(config.data || {}), userId: config.data?.userId || userId };
@@ -208,7 +210,9 @@ api.interceptors.response.use(
 
         if (typeof window !== 'undefined') {
           clearAuthStorage();
-          // window.location.href = '/login'; // Let components handle redirect
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+            window.location.replace('/login');
+          }
         }
     }
     return Promise.reject(error.response?.data || error);

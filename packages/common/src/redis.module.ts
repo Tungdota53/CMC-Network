@@ -11,14 +11,18 @@ export interface RedisModuleOptions {
   keyPrefix?: string;
 }
 
+function redisRequired() {
+  return process.env.REDIS_REQUIRED === 'true' || process.env.NODE_ENV === 'production';
+}
+
 /**
  * Global Redis module — provides a shared ioredis client for:
  *  - Socket.IO Redis adapter (cross-instance WebSocket fanout)
  *  - Redis-backed rate limiter (shared counters across instances)
  *  - Redis-backed presence (online status across instances)
  *
- * Falls back to in-memory mode (no-op) when Redis is unavailable so
- * single-instance dev still works without Redis running.
+ * Local development may fall back when Redis is unavailable. Production
+ * fails startup instead of silently weakening rate-limit and presence state.
  */
 @Global()
 @Module({})
@@ -40,7 +44,8 @@ export class RedisModule implements OnModuleInit, OnModuleDestroy {
             enableReadyCheck: true,
             retryStrategy: (times: number) => {
               if (times > 10) {
-                // Stop retrying after 10 attempts — app continues without Redis.
+                // Stop retrying after 10 attempts; onModuleInit decides whether
+                // this is acceptable for the current environment.
                 return null;
               }
               return Math.min(times * 200, 2000);
@@ -49,7 +54,7 @@ export class RedisModule implements OnModuleInit, OnModuleDestroy {
           });
           RedisModule.client.on('error', (err) => {
             Logger.warn(
-              `Redis connection error — continuing with in-memory fallback where available: ${err.message}`,
+              `Redis connection error: ${err.message}`,
               'RedisModule',
             );
           });
@@ -73,6 +78,11 @@ export class RedisModule implements OnModuleInit, OnModuleDestroy {
       await client.connect();
       this.logger.log('✅ Redis client connected');
     } catch (err) {
+      if (redisRequired()) {
+        throw new Error(
+          `Redis bắt buộc nhưng không thể kết nối: ${(err as Error).message}`,
+        );
+      }
       this.logger.warn(
         `⚠️  Redis unavailable — falling back to in-memory mode. Rate limiting & presence will be per-instance. Error: ${(err as Error).message}`,
       );

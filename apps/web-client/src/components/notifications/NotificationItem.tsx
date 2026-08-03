@@ -2,6 +2,7 @@ import React from 'react';
 import { Heart, MessageCircle, UserPlus, Share2 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import Link from 'next/link';
+import { getNotificationActionUrl } from './notification-links';
 
 interface Props {
   id: string;
@@ -11,11 +12,12 @@ interface Props {
   isRead: boolean;
   timeAgo: string;
   avatarUrl?: string;
+  senderName?: string;
   actionUrl?: string;
   onRead?: (id: string) => void;
 }
 
-export const NotificationItem = ({ id, title, content, type, isRead, timeAgo, avatarUrl, actionUrl, onRead }: Props) => {
+export const NotificationItem = ({ id, title, content, type, isRead, timeAgo, avatarUrl, senderName, actionUrl, onRead }: Props) => {
   const getIcon = () => {
     switch (type) {
       case 'LIKE': return <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center border-2 border-background"><Heart className="w-3 h-3 fill-current" /></div>;
@@ -26,16 +28,17 @@ export const NotificationItem = ({ id, title, content, type, isRead, timeAgo, av
     }
   };
 
-  const Wrapper = actionUrl ? Link : 'div';
+  const resolvedActionUrl = actionUrl || getNotificationActionUrl(type);
+  const Wrapper = resolvedActionUrl ? Link : 'div';
 
   return (
     <Wrapper 
-      href={actionUrl || '#'}
+      href={resolvedActionUrl || '#'}
       onClick={() => onRead?.(id)}
       className={`flex items-start gap-3 p-3 rounded-lg hover:bg-hover transition-colors cursor-pointer relative group ${!isRead ? 'bg-primary/5' : ''}`}
     >
       <div className="relative shrink-0">
-        <Avatar size="lg" src={avatarUrl} />
+        <Avatar size="lg" src={avatarUrl} fallback={senderName?.trim().charAt(0).toUpperCase()} />
         {getIcon()}
       </div>
       

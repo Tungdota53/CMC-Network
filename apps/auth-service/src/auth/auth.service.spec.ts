@@ -78,7 +78,7 @@ describe('AuthService — register', () => {
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
-  it('removes a stuck unverified account before creating a pending registration', async () => {
+  it('never deletes an existing unverified account during registration', async () => {
     jest.mocked(prisma.user.findUnique).mockResolvedValue({
       id: 'stuck-user',
       emailVerified: false,
@@ -91,11 +91,10 @@ describe('AuthService — register', () => {
         password: 'secret',
         fullName: 'Stuck User',
       }),
-    ).resolves.toMatchObject({ pendingEmail: 'stuck@st.cmc.edu.vn' });
+    ).rejects.toThrow(/đã tồn tại/i);
 
-    expect(prisma.user.delete).toHaveBeenCalledWith({
-      where: { id: 'stuck-user' },
-    });
+    expect(prisma.user.delete).not.toHaveBeenCalled();
+    expect(email.sendOtpEmail).not.toHaveBeenCalled();
   });
 
   it('stores a hashed password and derived studentId in the pending registration', async () => {

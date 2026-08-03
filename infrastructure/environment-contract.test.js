@@ -45,8 +45,8 @@ test('root environment template contains the complete local routing contract', (
 
 test('development compose uses project-specific host ports and container names', () => {
   const compose = read('infrastructure/docker-compose.yml');
-  assert.match(compose, /\$\{POSTGRES_HOST_PORT:-25432\}:5432/);
-  assert.match(compose, /\$\{REDIS_HOST_PORT:-26379\}:6379/);
+  assert.match(compose, /127\.0\.0\.1:\$\{POSTGRES_HOST_PORT:-5432\}:5432/);
+  assert.match(compose, /127\.0\.0\.1:\$\{REDIS_HOST_PORT:-6379\}:6379/);
   assert.match(compose, /cmc_network_postgres_dev/);
   assert.match(compose, /cmc_network_redis_dev/);
 });

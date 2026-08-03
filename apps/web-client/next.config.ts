@@ -54,6 +54,10 @@ const nextConfig: NextConfig = {
         destination: `${userApiUrl}/avatars/:path*`,
       },
       {
+        source: '/avatars-original/:path*',
+        destination: `${userApiUrl}/avatars-original/:path*`,
+      },
+      {
         source: '/covers/:path*',
         destination: `${userApiUrl}/covers/:path*`,
       },

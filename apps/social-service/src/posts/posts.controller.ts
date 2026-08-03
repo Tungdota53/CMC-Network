@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -17,13 +18,15 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   CurrentUser,
   JwtAuthGuard,
+  RateLimit,
   Roles,
   RolesGuard,
   VerifiedUserGuard,
   resolveUserId,
 } from '@campus-connect/common';
-import { PostType } from '@prisma/client';
+import { PostType, PostVisibility } from '@prisma/client';
 import 'multer';
+import { AdminPostQueryDto } from './dto/admin-post-query.dto';
 import { PostsService } from './posts.service';
 
 @Controller('posts')
@@ -33,14 +36,14 @@ export class PostsController {
   @Get('admin/all')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  async getAllPostsAdmin() {
-    return this.postsService.getAllPostsAdmin();
+  async getAllPostsAdmin(@Query() query: AdminPostQueryDto) {
+    return this.postsService.getAllPostsAdmin(query);
   }
 
   @Delete('admin/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  async adminDeletePost(@Param('id') id: string) {
+  async adminDeletePost(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.postsService.adminDeletePost(id);
   }
 
@@ -179,6 +182,7 @@ export class PostsController {
 
   @Post()
   @UseGuards(JwtAuthGuard, VerifiedUserGuard)
+  @RateLimit({ limit: 5, windowMs: 60_000 })
   @UseInterceptors(FilesInterceptor('files', 10))
   async createPost(
     @CurrentUser('sub') tokenUserId: string,
@@ -190,6 +194,7 @@ export class PostsController {
       type?: string;
       poll?: unknown;
       clubId?: string;
+      visibility?: string;
     } = {},
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
@@ -224,6 +229,7 @@ export class PostsController {
       this.parsePostType(data.type),
       parsedPoll,
       data.clubId,
+      this.parsePostVisibility(data.visibility),
     );
   }
 
@@ -232,6 +238,12 @@ export class PostsController {
     return Object.values(PostType).includes(type as PostType)
       ? (type as PostType)
       : undefined;
+  }
+
+  private parsePostVisibility(visibility?: string): PostVisibility {
+    return Object.values(PostVisibility).includes(visibility as PostVisibility)
+      ? (visibility as PostVisibility)
+      : PostVisibility.PUBLIC;
   }
 
   @Put(':id/like')
@@ -352,12 +364,14 @@ export class PostsController {
   async commentPost(
     @Param('id') id: string,
     @CurrentUser('sub') tokenUserId: string,
-    @Body() data: { userId?: string; content?: string } = {},
+    @Body()
+    data: { userId?: string; content?: string; parentId?: string } = {},
   ) {
     return this.postsService.commentPost(
       id,
       resolveUserId(tokenUserId, data.userId),
       data.content || '',
+      data.parentId,
     );
   }
 

@@ -31,13 +31,14 @@ export class NotificationsService {
     type: NotifType,
     content: string,
     relatedId?: string,
+    senderId?: string,
   ) {
     const preferences = await this.getPreferences(userId);
     if (!this.isTypeEnabled(type, preferences)) {
       return { skipped: true, reason: 'disabled_by_preferences' };
     }
     const notification = await prisma.notification.create({
-      data: { userId, type: type as never, content, relatedId },
+      data: { userId, type: type as never, content, relatedId, senderId },
     });
 
     if (preferences.email) {
@@ -133,6 +134,11 @@ export class NotificationsService {
   async list(userId: string, limit = 30) {
     return prisma.notification.findMany({
       where: { userId },
+      include: {
+        sender: {
+          select: { id: true, fullName: true, avatarUrl: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 100),
     });

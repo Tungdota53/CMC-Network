@@ -19,6 +19,7 @@
     "db:push": "prisma db push --schema packages/database/prisma/schema.prisma",
     "db:studio": "prisma studio --schema packages/database/prisma/schema.prisma",
     "deploy:healthcheck": "node scripts/deploy-healthcheck.js",
+    "deploy:web": "node scripts/deploy-web.js",
     "lint": "turbo run lint",
     "lint:fix": "npm run lint:fix --workspaces --if-present",
     "test:infra": "node --test infrastructure/*.test.js",

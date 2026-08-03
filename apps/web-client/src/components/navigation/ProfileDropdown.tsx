@@ -29,9 +29,10 @@ export function ProfileDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
+  const handleLogout = async () => {
+    setIsOpen(false);
+    await logout();
+    window.location.replace('/login');
   };
 
   return (

@@ -38,6 +38,7 @@ export default function ProfilePage() {
   const [editForm, setEditForm] = useState({ fullName: '', bio: '', location: '', department: '' });
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
   const [cropType, setCropType] = useState<'avatar' | 'cover' | null>(null);
+  const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
   
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
@@ -77,6 +78,7 @@ export default function ProfilePage() {
           bio: userData.bio || null,
           coverPhotoUrl: userData.coverPhotoUrl || null,
           avatarUrl: userData.avatarUrl,
+          avatarOriginalUrl: userData.avatarOriginalUrl || userData.avatarUrl,
           reputationScore: userData.reputationScore || 0,
           isVerified: userData.isVerified || false,
           hasBlueBadge: userData.hasBlueBadge || false,
@@ -272,6 +274,7 @@ export default function ProfilePage() {
       setProfile((prev: any) => ({
         ...prev,
         avatarUrl: type === 'avatar' ? data.avatarUrl : prev.avatarUrl,
+        avatarOriginalUrl: type === 'avatar' ? data.avatarOriginalUrl : prev.avatarOriginalUrl,
         coverPhotoUrl: type === 'cover' ? data.coverPhotoUrl : prev.coverPhotoUrl,
       }));
     } catch (err: any) {
@@ -348,9 +351,9 @@ export default function ProfilePage() {
             {/* Avatar & Name - FB Style */}
             <div className="flex flex-col md:flex-row items-center md:items-end gap-4 md:gap-6">
               <div className="relative inline-block shrink-0">
-                <div className="rounded-full bg-card p-1 shadow-sm">
+                <button type="button" onClick={() => profile.avatarOriginalUrl && setAvatarViewerOpen(true)} aria-label="Xem ảnh đại diện đầy đủ" className="block rounded-full bg-card p-1 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                   <Avatar fallback={profile.fullName.charAt(0)} src={profile.avatarUrl} className="w-[168px] h-[168px] border-4 border-card bg-primary/10 text-primary font-bold text-4xl" />
-                </div>
+                </button>
                 {isOwner && (
                   <>
                     <input
@@ -623,6 +626,15 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      {avatarViewerOpen && profile.avatarOriginalUrl && (
+        <div role="dialog" aria-modal="true" aria-label="Ảnh đại diện đầy đủ" className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" onClick={() => setAvatarViewerOpen(false)}>
+          <button type="button" aria-label="Đóng ảnh đại diện" onClick={() => setAvatarViewerOpen(false)} className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20">
+            <X className="h-6 w-6" />
+          </button>
+          <img src={profile.avatarOriginalUrl} alt={`Ảnh đại diện của ${profile.fullName}`} className="max-h-[90dvh] max-w-[min(90vw,1000px)] rounded-xl object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+        </div>
+      )}
 
       {editOpen && isOwner && profile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">

@@ -9,13 +9,15 @@ import {
   Query,
   UploadedFile,
   UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CurrentUser, resolveUserId } from '@campus-connect/common';
+import { CurrentUser, JwtAuthGuard, resolveUserId } from '@campus-connect/common';
 import { ClubsService } from './clubs.service';
 import 'multer';
 
 @Controller('clubs')
+@UseGuards(JwtAuthGuard)
 export class ClubsController {
   constructor(private readonly clubsService: ClubsService) {}
 

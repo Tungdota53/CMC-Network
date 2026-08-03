@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import {
   CurrentUser,
   JwtAuthGuard,
+  Public,
   Roles,
   RolesGuard,
   resolveUserId,
@@ -26,6 +27,7 @@ import 'multer';
 import { UsersService } from './users.service';
 
 @Controller('users')
+@UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -58,6 +60,7 @@ export class UsersController {
   // ========= USER PROFILE (ownership verified) =========
 
   @Get('count')
+  @Public()
   async getUserCount() {
     return this.usersService.getUserCount();
   }
@@ -68,6 +71,7 @@ export class UsersController {
   }
 
   @Get(':id')
+  @Public()
   async getProfile(@Param('id') id: string) {
     return this.usersService.getProfile(id);
   }
@@ -123,6 +127,7 @@ export class UsersController {
   // ----- Public profile (FE-005) -----
 
   @Get(':id/profile')
+  @Public()
   async getPublicProfile(@Param('id') id: string) {
     return this.usersService.getPublicProfile(id);
   }
@@ -162,11 +167,13 @@ export class UsersController {
   }
 
   @Get(':id/posts')
+  @Public()
   async getUserPosts(@Param('id') id: string, @Query('limit') limit?: string) {
     return this.usersService.getUserPosts(id, limit ? Number(limit) : 20);
   }
 
   @Get(':id/photos')
+  @Public()
   async getUserPhotos(@Param('id') id: string) {
     return this.usersService.getUserPhotos(id);
   }
@@ -182,26 +189,37 @@ export class UsersController {
   }
 
   @Get(':id/friends')
+  @Public()
   async getFriends(@Param('id') id: string) {
     return this.usersService.getFriends(id);
   }
 
   @Get([':id/friends/requests', ':id/friends/requests/incoming'])
-  async getFriendRequests(@Param('id') id: string) {
-    return this.usersService.getFriendRequests(id);
+  async getFriendRequests(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    return this.usersService.getFriendRequests(resolveUserId(tokenUserId));
   }
 
   @Get([':id/friends/requests/sent', ':id/friends/requests/outgoing'])
-  async getSentFriendRequests(@Param('id') id: string) {
-    return this.usersService.getSentFriendRequests(id);
+  async getSentFriendRequests(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    return this.usersService.getSentFriendRequests(resolveUserId(tokenUserId));
   }
 
   @Get(':id/friends/blocked')
-  async getBlockedUsers(@Param('id') id: string) {
-    return this.usersService.getBlockedUsers(id);
+  async getBlockedUsers(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    return this.usersService.getBlockedUsers(resolveUserId(tokenUserId));
   }
 
   @Get(':id/friends/mutual/:targetId')
+  @Public()
   async getMutualFriends(
     @Param('id') id: string,
     @Param('targetId') targetId: string,
@@ -210,13 +228,20 @@ export class UsersController {
   }
 
   @Get(':id/friends/suggestions')
-  async getFriendSuggestions(@Param('id') id: string) {
-    return this.usersService.getFriendSuggestions(id);
+  async getFriendSuggestions(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+  ) {
+    return this.usersService.getFriendSuggestions(resolveUserId(tokenUserId));
   }
 
   @Get(':id/friends/search')
-  async searchUsers(@Param('id') id: string, @Query('q') query = '') {
-    return this.usersService.searchUsers(id, query);
+  async searchUsers(
+    @Param('id') id: string,
+    @CurrentUser('sub') tokenUserId: string | undefined,
+    @Query('q') query = '',
+  ) {
+    return this.usersService.searchUsers(resolveUserId(tokenUserId), query);
   }
 
   @Post(':id/friends/request')
@@ -329,6 +354,7 @@ export class UsersController {
   // ----- Portfolio: skills / achievements / certificates / projects -----
 
   @Get(':id/portfolio')
+  @Public()
   async getPortfolio(@Param('id') id: string) {
     return this.usersService.getPortfolio(id);
   }

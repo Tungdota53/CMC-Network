@@ -1,10 +1,12 @@
 # CampusConnect — Fix progress and implementation plan
 
-> Cập nhật lần cuối: 2026-07-22
+> Cập nhật lần cuối: 2026-08-03
 >
-> Trạng thái hiện tại: **Giai đoạn 0 hoàn tất; chưa sẵn sàng release**
+> Trạng thái hiện tại: **Đã hoàn thành nhiều hạng mục Giai đoạn 1–6; còn P0 session cookie/secret rotation/migration baseline trước release chính thức**
 >
 > Nguồn theo dõi chính cho công việc ổn định, sửa lỗi và chuẩn bị phát hành.
+
+> Bản bàn giao mới nhất, gồm toàn bộ thay đổi đã triển khai, verification và backlog còn lại: [Release handoff 2026-08-03](./RELEASE_HANDOFF_2026-08-03.md).
 
 ## 1. Mục tiêu
 
@@ -38,12 +40,12 @@ Tài liệu liên quan:
 | Giai đoạn | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Baseline build, test, env, port, API contract, admin ownership | `DONE` |
-| 1 | Khóa authorization/IDOR, strict JWT và admin RBAC | `PENDING` |
-| 2 | Thiết kế lại session, refresh và logout | `PENDING` |
-| 3 | Hoàn thiện login, 2FA, OAuth và password lifecycle | `PENDING` |
-| 4 | Đồng bộ hợp đồng frontend/backend | `PENDING` |
-| 5 | Sửa race condition và tính toàn vẹn dữ liệu | `PENDING` |
-| 6 | UX loading/error/mobile và giảm hiện tượng khựng | `PENDING` |
+| 1 | Khóa authorization/IDOR, strict JWT và admin RBAC | `IN PROGRESS` |
+| 2 | Thiết kế lại session, refresh và logout | `IN PROGRESS` |
+| 3 | Hoàn thiện login, 2FA, OAuth và password lifecycle | `IN PROGRESS` |
+| 4 | Đồng bộ hợp đồng frontend/backend | `IN PROGRESS` |
+| 5 | Sửa race condition và tính toàn vẹn dữ liệu | `IN PROGRESS` |
+| 6 | UX loading/error/mobile và giảm hiện tượng khựng | `IN PROGRESS` |
 | 7 | E2E, security hardening, dependency và release gate | `PENDING` |
 
 Ghi chú: số giai đoạn hoàn tất không đại diện trực tiếp cho phần trăm effort vì

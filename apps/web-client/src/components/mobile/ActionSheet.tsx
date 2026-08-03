@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,8 +38,8 @@ export function ActionSheet({ open, title, description, children, onClose, class
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-[var(--mobile-z-sheet)] flex items-end bg-black/40 p-0 backdrop-blur-sm md:items-center md:justify-center md:p-6" role="presentation">
+  return createPortal(
+    <div className="fixed inset-0 z-[250] isolate flex items-end bg-black/70 p-0 backdrop-blur-md md:items-center md:justify-center md:p-6" role="presentation">
       <button className="absolute inset-0 cursor-default" aria-label="Đóng bảng thao tác" onClick={onClose} />
       <section
         ref={panelRef}
@@ -63,6 +64,7 @@ export function ActionSheet({ open, title, description, children, onClose, class
         </div>
         {children}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

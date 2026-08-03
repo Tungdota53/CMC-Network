@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 
 export interface Story {
   id: string;
@@ -16,6 +17,14 @@ export interface Story {
   createdAt: string;
   expiresAt?: string;
   isViewed: boolean;
+  sharedPost?: {
+    id: string;
+    authorName: string;
+    authorAvatarUrl?: string;
+    hasBlueBadge?: boolean;
+    content?: string;
+    mediaUrl?: string;
+  };
 }
 
 export interface StoryUserGroup {
@@ -33,6 +42,7 @@ export interface StoryUserGroup {
 function mapStoryPost(post: any): Story {
   const mediaUrl = post.mediaUrls?.[0] || post.mediaUrl || '';
   let textMeta: any = null;
+  let sharedPostMeta: Story['sharedPost'];
   if (typeof mediaUrl === 'string' && mediaUrl.startsWith('text-story:')) {
     try {
       textMeta = JSON.parse(decodeURIComponent(mediaUrl.slice('text-story:'.length)));
@@ -40,17 +50,29 @@ function mapStoryPost(post: any): Story {
       textMeta = { textContent: post.content };
     }
   }
+  if (typeof mediaUrl === 'string' && mediaUrl.startsWith('shared-post-story:')) {
+    try {
+      sharedPostMeta = JSON.parse(decodeURIComponent(mediaUrl.slice('shared-post-story:'.length)));
+    } catch {
+      sharedPostMeta = undefined;
+    }
+  }
 
   return {
     id: post.id,
-    type: textMeta ? 'TEXT' : 'IMAGE',
+    type: textMeta || sharedPostMeta
+      ? 'TEXT'
+      : /\.(mp4|webm|mov)(?:[?#]|$)/i.test(mediaUrl)
+        ? 'VIDEO'
+        : 'IMAGE',
     mediaUrl: textMeta ? undefined : mediaUrl,
-    textContent: textMeta?.textContent || post.content,
-    bgGradient: textMeta?.bgGradient,
+    textContent: textMeta?.textContent || (sharedPostMeta ? undefined : post.content),
+    bgGradient: textMeta?.bgGradient || (sharedPostMeta ? 'linear-gradient(145deg, #1877f2 0%, #7c3aed 52%, #ec4899 100%)' : undefined),
     duration: 5,
     createdAt: post.createdAt,
     expiresAt: post.expiresAt,
     isViewed: Boolean(post.seenByMe),
+    sharedPost: sharedPostMeta,
   };
 }
 
@@ -97,12 +119,18 @@ export function useStoriesFeed() {
 }
 
 export function useMyStories() {
+  const userId = useAuthStore((state) => state.user?.id);
   return useQuery({
-    queryKey: ['stories', 'my'],
+    queryKey: ['stories', 'my', userId],
     queryFn: async () => {
       const res = await api.get('/stories/my');
-      return groupStoryPosts(res.data.data ?? res.data);
+      const raw = res.data.data ?? res.data;
+      const posts = Array.isArray(raw) ? raw : raw?.data || [];
+      return groupStoryPosts(
+        posts.filter((post: any) => (post.user?.id || post.userId) === userId),
+      );
     },
+    enabled: Boolean(userId),
   });
 }
 
@@ -116,6 +144,21 @@ export function useViewStory() {
     onSuccess: () => {
       // Invalidate feed to update gradient rings
       qc.invalidateQueries({ queryKey: ['stories', 'feed'] });
+    },
+  });
+}
+
+export function useDeleteStory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ storyId, isAdmin }: { storyId: string; isAdmin: boolean }) => {
+      const endpoint = isAdmin ? `/posts/admin/${storyId}` : `/posts/${storyId}`;
+      const res = await api.delete(endpoint);
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stories'] });
+      qc.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }

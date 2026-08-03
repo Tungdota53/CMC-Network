@@ -192,7 +192,8 @@ export class StudyService {
       const group = await prisma.studyGroup.findUnique({
         where: { id: groupId },
       });
-      if (group && group.memberCount >= group.maxMembers) {
+      if (!group) throw new NotFoundException('Không tìm thấy nhóm học');
+      if (group.memberCount >= group.maxMembers) {
         throw new BadRequestException('Nhóm đã đủ thành viên');
       }
 
@@ -210,32 +211,35 @@ export class StudyService {
         return { status: 'APPROVED', requestId };
       }
 
-      await prisma.$transaction([
-        prisma.studyGroupMember.create({
-          data: { groupId, userId: request.userId, role: 'member' },
-        }),
-        prisma.studyGroup.update({
-          where: { id: groupId },
+      await prisma.$transaction(async (tx) => {
+        const reserved = await tx.studyGroup.updateMany({
+          where: { id: groupId, memberCount: { lt: group.maxMembers } },
           data: { memberCount: { increment: 1 } },
-        }),
-        prisma.joinRequest.update({
+        });
+        if (reserved.count !== 1) {
+          throw new BadRequestException('Nhóm đã đủ thành viên');
+        }
+
+        await tx.studyGroupMember.create({
+          data: { groupId, userId: request.userId, role: 'member' },
+        });
+        await tx.joinRequest.update({
           where: { id: requestId },
           data: { status: 'APPROVED' },
-        }),
-      ]);
-
-      // Thêm member vào group chat
-      if (group?.conversationId) {
-        await prisma.conversationMember
-          .create({
-            data: {
-              conversationId: group.conversationId,
-              userId: request.userId,
-              role: 'member',
-            },
-          })
-          .catch(() => null); // Bỏ qua nếu đã có
-      }
+        });
+        if (group.conversationId) {
+          await tx.conversationMember.createMany({
+            data: [
+              {
+                conversationId: group.conversationId,
+                userId: request.userId,
+                role: 'member',
+              },
+            ],
+            skipDuplicates: true,
+          });
+        }
+      });
 
       return { status: 'APPROVED', requestId };
     }

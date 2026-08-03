@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'next/navigation';
-import { LogOut, User, Lock, Shield, Palette, Mail, Loader2, X, Check } from 'lucide-react';
+import { LogOut, User, Lock, Shield, Palette, Mail, Loader2, X, Check, UserRoundPen, Monitor, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useMutation } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/hooks/useNotifications';
 import { useUiStore } from '@/store/uiStore';
+import Link from 'next/link';
+import { ChevronRight, Database, FileCheck2 } from 'lucide-react';
 
 const notificationPreferenceItems = [
   { key: 'push', label: 'Thông báo PUSH', desc: 'Bật/tắt thông báo trong ứng dụng' },
@@ -27,7 +29,7 @@ export default function SettingsPage() {
   const { logout, user } = useAuthStore();
   const router = useRouter();
 
-  const { theme, setTheme } = useUiStore();
+  const { theme, setTheme, compactMode, setCompactMode } = useUiStore();
   const darkMode = theme === 'dark';
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -46,7 +48,7 @@ export default function SettingsPage() {
 
   const passwordMutation = useMutation({
     mutationFn: async () => {
-      return api.put(`/users/${user?.id}/password`, {
+      return api.post('/auth/change-password', {
         currentPassword,
         newPassword,
       });
@@ -81,6 +83,8 @@ export default function SettingsPage() {
     await logout();
     router.push('/login');
   };
+
+  const handleThemeChange = (nextTheme: 'light' | 'dark' | 'system') => setTheme(nextTheme);
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +157,22 @@ export default function SettingsPage() {
               >
                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${darkMode ? 'right-1' : 'left-1'}`} />
               </button>
+              <div className="flex items-center gap-1">
+                {([['system', Monitor], ['light', Sun], ['dark', Moon]] as const).map(([value, Icon]) => (
+                  <button key={value} type="button" onClick={() => handleThemeChange(value)} aria-pressed={theme === value} className={`flex h-9 w-9 items-center justify-center rounded-lg ${theme === value ? 'bg-primary text-white' : 'text-foreground/60 hover:text-foreground'}`}>
+                    <Icon className="h-4 w-4" />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-between border-t border-border pt-5">
+              <div>
+                <p className="font-medium text-[15px]">Giao diện gọn</p>
+                <p className="text-sm text-foreground/60">Thu gọn khoảng cách và nội dung hiển thị</p>
+              </div>
+              <button type="button" onClick={() => setCompactMode(!compactMode)} aria-pressed={compactMode} className={`h-6 w-12 rounded-full ${compactMode ? 'bg-primary' : 'bg-gray-300'}`}>
+                <span className={`block h-4 w-4 rounded-full bg-white transition-transform ${compactMode ? 'translate-x-7' : 'translate-x-1'}`} />
+              </button>
             </div>
           </div>
         </section>
@@ -175,9 +195,13 @@ export default function SettingsPage() {
                 <p className="text-sm text-foreground/60 mt-1">{user?.email || 'Đang tải...'}</p>
               </div>
               <span className="text-primary text-sm font-medium flex items-center gap-1">
-                <Mail className="w-4 h-4" /> Chỉnh sửa
+                <Mail className="w-4 h-4" /> Email xác minh qua hỗ trợ
               </span>
             </button>
+            <Link href="/profile" className="w-full p-5 hover:bg-hover transition-colors flex items-center justify-between text-left">
+              <div><p className="font-medium text-[15px]">Hồ sơ công khai</p><p className="text-sm text-foreground/60 mt-1">Tên, ảnh đại diện, ảnh bìa và giới thiệu</p></div>
+              <span className="text-primary text-sm font-medium flex items-center gap-1"><UserRoundPen className="w-4 h-4" /> Chỉnh sửa</span>
+            </Link>
             <button
               onClick={() => setShowPasswordModal(true)}
               className="w-full p-5 hover:bg-hover transition-colors flex items-center justify-between text-left"
@@ -233,6 +257,34 @@ export default function SettingsPage() {
               </div>
             );
             })}
+          </div>
+        </section>
+
+        {/* Pháp lý và dữ liệu */}
+        <section className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+          <div className="p-5 border-b border-border">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <FileCheck2 className="w-5 h-5 text-primary" />
+              Pháp lý & Dữ liệu
+            </h2>
+          </div>
+          <div className="divide-y divide-border">
+            {[
+              { href: '/privacy', label: 'Chính sách bảo mật', desc: 'Cách dữ liệu cá nhân được xử lý và bảo vệ', icon: Shield },
+              { href: '/terms', label: 'Điều khoản sử dụng', desc: 'Quyền, nghĩa vụ và quy tắc cộng đồng', icon: FileCheck2 },
+              { href: '/data-declaration', label: 'Khai báo dữ liệu', desc: 'Danh mục, mục đích và thời hạn lưu giữ dữ liệu', icon: Database },
+            ].map(({ href, label, desc, icon: Icon }) => (
+              <Link key={href} href={href} className="flex min-h-16 items-center justify-between gap-4 p-5 transition-colors hover:bg-hover">
+                <span className="flex items-center gap-3">
+                  <Icon className="h-5 w-5 shrink-0 text-primary" />
+                  <span>
+                    <span className="block font-medium text-[15px]">{label}</span>
+                    <span className="mt-1 block text-sm text-foreground/60">{desc}</span>
+                  </span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-foreground/40" />
+              </Link>
+            ))}
           </div>
         </section>
 

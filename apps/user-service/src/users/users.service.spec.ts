@@ -101,6 +101,12 @@ describe('UsersService friendship', () => {
       type: 'FRIEND_REQUEST',
       userId: 'receiver-1',
     });
+    expect(mockedPrisma.notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'receiver-1',
+        senderId: 'sender-1',
+      }),
+    });
   });
 
   it('blocks duplicate pending requests in either direction', async () => {
@@ -197,7 +203,7 @@ describe('UsersService friendship', () => {
         isSuspended: false,
         OR: [{ major: 'SE' }, { cohort: 'K15' }],
       },
-      take: 8,
+      take: 40,
       select: {
         id: true,
         fullName: true,
@@ -230,7 +236,7 @@ describe('UsersService friendship', () => {
         isVerified: true,
         isSuspended: false,
       },
-      take: 8,
+      take: 40,
       select: {
         id: true,
         fullName: true,

@@ -18,7 +18,10 @@ export class MarketplaceService {
   private readonly maxImagesPerProduct = 8;
 
   private readonly storage: StorageProvider = createStorageProvider(
-    resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+    resolve(
+      process.env.UPLOAD_ROOT ||
+        resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+    ),
     process.env.UPLOAD_PUBLIC_BASE_URL || '/uploads',
   );
 
@@ -213,15 +216,20 @@ export class MarketplaceService {
       where: { id: productId },
     });
     if (!product) throw new NotFoundException('Không tìm thấy sản phẩm');
-    if (product.status === 'SOLD')
+    if (product.status !== 'AVAILABLE')
       throw new ForbiddenException('Sản phẩm đã được bán');
     if (product.sellerId === buyerId)
       throw new ForbiddenException('Không thể mua sản phẩm của chính mình');
 
-    return prisma.product.update({
-      where: { id: productId },
+    const claimed = await prisma.product.updateMany({
+      where: { id: productId, status: 'AVAILABLE', buyerId: null },
       data: { status: 'SOLD', buyerId },
     });
+    if (claimed.count !== 1) {
+      throw new ForbiddenException('Sản phẩm đã được bán');
+    }
+
+    return prisma.product.findUnique({ where: { id: productId } });
   }
 
   private requireText(value: unknown, field: string) {

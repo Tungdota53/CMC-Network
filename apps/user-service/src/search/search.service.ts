@@ -11,7 +11,7 @@ export class SearchService {
   async onModuleInit() {
     // Enable pg_trgm once during startup (in a real app this should be in a DB migration)
     try {
-      await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS pg_trgm;`);
+      await prisma.$executeRaw`CREATE EXTENSION IF NOT EXISTS pg_trgm;`;
     } catch {
       // Ignore extension creation errors if lack of permission
     }
