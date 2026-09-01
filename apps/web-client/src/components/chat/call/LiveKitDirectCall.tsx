@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { LiveKitRoom, VideoConference, useLocalParticipant } from '@livekit/components-react';
 import '@livekit/components-styles';
-import { AlertCircle, LoaderCircle, Lock, Phone, PhoneOff, Radio, Video } from 'lucide-react';
+import { AlertCircle, LoaderCircle, Lock, Phone, PhoneOff, Radio, RotateCcw, Video } from 'lucide-react';
 import api from '@/lib/api';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuthStore } from '@/store/authStore';
@@ -75,6 +75,7 @@ export const LiveKitDirectCall = ({ conversationId, title, avatarUrl, isVideo, o
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [deviceStatus, setDeviceStatus] = useState('Camera và micro sẽ tự động bật');
   const [statusText, setStatusText] = useState('Đang chuẩn bị phòng LiveKit…');
+  const [retryNonce, setRetryNonce] = useState(0);
   const displayName = (title || 'Cuộc gọi').trim() || 'Cuộc gọi';
   const avatarFallback = displayName.charAt(0).toUpperCase();
   const handleMediaReady = useCallback(() => {
@@ -133,7 +134,7 @@ export const LiveKitDirectCall = ({ conversationId, title, avatarUrl, isVideo, o
     return () => {
       cancelled = true;
     };
-  }, [conversationId, user]);
+  }, [conversationId, user, retryNonce]);
 
   return (
     <div className="livekit-direct-call fixed inset-0 z-[130] overflow-hidden bg-[#080b12] text-white">
@@ -182,7 +183,10 @@ export const LiveKitDirectCall = ({ conversationId, title, avatarUrl, isVideo, o
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/15 text-red-300"><AlertCircle className="h-6 w-6" /></div>
             <h2 className="text-lg font-semibold">Không thể kết nối cuộc gọi</h2>
             <p className="mt-2 text-sm leading-6 text-white/60">{error}</p>
-            <button onClick={onClose} className="mt-6 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-gray-950 transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Quay lại tin nhắn</button>
+            <div className="mt-6 flex flex-col-reverse justify-center gap-2 sm:flex-row">
+              <button onClick={onClose} className="min-h-11 rounded-lg border border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">Quay lại tin nhắn</button>
+              <button onClick={() => setRetryNonce(value => value + 1)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-gray-950 transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><RotateCcw className="h-4 w-4" /> Thử kết nối lại</button>
+            </div>
           </div>
         </div>
       )}

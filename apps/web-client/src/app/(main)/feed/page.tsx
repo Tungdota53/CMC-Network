@@ -6,7 +6,7 @@ import { CreatePost } from '@/components/feed/CreatePost';
 import { PostCard } from '@/components/feed/PostCard';
 import { PostSkeleton } from '@/components/feed/PostSkeleton';
 import { StoryCarousel } from '@/components/stories/StoryCarousel';
-import { EmptyState, ErrorState, PullToRefresh, SegmentedTabs } from '@/components/mobile';
+import { EmptyState, ErrorState, SegmentedTabs } from '@/components/mobile';
 import { useFeed, useLatestFeed, Post } from '@/hooks/useFeed';
 import { Bell, Flame, Clock, Pencil, Search } from 'lucide-react';
 import { ActiveLiveStreams } from '@/components/live/ActiveLiveStreams';
@@ -45,13 +45,8 @@ export default function FeedPage() {
     [activeQuery.hasNextPage, activeQuery.isFetchingNextPage, activeQuery.fetchNextPage],
   );
 
-  const refreshFeed = async () => {
-    await activeQuery.refetch();
-  };
-
   return (
-    <PullToRefresh onRefresh={refreshFeed} className="w-full">
-      <div className="mx-auto w-full max-w-[860px] space-y-4 px-0 py-3 sm:px-0 sm:py-4">
+    <div className="mx-auto w-full max-w-[860px] space-y-4 px-0 py-3 sm:px-0 sm:py-4">
       <div className="rounded-3xl border border-border bg-card/80 p-3 shadow-sm backdrop-blur md:hidden">
         <div className="grid grid-cols-[1fr_auto_auto] gap-2">
           <Link href="/search" className="flex min-h-11 items-center gap-2 rounded-2xl border border-border bg-background px-3 text-sm font-medium text-muted-foreground" aria-label="Tìm kiếm trong CMC Network">
@@ -137,7 +132,6 @@ export default function FeedPage() {
 
       {/* Sentinel for observer */}
       <div ref={observerRef} className="h-1" />
-      </div>
-    </PullToRefresh>
+    </div>
   );
 }

@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import api from '@/lib/api';
 import { getNotificationActionUrl } from '@/components/notifications/notification-links';
+import { useAuthStore } from '@/store/authStore';
 
 const hasAuthToken = () =>
-  typeof window !== 'undefined' && !!localStorage.getItem('auth_token');
+  useAuthStore.getState().hasVerifiedSession &&
+  useAuthStore.getState().isAuthenticated;
 
 interface Notification {
   id: string;

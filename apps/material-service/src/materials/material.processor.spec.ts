@@ -34,7 +34,9 @@ describe('MaterialProcessor', () => {
   it('marks a material READY when optional AI summarization times out', async () => {
     const fetchSpy = jest
       .spyOn(global, 'fetch')
-      .mockRejectedValueOnce(new DOMException('This operation was aborted', 'AbortError'));
+      .mockRejectedValueOnce(
+        new DOMException('This operation was aborted', 'AbortError'),
+      );
     const processor = new MaterialProcessor();
 
     await expect(
@@ -69,13 +71,17 @@ describe('MaterialProcessor', () => {
       ok: true,
       json: jest.fn().mockResolvedValue({
         summary: 'Tóm tắt từ nội dung PDF',
-        flashcards: [{ front: 'Sắp xếp nổi bọt là gì?', back: 'Một thuật toán sắp xếp.' }],
-        questions: [{
-          question: 'Độ phức tạp trung bình là gì?',
-          options: ['O(n)', 'O(n²)', 'O(log n)', 'O(1)'],
-          answer: 1,
-          explanation: 'Hai vòng lặp lồng nhau.',
-        }],
+        flashcards: [
+          { front: 'Sắp xếp nổi bọt là gì?', back: 'Một thuật toán sắp xếp.' },
+        ],
+        questions: [
+          {
+            question: 'Độ phức tạp trung bình là gì?',
+            options: ['O(n)', 'O(n²)', 'O(log n)', 'O(1)'],
+            answer: 1,
+            explanation: 'Hai vòng lặp lồng nhau.',
+          },
+        ],
       }),
     } as never);
     const processor = new MaterialProcessor();
@@ -92,7 +98,9 @@ describe('MaterialProcessor', () => {
       where: { id: 'material-2' },
       data: expect.objectContaining({
         aiSummary: 'Tóm tắt từ nội dung PDF',
-        aiFlashcards: [{ front: 'Sắp xếp nổi bọt là gì?', back: 'Một thuật toán sắp xếp.' }],
+        aiFlashcards: [
+          { front: 'Sắp xếp nổi bọt là gì?', back: 'Một thuật toán sắp xếp.' },
+        ],
         aiQuizQuestions: [expect.objectContaining({ answer: 1 })],
         aiGeneratedAt: expect.any(Date),
         status: MaterialStatus.READY,
@@ -102,7 +110,7 @@ describe('MaterialProcessor', () => {
   });
 
   it('uses OCR for garbled PDF text before generating learning content', async () => {
-    const { PDFParse } = jest.requireMock('pdf-parse') as { PDFParse: jest.Mock };
+    const { PDFParse } = jest.requireMock('pdf-parse');
     PDFParse.mockImplementationOnce(() => ({
       getText: jest.fn().mockResolvedValue({
         text: 'T×m kiÕm nhÞ ph©n ¸p dông trªn m¶ng ®· s¾p xÕp. PhÇn tö gi÷a ®­îc so s¸nh víi khãa.',
@@ -113,18 +121,32 @@ describe('MaterialProcessor', () => {
       ok: true,
       json: jest.fn().mockResolvedValue({
         summary: 'Tìm kiếm nhị phân chia đôi phạm vi tìm kiếm sau mỗi bước.',
-        flashcards: [{ front: 'Điều kiện áp dụng là gì?', back: 'Dữ liệu phải được sắp xếp.' }],
-        questions: [{
-          question: 'Sau mỗi lần so sánh, phạm vi tìm kiếm thay đổi thế nào?',
-          options: ['Giảm một nửa', 'Tăng gấp đôi', 'Giữ nguyên', 'Xóa toàn bộ'],
-          answer: 0,
-        }],
+        flashcards: [
+          {
+            front: 'Điều kiện áp dụng là gì?',
+            back: 'Dữ liệu phải được sắp xếp.',
+          },
+        ],
+        questions: [
+          {
+            question: 'Sau mỗi lần so sánh, phạm vi tìm kiếm thay đổi thế nào?',
+            options: [
+              'Giảm một nửa',
+              'Tăng gấp đôi',
+              'Giữ nguyên',
+              'Xóa toàn bộ',
+            ],
+            answer: 0,
+          },
+        ],
       }),
     } as never);
     const processor = new MaterialProcessor();
-    jest.spyOn(processor as any, 'extractTextWithOcr').mockResolvedValue(
-      'Tìm kiếm nhị phân áp dụng trên mảng đã sắp xếp. Mỗi bước so sánh khóa với phần tử giữa và loại bỏ một nửa phạm vi tìm kiếm.',
-    );
+    jest
+      .spyOn(processor as any, 'extractTextWithOcr')
+      .mockResolvedValue(
+        'Tìm kiếm nhị phân áp dụng trên mảng đã sắp xếp. Mỗi bước so sánh khóa với phần tử giữa và loại bỏ một nửa phạm vi tìm kiếm.',
+      );
 
     await processor.process({
       data: {

@@ -15,10 +15,24 @@ jest.mock('@campus-connect/database', () => {
     },
     message: {
       create: jest.fn(),
+      upsert: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       findMany: jest.fn(),
+      update: jest.fn(),
       updateMany: jest.fn(),
       groupBy: jest.fn(),
+    },
+    messageReaction: {
+      upsert: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    messageReadReceipt: {
+      createMany: jest.fn(),
+    },
+    conversationUserState: {
+      upsert: jest.fn(),
     },
     conversationMember: {
       findMany: jest.fn(),
@@ -115,7 +129,14 @@ describe('ChatService — message safety', () => {
     jest.mocked(prisma.message.findFirst).mockResolvedValue(null);
 
     await expect(
-      service.saveMessage('conv-1', 'user-1', 'reply', 'text', undefined, 'message-from-conv-2'),
+      service.saveMessage(
+        'conv-1',
+        'user-1',
+        'reply',
+        'text',
+        undefined,
+        'message-from-conv-2',
+      ),
     ).rejects.toThrow(/tin nhắn trả lời không thuộc đoạn chat/i);
     expect(prisma.message.create).not.toHaveBeenCalled();
   });
@@ -133,8 +154,71 @@ describe('ChatService — message safety', () => {
     jest.mocked(prisma.conversation.update).mockResolvedValue({} as never);
 
     await expect(
-      service.saveMessage('conv-1', 'user-1', 'reply', 'text', undefined, 'message-1'),
+      service.saveMessage(
+        'conv-1',
+        'user-1',
+        'reply',
+        'text',
+        undefined,
+        'message-1',
+      ),
     ).resolves.toEqual({ id: 'message-2' });
+  });
+
+  it('uses client message id as an idempotency key', async () => {
+    jest
+      .mocked(prisma.conversationMember.findUnique)
+      .mockResolvedValue({ id: 'membership-1' } as never);
+    jest
+      .mocked(prisma.message.upsert)
+      .mockResolvedValue({ id: 'message-1', content: 'hello' } as never);
+    jest.mocked(prisma.conversation.update).mockResolvedValue({} as never);
+
+    await service.saveMessage(
+      'conv-1',
+      'user-1',
+      'hello',
+      'text',
+      undefined,
+      undefined,
+      'temp-1',
+    );
+
+    expect(prisma.message.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          conversationId_senderId_clientMessageId: {
+            conversationId: 'conv-1',
+            senderId: 'user-1',
+            clientMessageId: 'temp-1',
+          },
+        },
+        update: {},
+        create: expect.objectContaining({ clientMessageId: 'temp-1' }),
+      }),
+    );
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty and oversized message content', async () => {
+    await expect(
+      service.saveMessage('conv-1', 'user-1', '   '),
+    ).rejects.toThrow(/nội dung/i);
+    await expect(
+      service.saveMessage('conv-1', 'user-1', 'x'.repeat(4001)),
+    ).rejects.toThrow(/4000/i);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty edits and unsupported reactions', async () => {
+    await expect(
+      service.editMessage('message-1', 'user-1', '   '),
+    ).rejects.toThrow(/nội dung/i);
+    await expect(
+      service.addReaction('message-1', 'user-1', 'CUSTOM_SCRIPT'),
+    ).rejects.toThrow(/cảm xúc/i);
+    expect(prisma.message.findUnique).not.toHaveBeenCalled();
+    expect(prisma.messageReaction.upsert).not.toHaveBeenCalled();
   });
 });
 
@@ -160,6 +244,43 @@ describe('ChatService — unread counts', () => {
     const result = await service.getUnreadCounts('viewer');
     expect(result.total).toBe(4);
     expect(result.perConversation).toHaveLength(2);
+    expect(prisma.message.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          readReceipts: { none: { userId: 'viewer' } },
+        }),
+      }),
+    );
+  });
+
+  it('marks only unread message ids for the current viewer without changing global status', async () => {
+    jest
+      .mocked(prisma.conversationMember.findUnique)
+      .mockResolvedValue({ id: 'membership-1' } as never);
+    jest
+      .mocked(prisma.message.findMany)
+      .mockResolvedValue([{ id: 'message-1' }, { id: 'message-2' }] as never);
+    jest
+      .mocked(prisma.messageReadReceipt.createMany)
+      .mockResolvedValue({ count: 2 });
+    jest
+      .mocked(prisma.conversationUserState.upsert)
+      .mockResolvedValue({} as never);
+
+    await expect(
+      service.markConversationRead('conv-1', 'viewer'),
+    ).resolves.toEqual({
+      updated: 2,
+      messageIds: ['message-1', 'message-2'],
+    });
+    expect(prisma.message.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          readReceipts: { none: { userId: 'viewer' } },
+        }),
+      }),
+    );
+    expect(prisma.message.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns zero when the viewer has no conversations', async () => {

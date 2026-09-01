@@ -15,6 +15,7 @@ interface MessageAreaProps {
   themeClassName?: string;
   themeColor?: string;
   loading?: boolean;
+  compact?: boolean;
   onLoadOlder?: () => void;
   onReply?: (msg: any) => void;
   onUnsend?: (messageId: string) => void;
@@ -52,10 +53,12 @@ function TimeDivider({ timestamp }: { timestamp: string }) {
   }
 
   return (
-    <div className="flex items-center justify-center py-3">
-      <span className="text-[12px] font-medium text-slate-400/80">
+    <div className="flex items-center gap-3 px-2 py-5" role="separator" aria-label={label}>
+      <span className="h-px flex-1 bg-gradient-to-r from-transparent to-border" />
+      <span className="px-2 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/80">
         {label}
       </span>
+      <span className="h-px flex-1 bg-gradient-to-l from-transparent to-border" />
     </div>
   );
 }
@@ -66,7 +69,7 @@ function TimeDivider({ timestamp }: { timestamp: string }) {
 function SystemMessage({ content }: { content: string }) {
   return (
     <div className="flex items-center justify-center py-2 px-4">
-      <span className="text-center text-[13px] italic text-slate-400/85">{content}</span>
+      <span className="rounded-full bg-hover px-3 py-1.5 text-center text-xs text-muted-foreground">{content}</span>
     </div>
   );
 }
@@ -80,7 +83,7 @@ function SystemMessage({ content }: { content: string }) {
  * - Profile info header at top of chat
  */
 export function MessageArea({ 
-  messages, conversationName, isGroup, conversationAvatarUrl, themeClassName, themeColor, loading, onLoadOlder,
+  messages, conversationName, isGroup, conversationAvatarUrl, themeClassName, themeColor, loading, compact = false, onLoadOlder,
   onReply, onUnsend, onDeleteForMe, onEdit, onReact, onRemoveReaction, onForward, onPin, onCopy, onRetry
 }: MessageAreaProps) {
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -90,27 +93,29 @@ export function MessageArea({
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div className={cn('flex flex-1 flex-col justify-end gap-3 overflow-hidden bg-chat-canvas px-4 pb-6', compact && 'px-3 pb-3', themeClassName)} aria-label="Đang tải tin nhắn" aria-busy="true">
+        <div className="h-12 w-2/5 animate-pulse self-start rounded-2xl rounded-bl-md bg-hover" />
+        <div className="h-16 w-3/5 animate-pulse self-end rounded-2xl rounded-br-md bg-primary/15" />
+        <div className="h-10 w-1/3 animate-pulse self-start rounded-2xl rounded-bl-md bg-hover" />
+        <div className="h-24 w-1/2 animate-pulse self-end rounded-2xl rounded-br-md bg-primary/15" />
       </div>
     );
   }
 
   if (messages.length === 0) {
     return (
-      <div className={cn('flex-1 flex flex-col items-center justify-center py-10', themeClassName)}>
-        <Avatar src={conversationAvatarUrl || undefined} fallback={avatarFallback} className="w-20 h-20 mb-4" />
-        <h3 className="text-[18px] font-bold text-foreground">{displayName}</h3>
-        <p className="text-[14px] text-foreground/50 mt-1">Các bạn là bạn bè trên CMC Campus</p>
-        <p className="text-[13px] text-foreground/40 mt-6">
-          Chưa có tin nhắn nào. Hãy là người bắt đầu cuộc trò chuyện!
-        </p>
+      <div className={cn('flex flex-1 flex-col items-center justify-center bg-chat-canvas px-6 py-10 text-center', compact && 'px-4 py-6', themeClassName)}>
+        <div className="rounded-full border border-border bg-card p-1 shadow-sm">
+          <Avatar src={conversationAvatarUrl || undefined} fallback={avatarFallback} className="h-20 w-20" />
+        </div>
+        <h3 className="mt-4 text-lg font-bold text-foreground">{displayName}</h3>
+        <p className="mt-1 max-w-xs text-sm leading-relaxed text-muted-foreground">Bắt đầu bằng lời chào, chia sẻ tài liệu hoặc gửi ảnh cho cuộc trò chuyện này.</p>
       </div>
     );
   }
 
   return (
-    <div className={cn('relative flex min-w-0 flex-1 flex-col overflow-hidden', themeClassName)}>
+    <div className={cn('relative flex min-w-0 flex-1 flex-col overflow-hidden bg-chat-canvas text-chat-text', themeClassName)}>
       <Virtuoso
         ref={virtuosoRef}
         data={messages}
@@ -133,10 +138,10 @@ export function MessageArea({
         components={{
           // Profile info at top of messages
           Header: () => (
-            <div className="flex min-w-0 flex-col items-center justify-center gap-2 px-4 py-10 text-center">
-              <Avatar src={conversationAvatarUrl || undefined} fallback={avatarFallback} className="w-20 h-20" />
-              <h3 className="mt-2 max-w-full truncate text-[18px] font-bold text-foreground">{displayName}</h3>
-              <p className="text-[13px] text-foreground/50">Các bạn là bạn bè trên CMC Campus</p>
+            <div className={cn('flex min-w-0 flex-col items-center justify-center gap-2 px-4 pb-10 pt-16 text-center', compact && 'pb-6 pt-8')}>
+              <div className="relative"><div className="absolute -inset-4 rounded-full bg-[rgb(var(--chat-accent)/0.10)] blur-xl" /><Avatar src={conversationAvatarUrl || undefined} fallback={avatarFallback} className="relative h-20 w-20 ring-4 ring-card" /></div>
+              <h3 className="mt-4 max-w-full truncate text-lg font-bold tracking-tight text-foreground">{displayName}</h3>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Đầu cuộc trò chuyện</p>
             </div>
           ),
           // Bottom padding
@@ -170,7 +175,7 @@ export function MessageArea({
           const showTimeDivider = !prevMsg || timeDiffPrev > 600000;
 
           return (
-            <div className="min-w-0 overflow-hidden px-2 md:px-3">
+            <div className={cn('relative z-[1] mx-auto min-w-0 max-w-4xl overflow-hidden px-2 md:px-5', compact && 'px-2 md:px-2')}>
               {/* TimeDivider — Group by 10 minutes */}
               {showTimeDivider && (
                 <TimeDivider timestamp={msg.createdAt || msg.timestamp} />
@@ -182,6 +187,7 @@ export function MessageArea({
                 conversationName={conversationName}
                 isGroup={isGroup}
                 themeColor={themeColor}
+                compact={compact}
                 onReply={onReply}
                 onUnsend={onUnsend}
                 onDeleteForMe={onDeleteForMe}
@@ -203,7 +209,8 @@ export function MessageArea({
       {showScrollButton && (
         <button
           onClick={() => virtuosoRef.current?.scrollToIndex({ index: messages.length - 1, behavior: 'smooth' })}
-          className="absolute bottom-4 right-4 w-9 h-9 rounded-full bg-card border border-border shadow-lg flex items-center justify-center text-foreground/70 hover:bg-hover transition-colors z-10"
+          aria-label="Cuộn tới tin nhắn mới nhất"
+          className="absolute bottom-4 right-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-card/90 text-foreground shadow-xl shadow-black/15 backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <ChevronDown className="w-5 h-5" />
         </button>

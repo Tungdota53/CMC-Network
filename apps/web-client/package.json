@@ -6,7 +6,8 @@
     "dev": "next dev --webpack -H 0.0.0.0 -p 25080",
     "build": "next build",
     "start": "next start -p 25080",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "jest"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -14,13 +15,15 @@
     "@livekit/components-styles": "^1.2.0",
     "@tanstack/react-query": "^5.101.2",
     "axios": "^1.18.1",
+    "bcrypt": "^6.0.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "dexie": "^4.4.4",
     "framer-motion": "^12.40.0",
     "livekit-client": "^2.20.1",
     "lucide-react": "^1.17.0",
-    "next": "16.2.7",
+    "next": "^16.3.2",
+    "nodemailer": "^9.0.5",
     "qrcode.react": "^4.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -42,7 +45,23 @@
     "@types/webrtc": "^0.0.47",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
+    "jest": "^30.0.0",
     "tailwindcss": "^4",
+    "ts-jest": "^29.2.5",
     "typescript": "^5"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts",
+      "tsx"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.(test|spec)\\.(ts|tsx)$",
+    "transform": {
+      "^.+\\.(t|j)sx?$": "ts-jest"
+    },
+    "testEnvironment": "node"
   }
 }

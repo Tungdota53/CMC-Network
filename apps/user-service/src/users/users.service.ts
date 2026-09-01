@@ -18,7 +18,8 @@ import { optimizeAvatar } from './avatar-image';
 @Injectable()
 export class UsersService {
   private readonly uploadRoot = resolve(
-    process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+    process.env.UPLOAD_ROOT ||
+      resolve(process.cwd(), '..', '..', '.data', 'uploads'),
   );
   private readonly storageProvider = createStorageProvider(
     this.uploadRoot,

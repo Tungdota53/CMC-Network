@@ -10,19 +10,20 @@ interface ClientAvatarProps {
 export function ClientAvatar({ size = 'md', className }: ClientAvatarProps) {
   const { user } = useAuthStore();
   
-  // Lấy chữ cái đầu tiên của Tên (ví dụ "Nguyễn Văn A" -> "A")
   const getInitials = (name?: string) => {
-    if (!name) return '?';
-    const parts = name.split(' ');
+    if (!name?.trim()) return undefined;
+    const parts = name.trim().split(/\s+/);
     return parts[parts.length - 1].charAt(0).toUpperCase();
   };
+
+  const initials = getInitials(user?.fullName);
 
   return (
     <Avatar 
       size={size} 
       src={user?.avatarUrl || undefined} 
-      fallback={getInitials(user?.fullName)} 
-      className={`bg-primary text-white font-bold ${className || ''}`}
+      fallback={initials} 
+      className={initials ? `bg-primary text-primary-foreground font-bold ${className || ''}` : className}
     />
   );
 }

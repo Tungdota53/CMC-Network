@@ -25,6 +25,7 @@ export const IncomingCallDialog = ({ callerName, isVideo, onAccept, onDecline }:
       <div className="flex items-center gap-16">
         <button 
           onClick={onDecline}
+          aria-label="Từ chối cuộc gọi"
           className="flex flex-col items-center gap-3 group"
         >
           <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-red-500/20">
@@ -35,6 +36,7 @@ export const IncomingCallDialog = ({ callerName, isVideo, onAccept, onDecline }:
 
         <button 
           onClick={onAccept}
+          aria-label={`Trả lời cuộc gọi ${isVideo ? 'video' : 'thoại'}`}
           className="flex flex-col items-center gap-3 group"
         >
           <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-green-500/20 animate-bounce">

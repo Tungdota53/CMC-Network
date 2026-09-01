@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -9,6 +10,7 @@ import {
   validateUpload,
   type StorageProvider,
 } from '@campus-connect/common';
+import { Prisma } from '@prisma/client';
 import { resolve } from 'path';
 
 type UploadFile = {
@@ -27,7 +29,10 @@ export class ChatService {
   }
 
   private readonly storage: StorageProvider = createStorageProvider(
-    resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+    resolve(
+      process.env.UPLOAD_ROOT ||
+        resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+    ),
     process.env.UPLOAD_PUBLIC_BASE_URL || '/uploads',
   );
 
@@ -257,7 +262,15 @@ export class ChatService {
     messageType: string = 'text',
     mediaUrl?: string,
     replyToId?: string,
+    clientMessageId?: string,
   ) {
+    const normalizedContent = content?.trim();
+    if (!normalizedContent) {
+      throw new BadRequestException('Nội dung tin nhắn không được để trống');
+    }
+    if (normalizedContent.length > 4000) {
+      throw new BadRequestException('Nội dung tin nhắn tối đa 4000 ký tự');
+    }
     const allowedTypes = [
       'text',
       'image',
@@ -287,28 +300,44 @@ export class ChatService {
       }
     }
 
-    const message = await prisma.message.create({
-      data: {
-        conversationId,
-        senderId,
-        content,
-        messageType,
-        mediaUrl,
-        status: 'SENT',
-        replyToId,
-      },
-      include: {
-        sender: { select: { id: true, fullName: true, avatarUrl: true } },
-        replyTo: {
-          select: {
-            id: true,
-            content: true,
-            sender: { select: { id: true, fullName: true, avatarUrl: true } },
-          },
+    const messageData: Prisma.MessageUncheckedCreateInput = {
+      conversationId,
+      senderId,
+      clientMessageId,
+      content: normalizedContent,
+      messageType,
+      mediaUrl,
+      status: 'SENT',
+      replyToId,
+    };
+    const messageInclude = Prisma.validator<Prisma.MessageInclude>()({
+      sender: { select: { id: true, fullName: true, avatarUrl: true } },
+      replyTo: {
+        select: {
+          id: true,
+          content: true,
+          sender: { select: { id: true, fullName: true, avatarUrl: true } },
         },
-        reactions: true,
       },
+      reactions: true,
     });
+    const message = clientMessageId
+      ? await prisma.message.upsert({
+          where: {
+            conversationId_senderId_clientMessageId: {
+              conversationId,
+              senderId,
+              clientMessageId,
+            },
+          },
+          update: {},
+          create: messageData,
+          include: messageInclude,
+        })
+      : await prisma.message.create({
+          data: messageData,
+          include: messageInclude,
+        });
 
     await prisma.conversation.update({
       where: { id: conversationId },
@@ -351,6 +380,13 @@ export class ChatService {
   }
 
   async editMessage(messageId: string, userId: string, content: string) {
+    const normalizedContent = content?.trim();
+    if (!normalizedContent) {
+      throw new BadRequestException('Nội dung tin nhắn không được để trống');
+    }
+    if (normalizedContent.length > 4000) {
+      throw new BadRequestException('Nội dung tin nhắn tối đa 4000 ký tự');
+    }
     const scopedMessage = await this.assertMessageConversationMember(
       messageId,
       userId,
@@ -364,7 +400,7 @@ export class ChatService {
     return prisma.message
       .update({
         where: { id: messageId },
-        data: { content },
+        data: { content: normalizedContent },
         include: {
           sender: { select: { id: true, fullName: true, avatarUrl: true } },
           replyTo: {
@@ -418,6 +454,10 @@ export class ChatService {
   }
 
   async addReaction(messageId: string, userId: string, emoji: string) {
+    const allowedReactions = ['LIKE', 'LOVE', 'HAHA', 'WOW', 'SAD', 'ANGRY'];
+    if (!allowedReactions.includes(emoji)) {
+      throw new BadRequestException('Cảm xúc không được hỗ trợ');
+    }
     await this.assertMessageConversationMember(messageId, userId);
     return prisma.messageReaction.upsert({
       where: { messageId_userId_emoji: { messageId, userId, emoji } },
@@ -472,7 +512,7 @@ export class ChatService {
       where: {
         conversationId,
         senderId: { not: viewerId },
-        status: { not: 'READ' },
+        readReceipts: { none: { userId: viewerId } },
       },
       select: { id: true },
     });
@@ -485,15 +525,10 @@ export class ChatService {
       skipDuplicates: true,
     });
 
-    const result = await prisma.message.updateMany({
-      where: {
-        conversationId,
-        senderId: { not: viewerId },
-        status: { not: 'READ' },
-      },
-      data: { status: 'READ' },
-    });
-    return { updated: result.count };
+    return {
+      updated: unreadMessages.length,
+      messageIds: unreadMessages.map((message) => message.id),
+    };
   }
 
   async deleteMessageForMe(messageId: string, userId: string) {
@@ -606,7 +641,7 @@ export class ChatService {
       where: {
         conversationId: { in: ids },
         senderId: { not: viewerId },
-        status: { not: 'READ' },
+        readReceipts: { none: { userId: viewerId } },
       },
       _count: { _all: true },
     });

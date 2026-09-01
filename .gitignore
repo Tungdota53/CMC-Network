@@ -12,6 +12,11 @@ coverage
 *.log
 __pycache__/
 *.pyc
+.venv/
+venv/
+ENV/
+.pytest_cache/
+*.egg-info/
 .ua/
 logs*
 *-audit.json

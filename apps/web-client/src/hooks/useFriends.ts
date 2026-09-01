@@ -2,28 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 
-function decodeJwtUserId(token: string | null): string | null {
-  if (!token || typeof window === 'undefined') return null;
-  try {
-    const payload = token.split('.')[1];
-    if (!payload) return null;
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-    const decoded = JSON.parse(atob(padded));
-    return decoded.sub || decoded.id || null;
-  } catch {
-    return null;
-  }
-}
-
 function useCurrentUserId(): string | null {
   const userId = useAuthStore((state) => state.user?.id ?? null);
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
-  if (typeof window === 'undefined') return null;
-  const tokenUserId = decodeJwtUserId(localStorage.getItem('auth_token'));
-  if (tokenUserId) return tokenUserId;
   if (!hasHydrated) return null;
-  return tokenUserId || userId;
+  return userId;
 }
 
 // ==========================================

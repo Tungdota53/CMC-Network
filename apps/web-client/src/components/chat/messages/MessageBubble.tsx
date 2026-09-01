@@ -29,22 +29,22 @@ function PostShareMessage({ content, isOwn }: { content: string; isOwn: boolean 
       className={cn(
         "block w-[min(330px,76vw)] overflow-hidden rounded-[18px] border text-left shadow-sm transition-transform hover:scale-[1.01]",
         isOwn
-          ? "border-white/20 bg-white text-slate-950"
-          : "border-border bg-white text-slate-950 dark:bg-slate-950 dark:text-white"
+          ? "border-chat-border bg-chat-surface text-chat-text"
+          : "border-chat-border bg-chat-surface text-chat-text"
       )}
     >
-      <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-white/10">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1877f2] text-white">
+      <div className="flex items-center gap-2 border-b border-chat-border px-3 py-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-chat-accent text-chat-accent-foreground">
           <Share2 className="h-4 w-4" />
         </div>
         <div className="min-w-0">
           <div className="text-[13px] font-bold leading-tight">CMC Network</div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400">Bài viết được chia sẻ</div>
+          <div className="text-[11px] text-chat-muted">Bài viết được chia sẻ</div>
         </div>
       </div>
 
-      <div className="bg-slate-100 dark:bg-slate-900">
-        <div className="flex h-[145px] items-center justify-center bg-gradient-to-br from-[#1877f2] via-[#2d88ff] to-[#8bd3ff] px-5 text-center text-white">
+      <div className="bg-chat-canvas">
+        <div className="flex h-[145px] items-center justify-center bg-chat-accent px-5 text-center text-chat-accent-foreground">
           <div>
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/20 backdrop-blur">
               <ExternalLink className="h-6 w-6" />
@@ -57,18 +57,18 @@ function PostShareMessage({ content, isOwn }: { content: string; isOwn: boolean 
       </div>
 
       <div className="px-3 py-2.5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">cmcnetwork.io.vn</div>
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-chat-muted">cmcnetwork.io.vn</div>
         <div className="mt-0.5 line-clamp-2 text-[15px] font-bold leading-snug">{caption || 'Bài viết trên CMC Network'}</div>
-        <div className="mt-1 line-clamp-2 text-[12px] leading-snug text-slate-500 dark:text-slate-400">
+        <div className="mt-1 line-clamp-2 text-[12px] leading-snug text-chat-muted">
           Nhấn để xem nội dung, bình luận và tương tác trên CMC Network.
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-3 py-2 dark:border-white/10">
+      <div className="flex items-center justify-between gap-3 border-t border-chat-border px-3 py-2">
         <div className="min-w-0">
-          <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">{postUrl.replace(/^https?:\/\//, '')}</div>
+          <div className="truncate text-[11px] text-chat-muted">{postUrl.replace(/^https?:\/\//, '')}</div>
         </div>
-        <div className="shrink-0 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 dark:bg-white/10 dark:text-white">Xem bài viết</div>
+        <div className="shrink-0 rounded-lg bg-chat-hover px-3 py-1.5 text-xs font-bold text-chat-text">Xem bài viết</div>
       </div>
     </a>
   );
@@ -95,6 +95,7 @@ interface MessageBubbleProps {
   onCopy?: (text: string) => void;
   onRetry?: (msg: any) => void;
   allMessages?: any[];
+  compact?: boolean;
 }
 
 // ============================================================
@@ -105,26 +106,30 @@ function MessageStatus({ status }: { status?: string }) {
   switch (status) {
     case 'SENDING':
       return (
-        <div className="text-[11px] text-foreground/40 mt-0.5 flex items-center justify-end gap-1 pr-1">
+        <div className="mt-1 flex items-center justify-end gap-1 pr-1 text-[10px] font-medium text-muted-foreground" aria-label="Đang gửi">
           <div className="w-3 h-3 border-2 border-foreground/30 border-t-transparent rounded-full animate-spin" />
+          <span>Đang gửi</span>
         </div>
       );
     case 'SENT':
       return (
-        <div className="text-[11px] text-foreground/50 mt-0.5 flex items-center justify-end pr-1">
+        <div className="mt-1 flex min-h-4 items-center justify-end gap-1 pr-1 text-[10px] font-medium text-muted-foreground" aria-label="Đã gửi">
           <Check className="w-3.5 h-3.5" />
+          <span>Đã gửi</span>
         </div>
       );
     case 'DELIVERED':
       return (
-        <div className="text-[11px] text-foreground/50 mt-0.5 flex items-center justify-end pr-1">
+        <div className="mt-1 flex min-h-4 items-center justify-end gap-1 pr-1 text-[10px] font-medium text-muted-foreground" aria-label="Đã nhận">
           <CheckCheck className="w-3.5 h-3.5" />
+          <span>Đã nhận</span>
         </div>
       );
     case 'SEEN':
       return (
-        <div className="text-[11px] text-primary mt-0.5 flex items-center justify-end pr-1">
+        <div className="mt-1 flex min-h-4 items-center justify-end gap-1 pr-1 text-[10px] font-semibold text-blue-400" aria-label="Đã xem">
           <CheckCheck className="w-3.5 h-3.5" />
+          <span>Đã xem</span>
         </div>
       );
     case 'FAILED':
@@ -304,7 +309,7 @@ function MenuItem({
         "flex items-center gap-2.5 px-3.5 py-2 text-[14px] font-semibold w-full text-left transition-colors",
         danger
           ? "text-red-500 hover:bg-red-500/10"
-          : "text-foreground hover:bg-black/5 dark:hover:bg-white/10"
+          : "text-foreground hover:bg-hover"
       )}
     >
       <span>{label}</span>
@@ -320,7 +325,7 @@ function ReplyQuote({ replyToId, allMessages }: { replyToId: string; allMessages
   if (!repliedMsg) return null;
 
   return (
-    <div className="mb-1 px-2.5 py-1.5 border-l-2 border-primary/50 bg-black/10 rounded-r-md text-[13px] leading-snug max-w-full">
+    <div className="mb-1 max-w-full rounded-r-md border-l-2 border-chat-accent bg-chat-hover px-2.5 py-1.5 text-[13px] leading-snug">
       <div className="text-primary/70 font-medium text-[11px] mb-0.5">
         {repliedMsg.isOwn ? 'Bạn' : repliedMsg.sender?.fullName || 'Người dùng'}
       </div>
@@ -388,7 +393,7 @@ function MessageHoverActions({
 export function MessageBubble({ 
   msg, isFirstInGroup, isLastInGroup, conversationName, isGroup, themeColor,
   onReply, onUnsend, onDeleteForMe, onEdit, onReact, onRemoveReaction, onForward, onPin, onCopy, onRetry,
-  allMessages
+  allMessages, compact = false
 }: MessageBubbleProps) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -400,12 +405,7 @@ export function MessageBubble({
   const senderName = (msg.sender?.fullName || msg.senderName || msg.sender?.name || conversationName || 'Người dùng').toString();
   const senderFallback = senderName.charAt(0).toUpperCase() || 'U';
   const senderAvatar = msg.sender?.avatarUrl || msg.senderAvatar || msg.sender?.avatar;
-  const senderNameClass = {
-    blue: 'text-sky-300',
-    purple: 'text-violet-300',
-    green: 'text-emerald-300',
-    orange: 'text-orange-300',
-  }[themeColor || 'blue'] || 'text-sky-300';
+  const senderNameClass = 'text-chat-accent';
 
   // Handle right-click context menu
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -432,12 +432,7 @@ export function MessageBubble({
   const textContent = (msg.content || msg.text || '').toString();
   const isPostShare = messageType === 'text' && POST_URL_PATTERN.test(textContent);
   const canEdit = msg.isOwn && messageType === 'text' && !msg.isUnsent;
-  const ownBubbleClass = {
-    blue: 'bg-[#0084ff] text-white',
-    purple: 'bg-violet-600 text-white',
-    green: 'bg-emerald-600 text-white',
-    orange: 'bg-orange-600 text-white',
-  }[themeColor || 'blue'] || 'bg-[#0084ff] text-white';
+  const ownBubbleClass = 'border-chat-accent bg-chat-accent text-chat-accent-foreground';
 
   // UnsendMessage display
   if (msg.isUnsent) {
@@ -458,9 +453,9 @@ export function MessageBubble({
   return (
     <div 
       className={cn(
-        "flex w-full min-w-0 overflow-hidden",
+        "flex w-full min-w-0 overflow-hidden px-0.5",
         msg.isOwn ? "justify-end" : "justify-start",
-        isFirstInGroup ? "mt-3" : "mt-0.5"
+        isFirstInGroup ? "mt-4" : "mt-1"
       )}
       onContextMenu={handleContextMenu}
     >
@@ -474,7 +469,7 @@ export function MessageBubble({
       <div className={cn(
         "flex min-w-0 flex-col",
         msg.isOwn ? "items-end" : "items-start",
-        isVisualMedia ? "max-w-[min(82vw,32rem)]" : "max-w-[min(76vw,32rem)] md:max-w-[70%]"
+        isVisualMedia ? "max-w-[min(84vw,32rem)]" : cn("max-w-[min(82vw,36rem)] md:max-w-[72%]", compact && "max-w-[86%] md:max-w-[86%]")
       )}>
         {!msg.isOwn && isGroup && isFirstInGroup && (
           <div className={cn("mb-1 ml-1 max-w-full truncate text-[12px] font-semibold", senderNameClass)}>
@@ -485,15 +480,15 @@ export function MessageBubble({
         <div className="flex items-end relative" ref={bubbleRef}>
           <div 
             className={cn(
-              "relative group max-w-full break-words text-[15px] leading-snug [overflow-wrap:anywhere]",
+              "relative group max-w-full break-words text-[15px] leading-[1.45] [overflow-wrap:anywhere]",
               isVisualMedia || isPostShare
                 ? "overflow-hidden bg-transparent p-0 shadow-none"
-                : "px-3.5 py-2 shadow-sm",
-              !isVisualMedia && !isPostShare && (msg.isOwn ? ownBubbleClass : "bg-white/10 dark:bg-white/5 border border-white/5 backdrop-blur-md text-foreground"),
-              isFirstInGroup && isLastInGroup ? "rounded-2xl" :
+                : "border px-3.5 py-2.5 shadow-sm",
+              !isVisualMedia && !isPostShare && (msg.isOwn ? ownBubbleClass : "border-chat-border bg-chat-raised text-chat-text"),
+              isFirstInGroup && isLastInGroup ? "rounded-[18px]" :
               msg.isOwn
-                ? cn("rounded-l-2xl", isFirstInGroup ? "rounded-tr-2xl rounded-br-md" : isLastInGroup ? "rounded-br-2xl rounded-tr-md" : "rounded-r-md")
-                : cn("rounded-r-2xl", isFirstInGroup ? "rounded-tl-2xl rounded-bl-md" : isLastInGroup ? "rounded-bl-2xl rounded-tl-md" : "rounded-l-md")
+                ? cn("rounded-l-[18px]", isFirstInGroup ? "rounded-tr-[18px] rounded-br-[5px]" : isLastInGroup ? "rounded-br-[18px] rounded-tr-[5px]" : "rounded-r-[5px]")
+                : cn("rounded-r-[18px]", isFirstInGroup ? "rounded-tl-[18px] rounded-bl-[5px]" : isLastInGroup ? "rounded-bl-[18px] rounded-tl-[5px]" : "rounded-l-[5px]")
             )}
           >
             {/* Reply Quote */}
@@ -534,6 +529,12 @@ export function MessageBubble({
             ) : (
               msg.content || msg.text
             )}
+
+            {msg.status === 'SENDING' && typeof msg.uploadProgress === 'number' && (
+              <div className="absolute inset-x-2 bottom-2 overflow-hidden rounded-full bg-black/35" role="progressbar" aria-label={`Đang tải ${msg.content || 'tệp'}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={msg.uploadProgress}>
+                <div className="h-1 rounded-full bg-white transition-[width]" style={{ width: `${msg.uploadProgress}%` }} />
+              </div>
+            )}
             
             {/* Hover Actions */}
             <MessageHoverActions 
@@ -560,6 +561,18 @@ export function MessageBubble({
             reactions={msg.reactions} 
             onRemoveReaction={() => onRemoveReaction?.(msg.id)}
           />
+        )}
+
+        {isLastInGroup && (
+          <button
+            type="button"
+            onClick={handleMoreClick}
+            className="mt-1 flex h-7 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-muted-foreground transition hover:bg-hover hover:text-foreground md:hidden"
+            aria-label="Mở hành động tin nhắn"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+            Tùy chọn
+          </button>
         )}
 
         {/* Status */}
@@ -594,13 +607,13 @@ export function MessageBubble({
       {/* Delete Confirmation Modal (Messenger exact style) */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-auto">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowDeleteConfirm(false)} />
-          <div className="relative w-[340px] bg-card rounded-xl shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden border border-white/5">
-            <div className="flex items-center justify-between p-4 border-b border-black/5 dark:border-white/5">
-              <h3 className="font-bold text-[17px] text-foreground mx-auto pl-8">
+          <div className="absolute inset-0 animate-in bg-foreground/40 fade-in duration-200" onClick={() => setShowDeleteConfirm(false)} />
+          <div role="dialog" aria-modal="true" aria-labelledby={`delete-message-${msg.id}`} className="relative flex w-[340px] flex-col overflow-hidden rounded-xl border border-chat-border bg-chat-surface shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-chat-border p-4">
+              <h3 id={`delete-message-${msg.id}`} className="mx-auto pl-8 text-[17px] font-bold text-foreground">
                 {msg.isOwn ? 'Gỡ tin nhắn' : 'Gỡ đối với bạn'}
               </h3>
-              <button onClick={() => setShowDeleteConfirm(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors shrink-0">
+              <button aria-label="Đóng hộp thoại gỡ tin nhắn" onClick={() => setShowDeleteConfirm(false)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-hover">
                 <X className="w-5 h-5 text-foreground/60" />
               </button>
             </div>
@@ -655,13 +668,13 @@ export function MessageBubble({
 
             <div className="flex justify-end gap-2 p-4 pt-2">
               <button 
-                className="px-4 py-2 rounded-lg font-semibold text-[15px] hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-primary"
+                className="rounded-lg px-4 py-2 text-[15px] font-semibold text-primary transition-colors hover:bg-hover"
                 onClick={() => setShowDeleteConfirm(false)}
               >
                 Hủy
               </button>
               <button 
-                className="px-4 py-2 rounded-lg font-semibold text-[15px] bg-[#0084ff] hover:bg-[#0073e6] text-white transition-colors"
+                className="rounded-lg bg-chat-accent px-4 py-2 text-[15px] font-semibold text-chat-accent-foreground transition-colors hover:bg-chat-accent-hover"
                 onClick={() => { 
                   if (msg.isOwn && deleteOption === 'everyone') {
                     onUnsend?.(msg.id);

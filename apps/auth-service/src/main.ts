@@ -7,4 +7,4 @@ async function bootstrap() {
     port: 22022,
   });
 }
-bootstrap();
+void bootstrap();

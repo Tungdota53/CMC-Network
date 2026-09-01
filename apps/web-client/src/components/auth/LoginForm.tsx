@@ -19,6 +19,7 @@ const getErrorMessage = (err: any, fallback: string) => {
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const STUDENT_EMAIL_DOMAIN = '@st.cmc.edu.vn';
+const MICROSOFT_AUTH_ENABLED = process.env.NEXT_PUBLIC_MICROSOFT_AUTH_ENABLED === 'true';
 
 const isStudentCode = (value: string) => /^[a-z]{2,}\d{4,}$/i.test(value.trim());
 const authInputClass = 'auth-input relative z-10 h-12 border-white/20 !bg-slate-950/35 text-white caret-blue-300 shadow-inner placeholder:text-slate-400 hover:!bg-slate-950/35 focus:border-blue-300/70 focus:!bg-slate-950/55 focus:ring-blue-400/40';
@@ -266,15 +267,18 @@ export function LoginForm() {
 
       <Button
         type="button"
-        className="w-full bg-white/5 hover:bg-white/10 text-slate-200 font-semibold border border-white/10 rounded-xl h-12 text-[14px] flex items-center justify-center gap-3 shadow-sm transition-all"
+        disabled={!MICROSOFT_AUTH_ENABLED}
+        aria-describedby={!MICROSOFT_AUTH_ENABLED ? 'microsoft-auth-status' : undefined}
+        className="w-full bg-white/5 hover:bg-white/10 text-slate-200 font-semibold border border-white/10 rounded-xl h-12 text-[14px] flex items-center justify-center gap-3 shadow-sm transition-all disabled:cursor-not-allowed disabled:opacity-60"
         onClick={() => {
-          // Xử lý OAuth Microsoft
+          if (!MICROSOFT_AUTH_ENABLED) return;
           window.location.href = '/api/auth/microsoft';
         }}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 21 21"><path fill="#f25022" d="M1 1h9v9H1z"/><path fill="#00a4ef" d="M1 11h9v9H1z"/><path fill="#7fba00" d="M11 1h9v9h-9z"/><path fill="#ffb900" d="M11 11h9v9h-9z"/></svg>
-        Microsoft 365
+        Microsoft 365 {!MICROSOFT_AUTH_ENABLED && '· Đang phát triển'}
       </Button>
+      {!MICROSOFT_AUTH_ENABLED && <p id="microsoft-auth-status" className="text-center text-xs text-slate-400">Hiện dùng email trường hoặc mã sinh viên để đăng nhập. Microsoft 365 sẽ mở sau khi hoàn tất cấu hình bảo mật.</p>}
     </form>
   );
 }

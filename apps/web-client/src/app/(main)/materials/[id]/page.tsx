@@ -6,6 +6,7 @@ import { FlashcardViewer } from '@/components/materials/FlashcardViewer';
 import { QuizViewer } from '@/components/materials/QuizViewer';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
+import { PdfTranslationStudio } from '@/components/materials/PdfTranslationStudio';
 
 type MaterialDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -24,6 +25,7 @@ export default async function MaterialDetailPage({ params }: MaterialDetailPageP
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
         <div className="min-w-0 space-y-6">
           <MaterialDetail id={id} />
+          <PdfTranslationStudio />
           <AISummary materialId={id} />
           <FlashcardViewer materialId={id} />
         </div>

@@ -3,6 +3,22 @@ import { prisma } from '@campus-connect/database';
 import { getRedisClient } from '@campus-connect/cache';
 import * as bcrypt from 'bcrypt';
 
+jest.mock('bcrypt', () => {
+  const actual = jest.requireActual<typeof import('bcrypt')>('bcrypt');
+  return {
+    ...actual,
+    compare: jest.fn((...args: Parameters<typeof actual.compare>) => {
+      return actual.compare(...args);
+    }),
+    genSalt: jest.fn((...args: Parameters<typeof actual.genSalt>) => {
+      return actual.genSalt(...args);
+    }),
+    hash: jest.fn((...args: Parameters<typeof actual.hash>) => {
+      return actual.hash(...args);
+    }),
+  };
+});
+
 jest.mock('@campus-connect/database', () => {
   const mockPrisma = {
     $transaction: jest
@@ -27,15 +43,22 @@ jest.mock('@campus-connect/database', () => {
 jest.mock('@campus-connect/cache', () => {
   const store = new Map<string, string>();
   return {
+    __store: store,
     getRedisClient: () => ({
       get: jest.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
       set: jest.fn((key: string, value: string) => {
         store.set(key, value);
         return Promise.resolve('OK');
       }),
-      del: jest.fn((key: string) => {
-        store.delete(key);
-        return Promise.resolve(1);
+      del: jest.fn((...keys: string[]) => {
+        const deleted = keys.filter((key) => store.delete(key)).length;
+        return Promise.resolve(deleted);
+      }),
+      keys: jest.fn((pattern: string) => {
+        const prefix = pattern.slice(0, -1);
+        return Promise.resolve(
+          [...store.keys()].filter((key) => key.startsWith(prefix)),
+        );
       }),
       incr: jest.fn((key: string) => {
         const next = Number(store.get(key) ?? 0) + 1;
@@ -62,6 +85,17 @@ describe('AuthService — register', () => {
     service = new AuthService(jwt as never, email as never);
   });
 
+  it('rejects a weak password even when validation pipe is bypassed', async () => {
+    await expect(
+      service.register({
+        email: 'a@st.cmc.edu.vn',
+        password: '123456',
+        fullName: 'A',
+      }),
+    ).rejects.toThrow(/mật khẩu/i);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
   it('rejects registration when a verified account already exists', async () => {
     jest.mocked(prisma.user.findUnique).mockResolvedValue({
       id: 'existing',
@@ -71,7 +105,7 @@ describe('AuthService — register', () => {
     await expect(
       service.register({
         email: 'a@st.cmc.edu.vn',
-        password: 'pw',
+        password: 'Strong1!',
         fullName: 'A',
       }),
     ).rejects.toThrow(/đã tồn tại/i);
@@ -88,7 +122,7 @@ describe('AuthService — register', () => {
     await expect(
       service.register({
         email: 'stuck@st.cmc.edu.vn',
-        password: 'secret',
+        password: 'Strong1!',
         fullName: 'Stuck User',
       }),
     ).rejects.toThrow(/đã tồn tại/i);
@@ -102,7 +136,7 @@ describe('AuthService — register', () => {
 
     const result = await service.register({
       email: 'BIT220001@st.cmc.edu.vn',
-      password: 'secret',
+      password: 'Strong1!',
       fullName: 'Nguyen Van A',
     });
 
@@ -117,7 +151,7 @@ describe('AuthService — register', () => {
       passwordHash: string;
       studentId: string;
     };
-    expect(pending.passwordHash).not.toBe('secret');
+    expect(pending.passwordHash).not.toBe('Strong1!');
     expect(pending.studentId).toBe('BIT220001');
     expect(email.sendOtpEmail).toHaveBeenCalledWith(
       'bit220001@st.cmc.edu.vn',
@@ -168,12 +202,103 @@ describe('AuthService — login', () => {
       { expiresIn: '15m' },
     );
     expect(jwt.signAsync).toHaveBeenCalledWith(
-      { sub: 'user-1', email: 'a@st.cmc.edu.vn', role: 'STUDENT' },
+      expect.objectContaining({
+        sub: 'user-1',
+        email: 'a@st.cmc.edu.vn',
+        role: 'STUDENT',
+        jti: expect.any(String),
+      }),
       { expiresIn: '7d' },
     );
     // DAU/MAU tracking
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'user-1' } }),
+    );
+  });
+});
+
+describe('AuthService — sessions', () => {
+  let service: AuthService;
+  const jwt = {
+    signAsync: jest.fn(
+      (payload: { jti?: string }, options: { expiresIn: string }) =>
+        Promise.resolve(
+          options.expiresIn === '7d'
+            ? `refresh-token:${payload.jti}`
+            : 'access-token',
+        ),
+    ),
+    verifyAsync: jest.fn((token: string) => {
+      const [, jti] = token.split(':');
+      return Promise.resolve({ sub: 'user-1', jti });
+    }),
+  };
+  const email = { sendOtpEmail: jest.fn().mockResolvedValue(true) };
+  const user = {
+    id: 'user-1',
+    email: 'a@st.cmc.edu.vn',
+    fullName: 'A',
+    role: 'STUDENT',
+    emailVerified: true,
+    isVerified: true,
+    isSuspended: false,
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new AuthService(jwt as never, email as never);
+  });
+
+  it('keeps independent refresh tokens valid for concurrent devices', async () => {
+    jest.mocked(prisma.user.findUnique).mockResolvedValue(user as never);
+
+    const first = await service.generateTokens(user);
+    const second = await service.generateTokens(user);
+
+    await expect(
+      service.refreshToken(first.refresh_token),
+    ).resolves.toBeDefined();
+    await expect(
+      service.refreshToken(second.refresh_token),
+    ).resolves.toBeDefined();
+  });
+
+  it('logs out only the selected session', async () => {
+    jest.mocked(prisma.user.findUnique).mockResolvedValue(user as never);
+
+    const first = await service.generateTokens(user);
+    const second = await service.generateTokens(user);
+
+    await service.logout(first.refresh_token);
+
+    await expect(service.refreshToken(first.refresh_token)).rejects.toThrow(
+      /không hợp lệ/i,
+    );
+    await expect(
+      service.refreshToken(second.refresh_token),
+    ).resolves.toBeDefined();
+  });
+
+  it('revokes every session after a password change', async () => {
+    jest.mocked(prisma.user.findUnique).mockResolvedValue({
+      ...user,
+      passwordHash: 'current-hash',
+    } as never);
+    jest.mocked(prisma.user.update).mockResolvedValue(user as never);
+    jest.mocked(bcrypt.compare).mockResolvedValue(true as never);
+    jest.mocked(bcrypt.genSalt).mockResolvedValue('salt' as never);
+    jest.mocked(bcrypt.hash).mockResolvedValue('next-hash' as never);
+
+    const first = await service.generateTokens(user);
+    const second = await service.generateTokens(user);
+
+    await service.changePassword('user-1', 'current-password', 'next-password');
+
+    await expect(service.refreshToken(first.refresh_token)).rejects.toThrow(
+      /không hợp lệ/i,
+    );
+    await expect(service.refreshToken(second.refresh_token)).rejects.toThrow(
+      /không hợp lệ/i,
     );
   });
 });

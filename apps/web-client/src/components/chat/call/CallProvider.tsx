@@ -49,7 +49,7 @@ export const CallProvider = ({ children }: { children: React.ReactNode }) => {
       {children}
 
       {call.error && (
-        <div className="fixed bottom-6 right-6 z-[120] max-w-sm rounded-xl border border-red-200 bg-white px-4 py-3 text-sm text-red-700 shadow-xl">
+        <div role="alert" aria-live="assertive" className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[120] mx-auto max-w-sm rounded-xl border border-red-200 bg-white px-4 py-3 text-sm text-red-700 shadow-xl sm:left-auto sm:mx-0">
           {call.error}
         </div>
       )}

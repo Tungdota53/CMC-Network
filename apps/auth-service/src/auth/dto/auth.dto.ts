@@ -1,11 +1,5 @@
 import { Transform } from 'class-transformer';
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsString,
-  Matches,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, Matches } from 'class-validator';
 
 export class RegisterDto {
   @Transform(({ value }) =>
@@ -18,7 +12,13 @@ export class RegisterDto {
   email: string;
 
   @IsString()
-  @MinLength(6, { message: 'Mật khẩu phải có ít nhất 6 ký tự' })
+  @Matches(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,50}$/,
+    {
+      message:
+        'Mật khẩu phải có 8-50 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt',
+    },
+  )
   password: string;
 
   @IsString()
@@ -49,7 +49,13 @@ export class ChangePasswordDto {
   currentPassword: string;
 
   @IsString()
-  @MinLength(6, { message: 'Mật khẩu mới phải có ít nhất 6 ký tự' })
+  @Matches(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,50}$/,
+    {
+      message:
+        'Mật khẩu mới phải có 8-50 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt',
+    },
+  )
   newPassword: string;
 }
 
@@ -127,6 +133,12 @@ export class ResetPasswordDto {
   otp: string;
 
   @IsString()
-  @MinLength(6, { message: 'Mật khẩu mới phải có ít nhất 6 ký tự' })
+  @Matches(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,50}$/,
+    {
+      message:
+        'Mật khẩu mới phải có 8-50 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt',
+    },
+  )
   newPassword: string;
 }

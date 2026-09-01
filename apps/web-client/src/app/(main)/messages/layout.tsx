@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Avatar } from '@/components/ui/Avatar';
-import { Search, Edit, MoreHorizontal, Video, Phone, Info } from 'lucide-react';
+import { Search, Edit, MessageCircle, MoreHorizontal, Users, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -16,18 +16,27 @@ export default function MessagesLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { user: authUser } = useAuthStore();
+  const { user: authUser, hasHydrated } = useAuthStore();
   const isThreadPage = pathname.startsWith('/messages/t/');
   const [conversations, setConversations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'unread' | 'group'>('all');
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   
   useEffect(() => {
+    if (!authUser?.id) {
+      setLoading(false);
+      setConversations([]);
+      return;
+    }
+
     const fetchMessages = async () => {
       try {
         setLoading(true);
+        setLoadError(false);
         const keyword = searchQuery.trim();
         const response = await api.get(keyword.length >= 2 ? '/conversations/search' : '/conversations', {
           params: keyword.length >= 2 ? { q: keyword } : undefined,
@@ -69,62 +78,71 @@ export default function MessagesLayout({
       } catch (error) {
         console.error('Failed to fetch conversations:', error);
         setConversations([]);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
     };
-    if (authUser?.id) fetchMessages();
-  }, [authUser?.id, searchQuery, filter]);
+    fetchMessages();
+  }, [authUser?.id, searchQuery, filter, retryKey]);
 
   return (
     <div className="flex h-full w-full min-w-0 overflow-hidden bg-background">
       {/* Left Sidebar: Conversations List */}
       <div className={cn(
-        'h-full flex-shrink-0 flex-col border-r border-border/50 bg-card',
-        isThreadPage ? 'hidden md:flex md:w-[360px]' : 'flex w-full md:w-[360px]',
+        'h-full flex-shrink-0 flex-col border-r border-border bg-card',
+        isThreadPage ? 'hidden md:flex md:w-[320px] lg:w-[344px]' : 'flex w-full md:w-[320px] lg:w-[344px]',
       )}>
         {/* Header */}
-        <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-border/30 bg-card/95 p-3 pb-3 backdrop-blur-xl md:gap-4 md:p-5 md:pb-3">
+        <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-border bg-card px-4 pb-3 pt-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-primary to-purple-500 md:text-[28px]">Đoạn chat</h1>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground">CMC Network</p>
+              <h1 className="mt-0.5 text-xl font-bold tracking-tight text-foreground">Tin nhắn</h1>
+            </div>
             <div className="flex gap-2">
-              <button className="flex h-9 w-9 items-center justify-center rounded-full border border-border/40 bg-background text-foreground shadow-sm transition-all hover:scale-105 hover:bg-hover md:h-10 md:w-10" aria-label="Tùy chọn đoạn chat">
-                <MoreHorizontal className="w-5 h-5" />
-              </button>
               <button
                 onClick={() => setIsCreateGroupOpen(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-border/40 bg-background text-foreground shadow-sm transition-all hover:scale-105 hover:bg-hover md:h-10 md:w-10"
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 aria-label="Tạo nhóm chat"
               >
-                <Edit className="w-4 h-4" />
+                <Edit className="h-5 w-5" />
               </button>
             </div>
           </div>
           
           <div className="relative group">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40 group-focus-within:text-primary transition-colors" />
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
             <input 
-              type="text" 
-              placeholder="Tìm kiếm tin nhắn..." 
+              type="search"
+              aria-label="Tìm cuộc trò chuyện"
+              placeholder="Tìm người hoặc nhóm"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              className="h-10 w-full rounded-2xl border border-border/40 bg-background/50 pl-10 pr-4 text-sm text-foreground shadow-inner backdrop-blur-sm transition-all hover:bg-background/80 focus:border-primary/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 md:h-11 md:text-[15px]"
+              className="h-11 w-full rounded-xl border border-transparent bg-hover pl-10 pr-10 text-sm text-foreground transition-colors placeholder:text-muted-foreground focus:border-primary/40 focus:bg-background focus:outline-none focus:ring-3 focus:ring-primary/10"
             />
+            {searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground hover:bg-hover hover:text-foreground" aria-label="Xóa tìm kiếm"><X className="h-4 w-4" /></button>}
           </div>
           
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
-            <button onClick={() => setFilter('all')} className={cn("min-h-9 shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors", filter === 'all' ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "bg-hover/50 border border-border/40 hover:bg-hover text-foreground")}>Tất cả</button>
-            <button onClick={() => setFilter('unread')} className={cn("min-h-9 shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors", filter === 'unread' ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "bg-hover/50 border border-border/40 hover:bg-hover text-foreground")}>Chưa đọc</button>
-            <button onClick={() => setFilter('group')} className={cn("min-h-9 shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors", filter === 'group' ? "bg-primary text-primary-foreground shadow-md shadow-primary/20" : "bg-hover/50 border border-border/40 hover:bg-hover text-foreground")}>Nhóm</button>
+            <button onClick={() => setFilter('all')} className={cn("min-h-10 shrink-0 rounded-xl px-3.5 text-sm font-semibold transition-colors", filter === 'all' ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-hover hover:text-foreground")}><MessageCircle className="mr-1.5 inline h-4 w-4" />Tất cả</button>
+            <button onClick={() => setFilter('unread')} className={cn("min-h-10 shrink-0 rounded-xl px-3.5 text-sm font-semibold transition-colors", filter === 'unread' ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-hover hover:text-foreground")}>Chưa đọc</button>
+            <button onClick={() => setFilter('group')} className={cn("min-h-10 shrink-0 rounded-xl px-3.5 text-sm font-semibold transition-colors", filter === 'group' ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-hover hover:text-foreground")}><Users className="mr-1.5 inline h-4 w-4" />Nhóm</button>
           </div>
         </div>
         
         {/* List */}
         <div className="flex-1 space-y-1 overflow-y-auto p-2 pb-[calc(var(--mobile-bottom-nav-height)+var(--mobile-safe-bottom)+1rem)] md:pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-foreground/20">
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-40 text-foreground/50">
-              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-              <span className="text-[13px]">Đang tải...</span>
+            <div className="space-y-2 px-2 py-3" aria-label="Đang tải cuộc trò chuyện" aria-busy="true">
+              {[1, 2, 3, 4, 5].map((item) => <div key={item} className="flex animate-pulse items-center gap-3 rounded-xl p-2"><div className="h-12 w-12 rounded-full bg-hover" /><div className="flex-1 space-y-2"><div className="h-3 w-2/3 rounded bg-hover" /><div className="h-3 w-5/6 rounded bg-hover" /></div></div>)}
+            </div>
+          ) : loadError ? (
+            <div role="alert" className="mx-3 mt-8 rounded-2xl border border-destructive/30 bg-destructive/10 p-5 text-center">
+              <MessageCircle className="mx-auto h-7 w-7 text-destructive" />
+              <p className="mt-3 text-sm font-semibold text-foreground">Không thể tải cuộc trò chuyện</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Kiểm tra kết nối rồi thử lại.</p>
+              <button type="button" onClick={() => setRetryKey((value) => value + 1)} className="mt-4 min-h-10 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover">Thử lại</button>
             </div>
           ) : conversations.length > 0 ? (
             conversations.map((conv) => {
@@ -136,8 +154,8 @@ export default function MessagesLayout({
                   href={`/messages/t/${conv.id}`} 
                   key={conv.id}
                   className={cn(
-                    "group relative mb-1 flex cursor-pointer items-center gap-3 overflow-hidden rounded-2xl border p-3 transition-all duration-200",
-                    isActive ? "bg-primary/10 border border-primary/20 shadow-sm" : "hover:bg-hover/80 border border-transparent"
+                    "group relative mb-0.5 flex min-h-[68px] cursor-pointer items-center gap-3 overflow-hidden rounded-xl border px-2.5 py-2 transition-colors",
+                    isActive ? "border-primary/15 bg-primary/10" : "border-transparent hover:bg-hover"
                   )}
                 >
                   {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full" />}
@@ -172,9 +190,21 @@ export default function MessagesLayout({
                 </Link>
               );
             })
+          ) : !authUser?.id ? (
+            <div className="mx-3 mt-8 rounded-2xl border border-dashed border-border p-6 text-center">
+              <MessageCircle className="mx-auto h-7 w-7 text-muted-foreground" />
+              <p className="mt-3 text-sm font-semibold text-foreground">Bạn chưa đăng nhập</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Đăng nhập để xem danh sách tin nhắn và kết nối với bạn bè.</p>
+              <Link href="/login" className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover">
+                Đăng nhập ngay
+              </Link>
+            </div>
           ) : (
-            <div className="text-center p-4 text-foreground/50 text-[14px]">
-              Chưa có cuộc trò chuyện nào
+            <div className="mx-3 mt-8 rounded-2xl border border-dashed border-border p-6 text-center">
+              <MessageCircle className="mx-auto h-7 w-7 text-muted-foreground" />
+              <p className="mt-3 text-sm font-semibold text-foreground">{searchQuery ? 'Không tìm thấy kết quả' : 'Chưa có cuộc trò chuyện'}</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{searchQuery ? 'Thử tên hoặc từ khóa khác.' : 'Tạo nhóm mới để bắt đầu kết nối.'}</p>
+              {!searchQuery && <button type="button" onClick={() => setIsCreateGroupOpen(true)} className="mt-4 min-h-10 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover">Tạo nhóm chat</button>}
             </div>
           )}
         </div>
@@ -182,15 +212,10 @@ export default function MessagesLayout({
 
       {/* Main Chat Area */}
       <div className={cn(
-        'relative h-full min-w-0 flex-1 flex-col overflow-hidden border-r border-border/50 bg-background',
+        'relative h-full min-w-0 flex-1 flex-col overflow-hidden bg-background',
         isThreadPage ? 'flex' : 'hidden md:flex',
       )}>
         {children}
-      </div>
-
-      {/* Right Sidebar: Chat Info (Placeholder for Facebook's right pane) */}
-      <div className="hidden h-full w-[360px] flex-shrink-0 flex-col overflow-y-auto bg-card 2xl:flex">
-        {/* Placeholder for now, can be populated by specific chat route */}
       </div>
 
       <CreateGroupDialog open={isCreateGroupOpen} onClose={() => setIsCreateGroupOpen(false)} />

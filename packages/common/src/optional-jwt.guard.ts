@@ -46,9 +46,18 @@ export class OptionalJwtGuard implements CanActivate {
 
   private extractToken(req: Request): string | undefined {
     const header = req.headers.authorization;
-    if (!header) return undefined;
-    const [type, token] = header.split(' ');
-    return type === 'Bearer' ? token : undefined;
+    if (header) {
+      const [type, token] = header.split(' ');
+      if (type === 'Bearer') return token;
+    }
+
+    const accessCookie = req.headers.cookie
+      ?.split(';')
+      .map((cookie) => cookie.trim())
+      .find((cookie) => cookie.startsWith('access_token='));
+    return accessCookie
+      ? decodeURIComponent(accessCookie.slice('access_token='.length))
+      : undefined;
   }
 }
 

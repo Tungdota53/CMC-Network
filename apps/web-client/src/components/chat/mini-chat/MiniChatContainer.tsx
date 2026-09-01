@@ -10,7 +10,7 @@ export const MiniChatContainer = () => {
   if (windows.length === 0) return null;
 
   return (
-    <div className="fixed bottom-0 right-20 z-50 hidden items-end gap-3 pointer-events-none md:flex">
+    <div className="fixed bottom-0 right-4 z-50 hidden max-w-[calc(100vw-2rem)] items-end gap-3 overflow-hidden pointer-events-none md:flex xl:right-20">
       {/* Minimized windows stack as chat heads */}
       {windows.some(w => w.isMinimized) && (
         <div className="flex flex-col-reverse gap-3 pb-4 pointer-events-auto">
@@ -30,7 +30,7 @@ export const MiniChatContainer = () => {
       )}
 
       {/* Open windows */}
-      {windows.filter(w => !w.isMinimized).map(w => (
+      {windows.filter(w => !w.isMinimized).slice(-2).map(w => (
         <div key={w.id} className="pointer-events-auto">
           <MiniChatWindow 
             conversationId={w.id} 

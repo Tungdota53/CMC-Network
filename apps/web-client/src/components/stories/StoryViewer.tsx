@@ -29,17 +29,18 @@ export function StoryViewer({ users, initialUserIndex, onClose }: StoryViewerPro
 
   const currentUser = users[currentUserIdx];
   const currentStory: Story | undefined = currentUser?.stories[currentStoryIdx];
-  const canDelete = user?.id === currentUser?.userId || user?.role === 'ADMIN';
+  const isAdmin = user?.role === 'ADMIN';
+  const canDelete = user?.id === currentUser?.userId || isAdmin;
 
   const handleDeleteStory = useCallback(async () => {
     if (!currentStory || !canDelete) return;
     try {
-      await deleteStory.mutateAsync({ storyId: currentStory.id, isAdmin: user?.role === 'ADMIN' });
+      await deleteStory.mutateAsync({ storyId: currentStory.id, isAdmin });
       onClose();
     } catch {
       alert('Không thể xóa story lúc này');
     }
-  }, [canDelete, currentStory, deleteStory, onClose, user?.role]);
+  }, [canDelete, currentStory, deleteStory, isAdmin, onClose]);
 
   // Auto-advance logic and gesture placeholders
   const handleNext = useCallback(() => {

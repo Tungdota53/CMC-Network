@@ -14,14 +14,10 @@ export const ChatBubble = () => {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
-  const [hasToken, setHasToken] = useState(false);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   useEffect(() => {
-    setHasToken(typeof window !== 'undefined' && !!localStorage.getItem('auth_token'));
-  }, [userId]);
-
-  useEffect(() => {
-    if (!isOpen || !hasToken) return;
+    if (!isOpen || !isAuthenticated) return;
 
     const fetchConversations = async () => {
       try {
@@ -42,7 +38,7 @@ export const ChatBubble = () => {
 
     const timeout = window.setTimeout(fetchConversations, query.trim() ? 250 : 0);
     return () => window.clearTimeout(timeout);
-  }, [hasToken, isOpen, query, userId]);
+  }, [isAuthenticated, isOpen, query, userId]);
 
   const mappedConversations = useMemo(() => {
     return conversations.map((conversation) => {
@@ -73,7 +69,7 @@ export const ChatBubble = () => {
     });
   }, [conversations, userId]);
 
-  if (!hasToken || windows.length > 0) return null;
+  if (!isAuthenticated || windows.length > 0) return null;
 
   return (
     <div className="fixed bottom-5 right-5 z-50 hidden flex-col items-end gap-3 md:flex">

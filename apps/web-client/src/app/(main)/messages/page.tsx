@@ -1,18 +1,24 @@
 'use client';
 
 import React from 'react';
-import { MessageCircle } from 'lucide-react';
+import { Edit, MessageCircle, ShieldCheck, Zap } from 'lucide-react';
 
 export default function MessagesEmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full bg-background">
-      <div className="w-24 h-24 rounded-full bg-hover flex items-center justify-center mb-6 border-4 border-card shadow-sm">
-        <MessageCircle className="w-12 h-12 text-foreground/40" />
+    <main className="flex h-full w-full items-center justify-center overflow-y-auto px-6 py-10">
+      <div className="w-full max-w-lg text-center">
+      <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/15">
+        <MessageCircle className="h-10 w-10 text-primary" />
       </div>
-      <h2 className="text-[22px] font-bold text-foreground mb-2">Chưa chọn đoạn chat nào</h2>
-      <p className="text-[15px] text-foreground/60 max-w-md text-center">
-        Chọn một cuộc trò chuyện từ danh sách bên trái hoặc bắt đầu cuộc trò chuyện mới để kết nối với mọi người.
+      <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">CMC Messages</p>
+      <h2 className="mt-2 text-2xl font-bold tracking-tight text-foreground">Kết nối liền mạch trong campus</h2>
+      <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground">
+        Chọn cuộc trò chuyện bên trái để tiếp tục, hoặc tạo nhóm mới để học tập và trao đổi cùng bạn bè.
       </p>
-    </div>
+      <div className="mt-8 grid grid-cols-3 gap-2 text-left">
+        {[{ Icon: Zap, label: 'Tin nhắn thời gian thực' }, { Icon: ShieldCheck, label: 'Không gian riêng tư' }, { Icon: Edit, label: 'Nhóm học nhanh' }].map(({ Icon, label }) => <div key={label} className="rounded-xl border border-border bg-card/70 p-3"><Icon className="h-5 w-5 text-primary" /><p className="mt-2 text-xs font-semibold leading-5 text-foreground">{label}</p></div>)}
+      </div>
+      </div>
+    </main>
   );
 }

@@ -10,7 +10,7 @@ const checks = [
   ['material-service', 'http://localhost:3007/health'],
   ['marketplace-service', 'http://localhost:3008/health'],
   ['ai-service', 'http://localhost:8000/'],
-  ['web-client', 'http://localhost:3000'],
+  ['web-client', 'http://127.0.0.1:3000'],
 ];
 
 const timeoutMs = Number(process.env.HEALTHCHECK_TIMEOUT_MS || 5000);

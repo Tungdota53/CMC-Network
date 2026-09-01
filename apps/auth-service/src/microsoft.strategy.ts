@@ -6,9 +6,16 @@ import { AppService } from './app.service';
 @Injectable()
 export class MicrosoftStrategy extends PassportStrategy(Strategy, 'microsoft') {
   constructor(private appService: AppService) {
+    const microsoftEnabled = process.env.MICROSOFT_AUTH_ENABLED === 'true';
     super({
-      clientID: process.env.MICROSOFT_CLIENT_ID || 'dummy_client_id',
-      clientSecret: process.env.MICROSOFT_CLIENT_SECRET || 'dummy_secret',
+      clientID:
+        microsoftEnabled && process.env.MICROSOFT_CLIENT_ID
+          ? process.env.MICROSOFT_CLIENT_ID
+          : 'microsoft-login-disabled',
+      clientSecret:
+        microsoftEnabled && process.env.MICROSOFT_CLIENT_SECRET
+          ? process.env.MICROSOFT_CLIENT_SECRET
+          : 'microsoft-login-disabled',
       callbackURL:
         process.env.MICROSOFT_CALLBACK_URL ||
         `${process.env.AUTH_SERVICE_PUBLIC_URL || 'http://localhost:22022'}/auth/microsoft/callback`,

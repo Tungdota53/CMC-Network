@@ -3,6 +3,7 @@ import { CommonModule } from '@campus-connect/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MicrosoftStrategy } from './microsoft.strategy';
+import { MicrosoftAuthEnabledGuard } from './auth/microsoft-auth-enabled.guard';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { EmailService } from './auth/email.service';
@@ -14,6 +15,12 @@ import { EmailService } from './auth/email.service';
     CommonModule.register({ enableAuth: false }),
   ],
   controllers: [AppController, AuthController],
-  providers: [AppService, AuthService, EmailService, MicrosoftStrategy],
+  providers: [
+    AppService,
+    AuthService,
+    EmailService,
+    MicrosoftStrategy,
+    MicrosoftAuthEnabledGuard,
+  ],
 })
 export class AppModule {}

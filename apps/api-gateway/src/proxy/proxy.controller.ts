@@ -56,8 +56,12 @@ export class ProxyController {
   ) {
     try {
       const { method, body, headers } = req;
-      const authHeader = headers['authorization'];
+      const authHeader =
+        headers['authorization'] ||
+        this.authorizationFromCookie(headers.cookie);
       const contentType = headers['content-type'];
+
+      this.validateBrowserOrigin(method, headers);
 
       // `req.originalUrl` preserves the query string (e.g. "/search?q=foo"),
       // unlike `req.path` which only returns "/search". Strip the leading
@@ -99,6 +103,8 @@ export class ProxyController {
         files,
       );
 
+      const setCookie = result.headers['set-cookie'];
+      if (setCookie) res.setHeader('Set-Cookie', setCookie);
       res.status(result.status).json(result.data);
     } catch (error) {
       this.logger.error(`Gateway error: ${error?.message}`);
@@ -141,6 +147,44 @@ export class ProxyController {
           `Định dạng file không được hỗ trợ: ${file.mimetype}`,
         );
       }
+    }
+  }
+
+  private authorizationFromCookie(cookieHeader?: string): string | undefined {
+    const accessCookie = cookieHeader
+      ?.split(';')
+      .map((cookie) => cookie.trim())
+      .find((cookie) => cookie.startsWith('access_token='));
+    if (!accessCookie) return undefined;
+    return `Bearer ${decodeURIComponent(accessCookie.slice('access_token='.length))}`;
+  }
+
+  private validateBrowserOrigin(
+    method: string,
+    headers: express.Request['headers'],
+  ) {
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase()))
+      return;
+    const origin = headers.origin;
+    if (!origin) return;
+
+    const allowed = new Set(
+      (process.env.ALLOWED_ORIGINS || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    );
+    const forwardedHost = headers['x-forwarded-host'];
+    const host = Array.isArray(forwardedHost)
+      ? forwardedHost[0]
+      : forwardedHost || headers.host;
+    if (host) {
+      allowed.add(`http://${host}`);
+      allowed.add(`https://${host}`);
+    }
+
+    if (!allowed.has(origin)) {
+      throw new BadRequestException('Nguồn yêu cầu không hợp lệ.');
     }
   }
 }

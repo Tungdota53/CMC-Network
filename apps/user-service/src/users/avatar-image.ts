@@ -4,7 +4,10 @@ export const AVATAR_THUMBNAIL_SIZE = 160;
 export const AVATAR_DETAIL_MAX_SIZE = 1600;
 
 export async function optimizeAvatar(buffer: Buffer) {
-  const image = sharp(buffer, { failOn: 'error', limitInputPixels: 40_000_000 }).rotate();
+  const image = sharp(buffer, {
+    failOn: 'error',
+    limitInputPixels: 40_000_000,
+  }).rotate();
 
   const [thumbnail, detail] = await Promise.all([
     image

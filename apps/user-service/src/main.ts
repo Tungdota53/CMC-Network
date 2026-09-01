@@ -7,9 +7,12 @@ async function bootstrap() {
     serviceName: 'user-service',
     port: 23306,
     staticAssets: {
-      root: resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+      root: resolve(
+        process.env.UPLOAD_ROOT ||
+          resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+      ),
       prefix: '/',
     },
   });
 }
-bootstrap();
+void bootstrap();

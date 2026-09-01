@@ -51,7 +51,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Verify the JWT from the handshake and return the authenticated userId.
-   * Token can arrive via `auth.token`, `Authorization` header, or `?token=`.
+   * Token can arrive via HttpOnly cookie, `auth.token`, Authorization header,
+   * or `?token=` during the compatibility window.
    * Returns null when the token is missing/invalid.
    */
   private authenticate(client: Socket): string | null {
@@ -61,7 +62,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       '',
     );
     const queryToken = client.handshake.query.token as string | undefined;
-    const token = auth?.token || headerToken || queryToken;
+    const cookieToken = client.handshake.headers?.cookie
+      ?.split(';')
+      .map((cookie) => cookie.trim())
+      .find((cookie) => cookie.startsWith('access_token='));
+    const token = cookieToken
+      ? decodeURIComponent(cookieToken.slice('access_token='.length))
+      : auth?.token || headerToken || queryToken;
     if (!token) return null;
 
     try {
@@ -132,6 +139,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const userId = this.authenticate(client);
     if (!userId) {
       // Reject unauthenticated sockets.
+      console.warn(
+        `[ChatSocket] Rejecting unauthenticated socket ${client.id}: missing or invalid access token`,
+      );
       client.emit('unauthorized', { message: 'Token không hợp lệ hoặc thiếu' });
       client.disconnect(true);
       return;
@@ -258,6 +268,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.type,
       data.mediaUrl,
       data.replyToId,
+      data.tempId,
     );
 
     const payload = {
@@ -339,6 +350,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         status: 'READ',
         readerId: userId,
         updated: result.updated,
+        messageIds: result.messageIds,
       });
     return { status: 'success', ...result };
   }
@@ -674,12 +686,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
     }
     if (callMessage && conversationId) {
-      this.server
-        .to(conversationRoom(conversationId))
-        .emit('new_message', {
-          conversationId,
-          message: callMessage,
-        });
+      this.server.to(conversationRoom(conversationId)).emit('new_message', {
+        conversationId,
+        message: callMessage,
+      });
     }
     return { status: 'success' };
   }

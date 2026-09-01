@@ -666,6 +666,7 @@ model Message {
   id             String               @id @default(uuid()) @db.Uuid
   conversationId String               @db.Uuid
   senderId       String               @db.Uuid
+  clientMessageId String?
   content        String
   messageType    String               @default("text")
   mediaUrl       String?
@@ -683,6 +684,7 @@ model Message {
   pinnedBy       PinnedMessage[]
 
   @@index([conversationId, createdAt(sort: Desc)])
+  @@unique([conversationId, senderId, clientMessageId])
   @@map("messages")
 }
 

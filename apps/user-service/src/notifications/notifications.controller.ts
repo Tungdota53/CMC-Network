@@ -23,7 +23,9 @@ export class NotificationsController {
   private currentUserId(tokenUserId: string, requestedUserId?: string) {
     const currentUserId = resolveUserId(tokenUserId);
     if (requestedUserId && requestedUserId !== currentUserId) {
-      throw new ForbiddenException('Không có quyền truy cập thông báo của người dùng khác');
+      throw new ForbiddenException(
+        'Không có quyền truy cập thông báo của người dùng khác',
+      );
     }
     return currentUserId;
   }

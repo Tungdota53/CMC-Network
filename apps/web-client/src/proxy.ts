@@ -30,17 +30,19 @@ export function proxy(request: NextRequest) {
 
   // Kiểm tra token từ cookie. Nếu access token hết hạn nhưng refresh token còn,
   // cho client vào app để AuthProvider refresh thay vì đá về login khi reload.
-  const authToken = request.cookies.get('auth_token');
+  const authToken = request.cookies.get('access_token');
   const refreshToken = request.cookies.get('refresh_token');
-  const isAuthenticated = !!authToken?.value || !!refreshToken?.value;
+  const hasAccessToken = !!authToken?.value;
+  const canRestoreSession = hasAccessToken || !!refreshToken?.value;
 
-  // Nếu đã đăng nhập mà vào trang auth → redirect về feed
-  if (isAuthenticated && AUTH_ONLY_PATHS.includes(pathname)) {
+  // Chỉ access token hiện tại mới đủ để rời trang đăng nhập. Cookie refresh có
+  // thể đã hết hạn; redirect nó về feed sẽ tạo vòng lặp feed ↔ login.
+  if (hasAccessToken && AUTH_ONLY_PATHS.includes(pathname)) {
     return NextResponse.redirect(new URL('/feed', request.url));
   }
 
   // Nếu chưa đăng nhập mà vào trang cần auth → redirect về login
-  if (!isAuthenticated && !PUBLIC_PATHS.includes(pathname) && pathname !== '/') {
+  if (!canRestoreSession && !PUBLIC_PATHS.includes(pathname) && pathname !== '/') {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 

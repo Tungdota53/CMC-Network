@@ -36,31 +36,36 @@ type MaterialJob = {
 export class MaterialProcessor extends WorkerHost {
   private readonly logger = new Logger(MaterialProcessor.name);
 
-  async process(
-    job: Job<MaterialJob>,
-    _token?: string,
-  ): Promise<any> {
+  async process(job: Job<MaterialJob>, _token?: string): Promise<any> {
     const { materialId, filePath, mimeType, title, subject } = job.data;
     this.logger.log(`Processing material ${materialId}...`);
 
     try {
       const uploadRoot = resolve(
-        process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+        process.env.UPLOAD_ROOT ||
+          resolve(process.cwd(), '..', '..', '.data', 'uploads'),
       );
       const fullPath = resolve(uploadRoot, filePath);
       const fileBuffer = await fs.readFile(fullPath);
 
       let aiContent: AiMaterialContent = { summary: null };
-      const configuredMaxBytes = Number(process.env.AI_MATERIAL_MAX_FILE_BYTES || 50 * 1024 * 1024);
+      const configuredMaxBytes = Number(
+        process.env.AI_MATERIAL_MAX_FILE_BYTES || 50 * 1024 * 1024,
+      );
       if (
         mimeType === 'application/pdf' &&
         fileBuffer.length <= configuredMaxBytes
       ) {
         try {
-          aiContent = await this.generateAiContent(fileBuffer, { title, subject });
+          aiContent = await this.generateAiContent(fileBuffer, {
+            title,
+            subject,
+          });
         } catch (error) {
           const reason =
-            error instanceof Error ? `${error.name}: ${error.message}` : 'Unknown error';
+            error instanceof Error
+              ? `${error.name}: ${error.message}`
+              : 'Unknown error';
           this.logger.warn(
             `AI learning content unavailable for material ${materialId}; continuing without it. ${reason}`,
           );
@@ -100,7 +105,9 @@ export class MaterialProcessor extends WorkerHost {
       const pdfData = await parser.getText();
       let text = this.normalizePdfText(pdfData.text);
       if (text.length < 80 || this.isLikelyGarbled(text)) {
-        this.logger.warn('PDF text extraction is empty or garbled; switching to Vietnamese OCR.');
+        this.logger.warn(
+          'PDF text extraction is empty or garbled; switching to Vietnamese OCR.',
+        );
         text = this.normalizePdfText(await this.extractTextWithOcr(fileBuffer));
       }
       if (text.length < 80 || this.isLikelyGarbled(text)) {
@@ -108,14 +115,21 @@ export class MaterialProcessor extends WorkerHost {
         return { summary: null };
       }
       const controller = new AbortController();
-      const configuredTimeout = Number(process.env.AI_MATERIAL_TIMEOUT_MS || 300000);
-      const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
-        ? configuredTimeout
-        : 300000;
+      const configuredTimeout = Number(
+        process.env.AI_MATERIAL_TIMEOUT_MS || 300000,
+      );
+      const timeoutMs =
+        Number.isFinite(configuredTimeout) && configuredTimeout > 0
+          ? configuredTimeout
+          : 300000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        const aiServiceBaseUrl = (process.env.AI_SERVICE_BASE_URL || process.env.AI_SERVICE_URL || 'http://localhost:8000/api/v1')
+        const aiServiceBaseUrl = (
+          process.env.AI_SERVICE_BASE_URL ||
+          process.env.AI_SERVICE_URL ||
+          'http://localhost:8000/api/v1'
+        )
           .replace(/\/(summarize|material-content)\/?$/, '')
           .replace(/\/$/, '');
         const aiServiceUrl = `${aiServiceBaseUrl}/material-content`;
@@ -147,12 +161,18 @@ export class MaterialProcessor extends WorkerHost {
 
     try {
       await fs.writeFile(pdfPath, fileBuffer);
-      await execFileAsync('pdftoppm', ['-jpeg', '-r', '180', pdfPath, pagePrefix], {
-        maxBuffer: 10 * 1024 * 1024,
-      });
+      await execFileAsync(
+        'pdftoppm',
+        ['-jpeg', '-r', '180', pdfPath, pagePrefix],
+        {
+          maxBuffer: 10 * 1024 * 1024,
+        },
+      );
       const pageFiles = (await fs.readdir(workDir))
         .filter((name) => /^page-\d+\.jpg$/.test(name))
-        .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+        .sort((left, right) =>
+          left.localeCompare(right, undefined, { numeric: true }),
+        );
       const pageTexts: string[] = [];
 
       for (const [index, pageFile] of pageFiles.entries()) {
@@ -161,7 +181,8 @@ export class MaterialProcessor extends WorkerHost {
           [join(workDir, pageFile), 'stdout', '-l', 'vie+eng', '--psm', '6'],
           { maxBuffer: 10 * 1024 * 1024 },
         );
-        if (stdout.trim()) pageTexts.push(`[Trang ${index + 1}]\n${stdout.trim()}`);
+        if (stdout.trim())
+          pageTexts.push(`[Trang ${index + 1}]\n${stdout.trim()}`);
       }
 
       return pageTexts.join('\n\n');
@@ -173,7 +194,15 @@ export class MaterialProcessor extends WorkerHost {
   private normalizePdfText(value: string) {
     return value
       .normalize('NFC')
-      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+      .split('')
+      .map((character) => {
+        const code = character.charCodeAt(0);
+        const isFilteredControl =
+          code === 127 ||
+          (code < 32 && code !== 9 && code !== 10 && code !== 13);
+        return isFilteredControl ? ' ' : character;
+      })
+      .join('')
       .replace(/[ \t]+/g, ' ')
       .replace(/\s*\n\s*/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
@@ -188,31 +217,47 @@ export class MaterialProcessor extends WorkerHost {
     const malformedWords = words.filter((word) =>
       /[A-Za-zÀ-ỹ][×Þ©¸®­µ¶¼½¾]|[×Þ©¸®­µ¶¼½¾][A-Za-zÀ-ỹ]/.test(word),
     ).length;
-    return replacement > 0 || suspicious / Math.max(sample.length, 1) > 0.012 ||
-      malformedWords / Math.max(words.length, 1) > 0.08;
+    return (
+      replacement > 0 ||
+      suspicious / Math.max(sample.length, 1) > 0.012 ||
+      malformedWords / Math.max(words.length, 1) > 0.08
+    );
   }
 
   private validateAiContent(value: unknown): AiMaterialContent {
     if (!value || typeof value !== 'object') return { summary: null };
     const data = value as Record<string, unknown>;
-    const summary = typeof data.summary === 'string' && data.summary.trim() ? data.summary.trim() : null;
+    const summary =
+      typeof data.summary === 'string' && data.summary.trim()
+        ? data.summary.trim()
+        : null;
     const flashcards = Array.isArray(data.flashcards)
-      ? data.flashcards.filter((card): card is Flashcard => Boolean(
-          card && typeof card === 'object' &&
-          typeof (card as Flashcard).front === 'string' &&
-          typeof (card as Flashcard).back === 'string',
-        )).slice(0, 8)
+      ? data.flashcards
+          .filter((card): card is Flashcard =>
+            Boolean(
+              card &&
+              typeof card === 'object' &&
+              typeof (card as Flashcard).front === 'string' &&
+              typeof (card as Flashcard).back === 'string',
+            ),
+          )
+          .slice(0, 8)
       : undefined;
     const questions = Array.isArray(data.questions)
-      ? data.questions.filter((question): question is QuizQuestion => Boolean(
-          question && typeof question === 'object' &&
-          typeof (question as QuizQuestion).question === 'string' &&
-          Array.isArray((question as QuizQuestion).options) &&
-          (question as QuizQuestion).options.length === 4 &&
-          Number.isInteger((question as QuizQuestion).answer) &&
-          (question as QuizQuestion).answer >= 0 &&
-          (question as QuizQuestion).answer < 4,
-        )).slice(0, 6)
+      ? data.questions
+          .filter((question): question is QuizQuestion =>
+            Boolean(
+              question &&
+              typeof question === 'object' &&
+              typeof (question as QuizQuestion).question === 'string' &&
+              Array.isArray((question as QuizQuestion).options) &&
+              (question as QuizQuestion).options.length === 4 &&
+              Number.isInteger((question as QuizQuestion).answer) &&
+              (question as QuizQuestion).answer >= 0 &&
+              (question as QuizQuestion).answer < 4,
+            ),
+          )
+          .slice(0, 6)
       : undefined;
     if (!summary || !flashcards?.length || !questions?.length) {
       return { summary: null };

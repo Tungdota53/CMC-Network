@@ -29,6 +29,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
 } from './dto/auth.dto';
+import { MicrosoftAuthEnabledGuard } from './microsoft-auth-enabled.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -45,8 +46,12 @@ export class AuthController {
   @Post('login')
   @UseGuards(RateLimitGuard)
   @RateLimit({ limit: 5, windowMs: 15 * 60_000 })
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const result = await this.authService.login(loginDto);
+    return this.setSessionCookies(res, result);
   }
 
   @HttpCode(HttpStatus.OK)
@@ -97,8 +102,27 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('refresh')
-  async refresh(@Body() body: Partial<RefreshTokenDto> = {}) {
-    return this.authService.refreshToken(body.refreshToken ?? '');
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 20, windowMs: 15 * 60_000 })
+  async refresh(
+    @Req() req: any,
+    @Body() body: Partial<RefreshTokenDto> = {},
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const refreshToken = this.readCookie(req.headers.cookie, 'refresh_token');
+    const result = await this.authService.refreshToken(
+      refreshToken ?? body.refreshToken ?? '',
+    );
+    return this.setSessionCookies(res, result);
+  }
+
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('logout')
+  async logout(@Req() req: any, @Res({ passthrough: true }) res: any) {
+    const refreshToken = this.readCookie(req.headers.cookie, 'refresh_token');
+    if (refreshToken) await this.authService.logout(refreshToken);
+    res.clearCookie('access_token', this.cookieOptions());
+    res.clearCookie('refresh_token', this.cookieOptions());
   }
 
   @HttpCode(HttpStatus.OK)
@@ -120,21 +144,27 @@ export class AuthController {
 
   @HttpCode(HttpStatus.OK)
   @Post('2fa/verify-login')
-  async verify2FALogin(@Body() body: Partial<Verify2FALoginDto> = {}) {
-    return this.authService.verify2FALogin(
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 5, windowMs: 15 * 60_000 })
+  async verify2FALogin(
+    @Body() body: Partial<Verify2FALoginDto> = {},
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const result = await this.authService.verify2FALogin(
       body.temp2faToken ?? '',
       body.token ?? '',
     );
+    return this.setSessionCookies(res, result);
   }
 
   @Get('microsoft')
-  @UseGuards(AuthGuard('microsoft'))
+  @UseGuards(MicrosoftAuthEnabledGuard, AuthGuard('microsoft'))
   async microsoftAuth() {
-    // Initiates the Microsoft OAuth flow
+    // Initiates the Microsoft OAuth flow when explicitly enabled.
   }
 
   @Get('microsoft/callback')
-  @UseGuards(AuthGuard('microsoft'))
+  @UseGuards(MicrosoftAuthEnabledGuard, AuthGuard('microsoft'))
   async microsoftAuthRedirect(@Req() req: any, @Res() res: any) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:25080';
     const user = req.user;
@@ -176,5 +206,40 @@ export class AuthController {
     });
 
     res.redirect(`${frontendUrl}/auth/callback`);
+  }
+
+  private setSessionCookies(res: any, result: any) {
+    if (!result?.access_token || !result?.refresh_token) return result;
+    res.cookie('access_token', result.access_token, {
+      ...this.cookieOptions(),
+      maxAge: 15 * 60 * 1000,
+    });
+    res.cookie('refresh_token', result.refresh_token, {
+      ...this.cookieOptions(),
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    const safeResult = { ...result };
+    delete safeResult.access_token;
+    delete safeResult.refresh_token;
+    return safeResult;
+  }
+
+  private cookieOptions() {
+    return {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax' as const,
+      path: '/',
+    };
+  }
+
+  private readCookie(cookieHeader: string | undefined, name: string) {
+    const cookie = cookieHeader
+      ?.split(';')
+      .map((item) => item.trim())
+      .find((item) => item.startsWith(`${name}=`));
+    return cookie
+      ? decodeURIComponent(cookie.slice(name.length + 1))
+      : undefined;
   }
 }

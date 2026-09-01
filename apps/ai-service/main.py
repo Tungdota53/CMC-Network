@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import re
 import ssl
 import textwrap
@@ -10,9 +11,8 @@ import time
 from collections import defaultdict
 from html.parser import HTMLParser
 
-import openai
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 try:
     from dotenv import load_dotenv
@@ -31,17 +31,18 @@ try:
 except ImportError:
     jwt = None
 
-openai.api_key = os.getenv("OPENAI_API_KEY") or os.getenv("AI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("AI_API_KEY")
+OPENAI_API_BASE = "https://api.openai.com/v1"
 
 def normalize_openai_base_url(url: str | None):
     if not url:
-        return openai.api_base
+        return OPENAI_API_BASE
     normalized = url.rstrip("/")
     if normalized.endswith("/chat/completions"):
         normalized = normalized[: -len("/chat/completions")]
     return normalized
 
-openai.api_base = normalize_openai_base_url(os.getenv("OPENAI_BASE_URL") or os.getenv("AI_API_URL"))
+OPENAI_API_BASE = normalize_openai_base_url(os.getenv("OPENAI_BASE_URL") or os.getenv("AI_API_URL"))
 
 AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
 WEB_TIMEOUT_SECONDS = float(os.getenv("AI_WEB_TIMEOUT_SECONDS", "6"))
@@ -53,6 +54,14 @@ AI_MAX_QUESTION_CHARS = int(os.getenv("AI_MAX_QUESTION_CHARS", "4000"))
 AI_RATE_LIMIT = int(os.getenv("AI_RATE_LIMIT", "20"))
 AI_RATE_WINDOW_SECONDS = int(os.getenv("AI_RATE_WINDOW_SECONDS", "60"))
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
+_pdf_layout_model = None
+
+def get_pdf_layout_model():
+    global _pdf_layout_model
+    if _pdf_layout_model is None:
+        from pdf2zh.doclayout import OnnxModel
+        _pdf_layout_model = OnnxModel.from_pretrained()
+    return _pdf_layout_model
 
 def authenticate_ai_user(authorization: str | None = Header(default=None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -92,6 +101,8 @@ def validate_request(request: "AskRequest"):
     return request
 
 def call_chat_completion(messages, temperature=0.7, max_tokens=900):
+    from pdf_translator import parse_chat_completion_response
+
     base_url = normalize_openai_base_url(os.getenv("OPENAI_BASE_URL") or os.getenv("AI_API_URL"))
     url = f"{base_url.rstrip('/')}/chat/completions"
     payload = json.dumps({
@@ -99,6 +110,7 @@ def call_chat_completion(messages, temperature=0.7, max_tokens=900):
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
+        "stream": False,
     }).encode("utf-8")
     request = urllib.request.Request(
         url,
@@ -106,13 +118,13 @@ def call_chat_completion(messages, temperature=0.7, max_tokens=900):
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Authorization": f"Bearer {openai.api_key}",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
             "User-Agent": "CMCNetworkAIAssistant/1.0",
         },
     )
-    with urllib.request.urlopen(request, timeout=45) as response:
-        data = json.loads(response.read().decode("utf-8"))
-    return strip_reasoning(data["choices"][0]["message"]["content"])
+    with urllib.request.urlopen(request, timeout=60) as response:
+        content = parse_chat_completion_response(response.read())
+    return strip_reasoning(content)
 
 def strip_reasoning(text: str):
     cleaned = re.sub(r"<think>.*?</think>", "", text or "", flags=re.DOTALL | re.IGNORECASE)
@@ -135,7 +147,7 @@ def stream_chat_completion(messages, temperature=0.7, max_tokens=900):
         headers={
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
-            "Authorization": f"Bearer {openai.api_key}",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
             "User-Agent": "CMCNetworkAIAssistant/1.0",
         },
     )
@@ -357,7 +369,7 @@ Ngữ cảnh website CMC đã đọc được:
 {web_context or 'Không có ngữ cảnh website mới hoặc không truy cập được nguồn phù hợp.'}
 """.strip()
 
-    if openai.api_key:
+    if OPENAI_API_KEY:
         try:
             answer = strip_reasoning(call_chat_completion(
                 messages=[
@@ -417,7 +429,7 @@ Ngữ cảnh website CMC đã đọc được:
 
     def events():
         yield f"data: {json.dumps({'type': 'meta', 'sources': sources, 'actions': suggest_actions(request.question, sources)}, ensure_ascii=False)}\n\n"
-        if openai.api_key:
+        if OPENAI_API_KEY:
             try:
                 raw_answer = ""
                 visible_answer = ""
@@ -454,7 +466,7 @@ class SummarizeRequest(BaseModel):
 @app.post("/api/v1/ai/summarize")
 def summarize_text(request: SummarizeRequest):
     content = request.text
-    if openai.api_key:
+    if OPENAI_API_KEY:
         summary = call_chat_completion(
             messages=[
                 {"role": "system", "content": "Tóm tắt tài liệu học tập bằng tiếng Việt. Nêu ý chính, thuật ngữ quan trọng, checklist ôn tập."},
@@ -565,7 +577,7 @@ def extract_material_notes(content: str):
 @app.post("/api/v1/ai/material-content")
 def generate_material_content(request: ContentRequest):
     content = request.text[:MAX_MATERIAL_CHARS]
-    if not openai.api_key:
+    if not OPENAI_API_KEY:
         return fallback_material_content(content)
     try:
         knowledge = extract_material_notes(content)
@@ -649,6 +661,66 @@ def generate_study_plan(request: ContentRequest):
             {"day": "Ngày 3", "topic": "Ôn tập và làm bài kiểm tra", "duration": "2 giờ"}
         ]
     }
+
+class TranslatePdfRequest(BaseModel):
+    fileUrl: str | None = None
+    fileBase64: str | None = None
+    fileName: str | None = None
+    targetLang: str = "vi"
+    maxPages: int = 15
+
+@app.post("/api/v1/translate-pdf")
+@app.post("/api/v1/ai/translate-pdf")
+def translate_pdf_endpoint(request: TranslatePdfRequest):
+    try:
+        from pdf2zh.high_level import translate_stream
+        import pymupdf as fitz
+
+        pdf_bytes = None
+        if request.fileBase64:
+            pdf_bytes = base64.b64decode(request.fileBase64)
+        elif request.fileUrl:
+            req = urllib.request.Request(
+                request.fileUrl,
+                headers={"User-Agent": "CMCNetworkAIAssistant/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                pdf_bytes = resp.read()
+
+        if not pdf_bytes:
+            raise HTTPException(status_code=400, detail="Vui lòng cung cấp fileBase64 hoặc fileUrl")
+
+        if not OPENAI_API_KEY:
+            raise HTTPException(status_code=503, detail="Dịch vụ dịch PDF chưa được cấu hình AI.")
+
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        base_url = normalize_openai_base_url(os.getenv("OPENAI_BASE_URL") or os.getenv("AI_API_URL"))
+        page_limit = max(1, min(request.maxPages, len(doc)))
+        translated_pdf, _dual_pdf, failures = translate_stream(
+            pdf_bytes,
+            pages=list(range(page_limit)),
+            lang_in="auto",
+            lang_out=request.targetLang,
+            service=f"ai:{AI_MODEL}",
+            thread=3,
+            model=get_pdf_layout_model(),
+            envs={"api_key": OPENAI_API_KEY, "base_url": base_url},
+        )
+        if failures:
+            print(f"[PDF Translate] {len(failures)} segments left untranslated", flush=True)
+        source_name = os.path.basename(request.fileName or "document.pdf")
+        safe_name = re.sub(r"[^A-Za-z0-9._-]", "-", source_name).removesuffix(".pdf")
+        return Response(
+            content=translated_pdf,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}-tieng-viet.pdf"'},
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"[PDF Translate Error] {exc}", flush=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

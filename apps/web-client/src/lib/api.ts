@@ -9,36 +9,13 @@ const api = axios.create({
   },
 });
 
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
-const ACCESS_TOKEN_MAX_AGE = 60 * 60 * 24 * 7;
-const REFRESH_TOKEN_MAX_AGE = 60 * 60 * 24 * 30;
-
-function setAuthCookies(accessToken: string, refreshToken?: string | null) {
-  document.cookie = `auth_token=${accessToken}; path=/; max-age=${ACCESS_TOKEN_MAX_AGE}; SameSite=Lax`;
-  if (refreshToken) {
-    document.cookie = `refresh_token=${refreshToken}; path=/; max-age=${REFRESH_TOKEN_MAX_AGE}; SameSite=Lax`;
-  }
-}
-
-function clearAuthStorage() {
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('refresh_token');
-  document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-  document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-  document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-}
-
-function getUserIdFromToken(token: string | null): string | null {
-  if (!token) return null;
+function getPersistedUserId(): string | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const payload = token.split('.')[1];
-    if (!payload) return null;
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-    const decoded = JSON.parse(atob(padded));
-    return decoded.sub || decoded.id || null;
-  } catch (e) {
+    return JSON.parse(localStorage.getItem('cc-auth') || '{}')?.state?.user?.id || null;
+  } catch {
     return null;
   }
 }
@@ -52,16 +29,11 @@ function userIdRequired(endpoint: string) {
 
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-    if (token && config.headers && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-
     if (config.data instanceof FormData && config.headers) {
       delete config.headers['Content-Type'];
     }
 
-    const userId = getUserIdFromToken(token);
+    const userId = getPersistedUserId();
     const method = (config.method || 'get').toLowerCase();
 
     if (
@@ -159,6 +131,10 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response: AxiosResponse) => {
+    if (response.config.responseType === 'blob' || response.config.responseType === 'arraybuffer') {
+      return response;
+    }
+
     // Adapter to map CMC-Network backend responses to CMC-Campus frontend expectations
     if (response.data) {
       if (response.data.access_token && !response.data.accessToken) {
@@ -180,40 +156,24 @@ api.interceptors.response.use(
     const isAuthEndpoint = typeof originalConfig?.url === 'string' && originalConfig.url.startsWith('/auth/');
 
     if (error.response?.status === 401 && originalConfig && !originalConfig._retry && !isAuthEndpoint) {
-      const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
-      if (refreshToken) {
-        originalConfig._retry = true;
-        refreshPromise ??= api.post('/auth/refresh', { refreshToken })
-          .then((res) => {
-            const nextAccessToken = res.data?.data?.accessToken || res.data?.data?.access_token;
-            const nextRefreshToken = res.data?.data?.refreshToken || res.data?.data?.refresh_token;
-            if (!nextAccessToken) return null;
-            localStorage.setItem('auth_token', nextAccessToken);
-            if (nextRefreshToken) localStorage.setItem('refresh_token', nextRefreshToken);
-            setAuthCookies(nextAccessToken, nextRefreshToken || refreshToken);
-            return nextAccessToken;
-          })
-          .catch(() => {
-            clearAuthStorage();
-            return null;
-          })
-          .finally(() => {
-            refreshPromise = null;
-          });
+      originalConfig._retry = true;
+      refreshPromise ??= api.post('/auth/refresh')
+        .then(() => true)
+        .catch(() => false)
+        .finally(() => {
+          refreshPromise = null;
+        });
 
-        const nextToken = await refreshPromise;
-        if (nextToken) {
-          originalConfig.headers.Authorization = `Bearer ${nextToken}`;
-          return api(originalConfig);
-        }
+      if (await refreshPromise) {
+        return api(originalConfig);
       }
 
-        if (typeof window !== 'undefined') {
-          clearAuthStorage();
-          if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-            window.location.replace('/login');
-          }
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('cc-auth');
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+          window.location.replace('/login');
         }
+      }
     }
     return Promise.reject(error.response?.data || error);
   },

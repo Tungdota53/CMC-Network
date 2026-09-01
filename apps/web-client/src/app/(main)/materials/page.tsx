@@ -11,6 +11,7 @@ import { LoadingState, ErrorState } from '@/components/shared/LoadingState';
 import { MaterialUploadDialog } from '@/components/materials/MaterialUploadDialog';
 import { AnimatePresence } from 'framer-motion';
 import { toMaterialViewModel, type MaterialApiItem, type MaterialFileType } from '@/components/materials/materialViewModel';
+import { PdfTranslationStudio } from '@/components/materials/PdfTranslationStudio';
 
 const FILE_FILTERS: Array<{ label: string; value: '' | MaterialFileType }> = [
   { label: 'Tất cả', value: '' },
@@ -69,6 +70,8 @@ export default function MaterialsPage() {
       </header>
 
       <KnowledgeLegacy />
+
+      <PdfTranslationStudio />
 
       {/* Advanced Search Area */}
       <section aria-label="Bộ lọc tài liệu" className="mb-8 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">

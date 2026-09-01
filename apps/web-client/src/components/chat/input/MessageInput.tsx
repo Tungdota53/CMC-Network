@@ -10,9 +10,12 @@ interface MessageInputProps {
   onCancelReply?: () => void;
   transparent?: boolean;
   quickEmoji?: string;
+  onTypingChange?: (isTyping: boolean) => void;
+  compact?: boolean;
 }
 
 const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
+const MAX_MESSAGE_LENGTH = 4000;
 const ALLOWED_UPLOAD_TYPES = [
   'image/',
   'video/',
@@ -30,7 +33,7 @@ const ALLOWED_UPLOAD_TYPES = [
 ];
 
 function isAllowedUploadType(file: File) {
-  if (!file.type) return true;
+  if (!file.type) return false;
   return ALLOWED_UPLOAD_TYPES.some((type) => (
     type.endsWith('/') ? file.type.startsWith(type) : file.type === type
   ));
@@ -49,7 +52,7 @@ function IconButton({
     <button
       onClick={onClick}
       aria-label={label}
-      className="w-8 h-8 rounded-full text-primary hover:bg-primary/10 flex items-center justify-center transition-colors shrink-0"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       {children}
     </button>
@@ -71,7 +74,7 @@ function FileIconButton({
     <label
       aria-label={label}
       title={label}
-      className="w-8 h-8 rounded-full text-primary hover:bg-primary/10 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+      className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-hover hover:text-foreground focus-within:ring-2 focus-within:ring-primary"
     >
       <input type="file" accept={accept} className="sr-only" onChange={onChange} />
       {children}
@@ -84,12 +87,13 @@ function FileIconButton({
  * Layout: [+]  [image]  [sticker]  [GIF]  │ Aa input │  [smile]  [thumbs-up]
  * + ReplyPreview bar above input when replying
  */
-export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelReply, transparent, quickEmoji = '👍' }: MessageInputProps) {
+export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelReply, transparent, quickEmoji = '👍', onTypingChange, compact = false }: MessageInputProps) {
   const [inputText, setInputText] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-focus input when reply starts
   useEffect(() => {
@@ -101,12 +105,15 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
   useEffect(() => {
     return () => {
       if (pendingPreview) URL.revokeObjectURL(pendingPreview);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      onTypingChange?.(false);
     };
-  }, [pendingPreview]);
+  }, [pendingPreview, onTypingChange]);
 
   const handleSend = () => {
     if (!inputText.trim()) return;
     onSendMessage(inputText.trim(), replyingTo?.id);
+    onTypingChange?.(false);
     setInputText('');
     onCancelReply?.();
     if (textareaRef.current) {
@@ -129,7 +136,11 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
   };
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInputText(e.target.value);
+    const nextValue = e.target.value.slice(0, MAX_MESSAGE_LENGTH);
+    setInputText(nextValue);
+    onTypingChange?.(nextValue.trim().length > 0);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => onTypingChange?.(false), 1800);
     if (textareaRef.current) {
       textareaRef.current.style.height = '22px';
       const scrollHeight = textareaRef.current.scrollHeight;
@@ -175,11 +186,11 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
   };
 
   return (
-    <div className={`${transparent ? 'bg-transparent' : 'bg-card border-t border-border/30'} w-full min-w-0 shrink-0 overflow-hidden`}>
+    <div className={`${transparent ? 'bg-transparent' : 'bg-card/90 border-t border-border/30'} relative z-[2] w-full min-w-0 shrink-0 overflow-hidden`}>
       {/* Reply Preview — Plan 02J */}
       {replyingTo && (
-        <div className="px-4 pt-2 pb-1 flex items-center gap-2 animate-in slide-in-from-bottom-2 duration-150">
-          <div className="flex-1 bg-hover rounded-lg px-3 py-2 border-l-2 border-primary">
+        <div className="mx-auto flex max-w-4xl items-center gap-2 px-3 pb-1 pt-2 animate-in slide-in-from-bottom-2 duration-150 md:px-5">
+          <div className="flex-1 rounded-xl border border-border/50 bg-card/90 px-3 py-2 shadow-lg shadow-black/5 backdrop-blur-xl">
             <div className="text-[11px] font-semibold text-primary mb-0.5">
               Đang trả lời {replyingTo.isOwn ? 'chính mình' : (replyingTo.sender?.fullName || 'tin nhắn')}
             </div>
@@ -189,6 +200,7 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
           </div>
           <button 
             onClick={onCancelReply}
+            aria-label="Hủy trả lời"
             className="w-7 h-7 rounded-full hover:bg-hover flex items-center justify-center text-foreground/50 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -197,7 +209,7 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
       )}
 
       {pendingFile && (
-        <div className="px-4 pt-3">
+        <div className="mx-auto max-w-4xl px-3 pt-3 md:px-5">
           <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-card to-muted/40 p-3 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-150">
             <button
               onClick={clearPendingFile}
@@ -235,7 +247,7 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
       )}
 
       {fileError && (
-        <div className="px-4 pt-2">
+        <div className="mx-auto max-w-4xl px-3 pt-2 md:px-5">
           <div className="flex items-start justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             <span>{fileError}</span>
             <button
@@ -250,14 +262,14 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
       )}
 
       {/* Input Bar */}
-      <div className="px-2 py-2 md:px-3">
-        <div className="flex min-w-0 items-end gap-1 md:gap-1.5">
+      <div className={`mx-auto w-full max-w-4xl px-2 pb-[calc(0.625rem+env(safe-area-inset-bottom))] pt-2 ${compact ? '' : 'md:px-5 md:pb-4 md:pt-3'}`}>
+        <div className="flex min-w-0 items-end gap-2 rounded-2xl border border-chat-border bg-chat-surface p-2 shadow-sm">
           {/* Left Actions */}
-          <div className="flex shrink-0 items-center gap-0.5 pb-0.5">
+          <div className="flex shrink-0 items-center gap-0.5">
             <FileIconButton label="Đính kèm" onChange={handleFileChange}>
               <PlusCircle className="w-5 h-5" />
             </FileIconButton>
-            <span className="hidden items-center gap-0.5 sm:flex">
+            <span className={`${compact ? 'hidden' : 'hidden lg:flex'} items-center gap-0.5`}>
               <FileIconButton label="Gửi ảnh" accept="image/*" onChange={handleFileChange}>
                 <ImageIcon className="w-5 h-5" />
               </FileIconButton>
@@ -269,31 +281,38 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
           </div>
 
           {/* Input */}
-          <div className="flex min-w-0 flex-1 items-end rounded-2xl border border-white/5 bg-white/10 px-3 py-1.5 shadow-inner backdrop-blur-md dark:bg-black/10">
+          <div className="relative flex min-h-10 min-w-0 flex-1 items-end border-l border-border pl-3 pr-1 transition focus-within:border-[rgb(var(--chat-accent)/0.65)]">
             <textarea
               ref={textareaRef}
               value={inputText}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Aa"
+              placeholder="Viết tin nhắn"
               rows={1}
-              className="min-w-0 flex-1 resize-none border-none bg-transparent py-[5px] text-[15px] leading-snug text-foreground placeholder:text-foreground/40 focus:outline-none max-h-[120px] [&::-webkit-scrollbar]:hidden"
+              maxLength={MAX_MESSAGE_LENGTH}
+              aria-describedby={inputText.length >= 3600 ? 'message-character-count' : undefined}
+              className="min-w-0 flex-1 resize-none border-none bg-transparent py-[9px] text-[15px] leading-snug text-chat-text placeholder:text-chat-muted focus:outline-none max-h-[120px] [&::-webkit-scrollbar]:hidden"
               style={{ height: '22px' }}
             />
             <button 
               aria-label="Emoji"
-              className="w-6 h-6 rounded-full text-primary hover:bg-primary/10 flex items-center justify-center transition-colors shrink-0 ml-1 mb-px"
+              className="mb-1 ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground"
             >
               <Smile className="w-[18px] h-[18px]" />
             </button>
+            {inputText.length >= 3600 && (
+              <span id="message-character-count" className="absolute -top-5 right-2 text-[10px] font-semibold text-muted-foreground">
+                {inputText.length}/{MAX_MESSAGE_LENGTH}
+              </span>
+            )}
           </div>
 
           {/* Right Action */}
-          <div className="pb-0.5">
+          <div>
             {hasText ? (
-              <IconButton onClick={handleSend} label="Gửi tin nhắn">
-                <SendHorizontal className="w-5 h-5" />
-              </IconButton>
+              <button onClick={handleSend} aria-label="Gửi tin nhắn" className="flex h-10 w-10 items-center justify-center rounded-xl bg-chat-accent text-chat-accent-foreground shadow-sm transition hover:bg-chat-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] focus-visible:ring-offset-2">
+                <SendHorizontal className="h-4.5 w-4.5" />
+              </button>
             ) : hasPendingFile ? (
               <IconButton onClick={handleSendPendingFile} label="Gửi tệp đã chọn">
                 <SendHorizontal className="w-5 h-5" />
@@ -304,6 +323,10 @@ export function MessageInput({ onSendMessage, onSendMedia, replyingTo, onCancelR
               </IconButton>
             )}
           </div>
+        </div>
+        <div className="mt-1.5 hidden items-center justify-between px-1 text-[10px] font-medium text-muted-foreground/60 md:flex">
+          <span>Enter để gửi · Shift + Enter để xuống dòng</span>
+          <span>Nội dung được đồng bộ theo thời gian thực</span>
         </div>
       </div>
     </div>

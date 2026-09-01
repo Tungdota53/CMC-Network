@@ -1,9 +1,10 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { User } from "lucide-react";
 
 interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
   src?: string;
-  fallback?: string;
+  fallback?: string | React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
@@ -16,10 +17,17 @@ export function Avatar({ src, fallback, size = 'md', className, ...props }: Avat
     xl: 'h-16 w-16 text-lg',
   };
 
+  const iconSizes = {
+    sm: 'h-4 w-4',
+    md: 'h-5 w-5',
+    lg: 'h-6 w-6',
+    xl: 'h-8 w-8',
+  };
+
   return (
     <div
       className={cn(
-        "relative flex shrink-0 overflow-hidden rounded-full bg-hover",
+        "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-hover text-foreground select-none",
         sizeClasses[size],
         className
       )}
@@ -28,8 +36,8 @@ export function Avatar({ src, fallback, size = 'md', className, ...props }: Avat
       {src && !imageFailed ? (
         <img src={src} alt="Avatar" onError={() => setImageFailed(true)} className="aspect-square h-full w-full object-cover" />
       ) : (
-        <span className="flex h-full w-full items-center justify-center font-medium text-foreground/60">
-          {fallback || "?"}
+        <span className="flex h-full w-full items-center justify-center font-semibold text-inherit">
+          {fallback ? fallback : <User className={cn("text-muted-foreground", iconSizes[size])} />}
         </span>
       )}
     </div>

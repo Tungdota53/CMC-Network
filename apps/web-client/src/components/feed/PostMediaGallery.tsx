@@ -14,20 +14,21 @@ interface PostMediaGalleryProps {
 
 function galleryClass(count: number, compact: boolean) {
   const height = compact ? 'h-[300px] sm:h-[360px]' : 'h-[360px] sm:h-[500px]';
-  if (count === 1) return 'grid-cols-1';
+  if (count === 1) return 'grid-cols-1 bg-transparent';
   if (count === 2) return `grid-cols-2 ${height}`;
-  return `grid-cols-2 grid-rows-2 ${height}`;
+  if (count <= 4) return `grid-cols-2 grid-rows-2 ${height}`;
+  return `grid-cols-6 grid-rows-2 ${height}`;
 }
 
 function itemClass(count: number, index: number) {
-  if (count === 1) return 'max-h-[600px]';
   if (count === 3 && index === 0) return 'row-span-2';
+  if (count >= 5) return index < 2 ? 'col-span-3' : 'col-span-2';
   return '';
 }
 
 export function PostMediaGallery({ media, compact = false }: PostMediaGalleryProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const visibleMedia = media.slice(0, 4);
+  const visibleMedia = media.slice(0, media.length >= 5 ? 5 : 4);
   const activeMedia = activeIndex === null ? null : media[activeIndex];
 
   useEffect(() => {
@@ -65,32 +66,39 @@ export function PostMediaGallery({ media, compact = false }: PostMediaGalleryPro
     <>
       <div className={`grid w-full gap-0.5 overflow-hidden bg-border/50 ${galleryClass(media.length, compact)}`}>
         {visibleMedia.map((item, index) => (
-          <div key={item.id} className={`relative min-h-0 min-w-0 overflow-hidden bg-black/5 ${itemClass(media.length, index)}`}>
+          <div key={item.id} className={`relative min-h-0 min-w-0 overflow-hidden ${media.length === 1 ? 'bg-transparent' : 'bg-black/5'} ${itemClass(media.length, index)}`}>
             {item.mediaType === 'VIDEO' ? (
-              <video src={item.mediaUrl} className="h-full w-full object-cover" controls preload="metadata" />
+              <video
+                src={item.mediaUrl}
+                className={media.length === 1 ? 'max-h-[600px] w-full bg-black object-contain' : 'h-full w-full object-cover'}
+                controls
+                preload="metadata"
+              />
             ) : (
               <button
                 type="button"
                 onClick={() => setActiveIndex(index)}
-                className="block h-full w-full cursor-zoom-in overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-white"
+                className={`block w-full cursor-zoom-in overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-white ${media.length === 1 ? '' : 'h-full'}`}
                 aria-label={`Xem ảnh ${index + 1} trong ${media.length} ảnh`}
               >
                 <img
                   src={item.mediaUrl}
                   alt={`Ảnh ${index + 1} của bài viết`}
-                  className={`h-full w-full object-contain transition-transform duration-200 hover:scale-[1.015] ${media.length === 1 ? 'max-h-[600px] bg-black/5' : ''}`}
+                  className={media.length === 1
+                    ? `w-full h-auto object-cover ${compact ? 'max-h-[480px]' : 'max-h-[680px]'}`
+                    : 'h-full w-full object-cover'}
                   loading="lazy"
                 />
               </button>
             )}
-            {index === 3 && media.length > 4 && (
+            {index === 4 && media.length > 5 && (
               <button
                 type="button"
                 onClick={() => setActiveIndex(index)}
                 className="absolute inset-0 flex items-center justify-center bg-black/50 text-3xl font-bold text-white transition-colors hover:bg-black/60"
-                aria-label={`Xem thêm ${media.length - 4} ảnh`}
+                aria-label={`Xem thêm ${media.length - 5} ảnh`}
               >
-                +{media.length - 4}
+                +{media.length - 5}
               </button>
             )}
           </div>

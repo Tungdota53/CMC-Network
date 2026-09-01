@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomInt, timingSafeEqual } from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -216,6 +217,16 @@ export class AuthService {
 
   async register(registerDto: RegisterDto) {
     const { email, password, fullName } = registerDto;
+
+    if (
+      !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,50}$/.test(
+        password,
+      )
+    ) {
+      throw new BadRequestException(
+        'Mật khẩu phải có 8-50 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt',
+      );
+    }
 
     const normalizedEmail = this.assertAllowedEmailDomain(email);
     // Check if user exists
@@ -468,7 +479,7 @@ export class AuthService {
     await Promise.all([
       this.resetOtpAttempts(normalizedEmail),
       getRedisClient().del(this.passwordResetKey(normalizedEmail)),
-      getRedisClient().del(`refresh_token:${user.id}`),
+      this.revokeAllSessions(user.id),
     ]);
 
     return { message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.' };
@@ -576,13 +587,15 @@ export class AuthService {
     const access_token = await this.jwtService.signAsync(payload, {
       expiresIn: '15m',
     });
-    const refresh_token = await this.jwtService.signAsync(payload, {
-      expiresIn: '7d',
-    });
+    const sessionId = randomUUID();
+    const refresh_token = await this.jwtService.signAsync(
+      { ...payload, jti: sessionId },
+      { expiresIn: '7d' },
+    );
 
     const redis = getRedisClient();
     await redis.set(
-      `refresh_token:${user.id}`,
+      `refresh_token:${user.id}:${sessionId}`,
       refresh_token,
       'EX',
       7 * 24 * 60 * 60,
@@ -611,7 +624,10 @@ export class AuthService {
       const userId = payload.sub;
 
       const redis = getRedisClient();
-      const storedToken = await redis.get(`refresh_token:${userId}`);
+      const sessionKey = payload.jti
+        ? `refresh_token:${userId}:${payload.jti}`
+        : `refresh_token:${userId}`;
+      const storedToken = await redis.get(sessionKey);
 
       if (!storedToken || storedToken !== refreshToken) {
         throw new UnauthorizedException(
@@ -625,10 +641,30 @@ export class AuthService {
         throw new UnauthorizedException('Refresh token không hợp lệ');
       }
 
-      return this.generateTokens(user);
+      const nextSession = await this.generateTokens(user);
+      await redis.del(sessionKey);
+      return nextSession;
     } catch {
       throw new UnauthorizedException('Refresh token không hợp lệ');
     }
+  }
+
+  async logout(refreshToken: string) {
+    try {
+      const payload = await this.jwtService.verifyAsync(refreshToken);
+      const sessionKey = payload.jti
+        ? `refresh_token:${payload.sub}:${payload.jti}`
+        : `refresh_token:${payload.sub}`;
+      await getRedisClient().del(sessionKey);
+    } catch {
+      // Logout remains idempotent for missing, expired, or malformed sessions.
+    }
+  }
+
+  private async revokeAllSessions(userId: string) {
+    const redis = getRedisClient();
+    const sessionKeys = await redis.keys(`refresh_token:${userId}:*`);
+    await redis.del(`refresh_token:${userId}`, ...sessionKeys);
   }
 
   async enable2FA(userId: string) {
@@ -704,8 +740,7 @@ export class AuthService {
       data: { passwordHash: newHash },
     });
 
-    const redis = getRedisClient();
-    await redis.del(`refresh_token:${userId}`);
+    await this.revokeAllSessions(userId);
 
     return { message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.' };
   }

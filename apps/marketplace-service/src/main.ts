@@ -7,9 +7,12 @@ async function bootstrap() {
     serviceName: 'marketplace-service',
     port: 38083,
     staticAssets: {
-      root: resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+      root: resolve(
+        process.env.UPLOAD_ROOT ||
+          resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+      ),
       prefix: '/uploads/',
     },
   });
 }
-bootstrap();
+void bootstrap();

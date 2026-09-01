@@ -10,7 +10,9 @@ jest.mock('@campus-connect/common', () => ({
 jest.mock('@campus-connect/database', () => ({
   prisma: {
     $transaction: jest.fn((operation) =>
-      typeof operation === 'function' ? operation(prisma) : Promise.all(operation),
+      typeof operation === 'function'
+        ? operation(prisma)
+        : Promise.all(operation),
     ),
     club: { findUnique: jest.fn() },
     clubMember: { findUnique: jest.fn(), upsert: jest.fn() },
@@ -28,12 +30,16 @@ describe('ClubsService — join request consistency', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('claims a pending join request before adding the member', async () => {
-    jest.mocked(prisma.clubMember.findUnique).mockResolvedValue({ role: 'OWNER' } as never);
+    jest
+      .mocked(prisma.clubMember.findUnique)
+      .mockResolvedValue({ role: 'OWNER' } as never);
     jest.mocked(prisma.clubJoinRequest.findFirst).mockResolvedValue({
       id: 'request-1',
       userId: 'student-1',
     } as never);
-    jest.mocked(prisma.clubJoinRequest.updateMany).mockResolvedValue({ count: 1 });
+    jest
+      .mocked(prisma.clubJoinRequest.updateMany)
+      .mockResolvedValue({ count: 1 });
 
     await service.approveJoinRequest('club-1', 'request-1', 'owner-1');
 
@@ -45,12 +51,16 @@ describe('ClubsService — join request consistency', () => {
   });
 
   it('does not add a member when another reviewer already handled the request', async () => {
-    jest.mocked(prisma.clubMember.findUnique).mockResolvedValue({ role: 'OWNER' } as never);
+    jest
+      .mocked(prisma.clubMember.findUnique)
+      .mockResolvedValue({ role: 'OWNER' } as never);
     jest.mocked(prisma.clubJoinRequest.findFirst).mockResolvedValue({
       id: 'request-1',
       userId: 'student-1',
     } as never);
-    jest.mocked(prisma.clubJoinRequest.updateMany).mockResolvedValue({ count: 0 });
+    jest
+      .mocked(prisma.clubJoinRequest.updateMany)
+      .mockResolvedValue({ count: 0 });
 
     await expect(
       service.approveJoinRequest('club-1', 'request-1', 'owner-1'),

@@ -7,9 +7,12 @@ async function bootstrap() {
     serviceName: 'material-service',
     port: 38082,
     staticAssets: {
-      root: resolve(process.env.UPLOAD_ROOT || resolve(process.cwd(), '..', '..', '.data', 'uploads')),
+      root: resolve(
+        process.env.UPLOAD_ROOT ||
+          resolve(process.cwd(), '..', '..', '.data', 'uploads'),
+      ),
       prefix: '/uploads/',
     },
   });
 }
-bootstrap();
+void bootstrap();

@@ -4,16 +4,19 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { NotificationDropdown } from './NotificationDropdown';
 import { useNotificationStore } from '@/stores/useNotificationStore';
+import { useAuthStore } from '@/store/authStore';
 
 export const NotificationBell = () => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const unreadCount = useNotificationStore(state => state.unreadCount);
   const fetchNotifications = useNotificationStore(state => state.fetchNotifications);
+  const hasVerifiedSession = useAuthStore(state => state.hasVerifiedSession);
 
   useEffect(() => {
+    if (!hasVerifiedSession) return;
     fetchNotifications();
-  }, [fetchNotifications]);
+  }, [fetchNotifications, hasVerifiedSession]);
 
   // Click outside to close
   useEffect(() => {
